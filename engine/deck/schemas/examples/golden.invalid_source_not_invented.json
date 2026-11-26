@@ -1,0 +1,22 @@
+{
+  "id": "g_idea_image_text",
+  "slide_type": "idea",
+  "layout": "image_text",
+  "slots": {
+    "title": {
+      "kind": "text",
+      "text": "A title"
+    }
+  },
+  "why_good": [
+    "One idea."
+  ],
+  "source": {
+    "kind": "client_material",
+    "client": "A real client"
+  },
+  "approved": {
+    "by": "Sai",
+    "at": "2026-11-17"
+  }
+}

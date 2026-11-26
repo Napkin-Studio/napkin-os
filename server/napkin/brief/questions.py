@@ -34,10 +34,28 @@ _WORD = re.compile(r"[a-z0-9€£$%]+")
 _CURRENCY = re.compile(r"^[€£$]")
 
 
+# Words that ask for the same thing in other words become one word first (acceptance run A6, 2026-11-25: "Is there budget
+# for a pre-launch tracker wave and a regional holdout?" came back as "Is there money for a tracker wave before April
+# and an area with no posters to compare against?"). Phrase first, then the word.
+_SAME = [
+    (re.compile(r"\b(?:an?\s+)?(?:area|region|market|city|town)s?\s+(?:with\s+)?(?:no|without)\s+(?:\w+\s+){0,3}?(?:to\s+)?(?:compare|comparison|control)(?:\s+(?:against|with))?\b"), " holdout "),
+    (re.compile(r"\b(?:hold[\s-]?outs?|control\s+(?:area|region|group|market)s?|test[\s-]and[\s-]control|geo[\s-]?(?:test|split|comparison)s?)\b"), " holdout "),
+    (re.compile(r"\b(?:pre[\s-]?launch|before\s+(?:the\s+)?(?:launch|go[\s-]?live|january|february|march|april|may|june|july|august|september|october|november|december|spring|summer|autumn|winter))\b"), " prelaunch "),
+    (re.compile(r"\b(?:money|funds?|funding|spend|budgets?)\b"), " budget "),
+    (re.compile(r"\b(?:brand\s+)?(?:tracker|tracking)(?:\s+(?:survey|study|wave)s?)?\b"), " tracker "),
+]
+
+
+def _same_words(text: str) -> str:
+    for rx, to in _SAME:
+        text = rx.sub(to, text)
+    return text
+
+
 def terms(question: str) -> frozenset[str]:
-    """What the question is about: its meaningful words, lower-cased and singular.
-    The `[priority]` prefix and the `— why it matters` clause are not part of the ask."""
-    text = _PRIORITY.sub("", question or "").split(" — ")[0].lower()
+    """What the question is about: its meaningful words, lower-cased and singular, with words that ask for the same
+    thing made one (_SAME). The `[priority]` prefix and the `— why it matters` clause are not part of the ask."""
+    text = _same_words(_PRIORITY.sub("", question or "").split(" — ")[0].lower())
     out = set()
     for w in _WORD.findall(text):
         if w in _GLUE:
@@ -61,8 +79,15 @@ def same_ask(a: str, b: str) -> bool:
     if len(small) < 2:
         return False
     inter = len(ta & tb)
-    # a longer ask needs less of its words to match: five shared words are not a coincidence
-    return inter / len(small) >= (0.6 if len(small) >= 5 else 0.75) or inter / len(ta | tb) >= 0.6
+    # a longer ask needs less of its words to match: five shared words are not a coincidence, and four shared words
+    # carry most of a seven-word ask ("existing liquid customers switch", UAT round 4: asked twice)
+    return (inter / len(small) >= (0.6 if len(small) >= 5 else 0.75) or inter / len(ta | tb) >= 0.6
+            or (inter >= 4 and inter / len(small) >= 0.55))
+
+
+def _figures(question: str) -> frozenset[str]:
+    """The figures a question is about ("99.9%", "€70k"): a shared figure ties two asks to one subject."""
+    return frozenset(t for t in terms(question) if any(c.isdigit() for c in t))
 
 
 def _asks(question: str) -> list[str]:
@@ -82,6 +107,7 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
     them already asked, keeps only the new one."""
     kept: list[str] = []
     asked: list[str] = []  # every single ask kept so far
+    parent: dict[str, str] = {}  # each ask -> the kept question it came from
     merged: list[tuple[str, str]] = []
     for q in questions:
         q = (q or "").strip()
@@ -93,21 +119,41 @@ def dedupe(questions: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
                 merged.append((twin, q))
             continue
         asks = _asks(q)
-        fresh = []
+        fresh, hits = [], []
         for a in asks:
             hit = next((k for k in asked if same_ask(k, a)), None)
             if hit is None:
                 fresh.append(a)
             else:
                 merged.append((hit, a))
+                hits.append(parent.get(hit, hit))
         if not fresh:
             continue
-        if len(fresh) == len(asks) or any(_LEANS.search(f) for f in fresh):
+        leaning = [f for f in fresh if _LEANS.search(f)]
+        # A leftover ask that leans on the dropped half ("does it support 99.9%…?") and names the same figure as the
+        # question that half came from is that question again (UAT round 4: the lab-report question asked twice).
+        if hits and leaning and len(leaning) == len(fresh) and all(_figures(f) and any(_figures(f) & _figures(h) for h in hits) for f in fresh):
+            merged.extend((hits[0], f) for f in fresh)
+            continue
+        if len(fresh) == len(asks) or leaning:
             kept.append(q)
         else:
             kept.append(" and ".join(f[0].lower() + f[1:] if i else f for i, f in enumerate(f.rstrip("?") for f in fresh)) + "?")
+        for f in fresh:
+            parent[f] = kept[-1]
         asked.extend(fresh)
     return kept, merged
+
+
+# An open question the planner answered (or left open, with why) keeps its words and gains the answer in the same
+# list item: "Q? — Answer: Yes" (brief-maker answerQ). The page reads the item back with this shape.
+_QA = re.compile(r"\s+—\s+(?:Answer|Left open):\s*\S")
+
+
+def answered_items(items) -> list[str]:
+    """The items of open_questions the planner has already answered or left open: a redraft keeps them
+    (UAT 2026-11-22: Draft it again dropped nine answers and asked the questions again)."""
+    return [x.strip() for x in items or [] if isinstance(x, str) and _QA.search(x)]
 
 
 def without_answered(questions: list[str], answered: dict[str, str]) -> list[str]:

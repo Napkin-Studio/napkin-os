@@ -1,6 +1,6 @@
 name: Deploy
 
-# A push to main builds both images and deploys staging. Production is the
+# A push to main builds the images (web, middleware, and the deck engine where it has a repository) and deploys staging. Production is the
 # same pipeline, run by hand (Actions → Deploy → Run workflow → production):
 # the organisation's plan has no reviewer gate on private repositories, so the
 # deliberate run is the approval. Only people with write access can run it.
@@ -24,10 +24,14 @@ name: Deploy
 on:
   push:
     branches: [ main ]
-    # The Production Tool has its own stack and workflow
-    # (deploy-production-tool.yml); merging it must not redeploy staging.
+    # The Production Tool's relay and stitch have their own stack and workflow
+    # (deploy-production-tool.yml); merging them must not redeploy staging.
+    # Its web app, CLAN store and contracts are built into napkin-web's image
+    # (Dockerfile, production stage; features/os-sign-in.clan), so they do.
+    # The terraform suite (scripts/check.sh) refuses a bare production-tool/** here.
     paths-ignore:
-      - 'production-tool/**'
+      - 'production-tool/relay/**'
+      - 'production-tool/stitch/**'
       - 'infra/envs/hackathon/**'
       - 'docs/production-tool/**'
       - '.github/workflows/deploy-production-tool.yml'
@@ -65,6 +69,7 @@ jobs:
       registry: ${{ steps.ecr.outputs.registry }}
       pushed: ${{ steps.mode.outputs.push }}
       sha: ${{ steps.sha.outputs.sha }}
+      deck: ${{ steps.deck.outputs.exists }}
     steps:
       # A ref other than the run's own may be built for UAT only: staging and
       # production take main's code, whatever is typed here.
@@ -133,6 +138,28 @@ jobs:
           cache-from: type=gha,scope=middleware
           cache-to: type=gha,scope=middleware,mode=max,ignore-error=true
 
+      # The deck engine's image (engine/deck/Dockerfile; features/deck-cloud.clan) goes to a repository that exists only where
+      # Terraform's deck_enabled is on. Where the repository is not there the image is still built, to prove it builds, and not pushed.
+      - id: deck
+        name: Is there a deck repository
+        run: |
+          if [ "${{ steps.mode.outputs.push }}" = "true" ] && aws ecr batch-get-image --repository-name "napkin-$TARGET/deck" --image-ids imageTag=bootstrap >/dev/null 2>&1; then   # the deploy role may read images, not list repositories: a repository that is not there errors
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No napkin-$TARGET/deck repository (or no deploy role): the deck image is built, not pushed."
+          fi
+
+      - name: Deck engine
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: engine/deck/Dockerfile
+          push: ${{ steps.deck.outputs.exists == 'true' }}
+          tags: ${{ steps.ecr.outputs.registry || 'local' }}/napkin-${{ env.TARGET }}/deck:${{ steps.sha.outputs.sha }}
+          cache-from: type=gha,scope=deck
+          cache-to: type=gha,scope=deck,mode=max,ignore-error=true
+
   deploy:
     name: Deploy ${{ inputs.environment || 'staging' }}
     needs: images
@@ -161,11 +188,31 @@ jobs:
           container-name: ${{ matrix.service }}
           image: ${{ needs.images.outputs.registry }}/napkin-${{ env.TARGET }}/${{ matrix.service }}:${{ needs.images.outputs.sha }}
 
+      # The middleware task's second container, the deck engine, only when the task definition has one
+      # (Terraform's deck_enabled applied) and this run pushed its image. Rendered on top of the first render.
+      - id: has_deck
+        if: matrix.service == 'middleware' && needs.images.outputs.deck == 'true'
+        run: |
+          if jq -e '.containerDefinitions[] | select(.name == "deck")' task.json >/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The middleware task definition has no deck container (deck_enabled is not applied): its image is not rolled out."
+          fi
+
+      - id: render_deck
+        if: steps.has_deck.outputs.present == 'true'
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          container-name: deck
+          image: ${{ needs.images.outputs.registry }}/napkin-${{ env.TARGET }}/deck:${{ needs.images.outputs.sha }}
+
       # A new revision, rolled out; ECS rolls back by itself when the new tasks
       # do not come up healthy (the services' deployment circuit breaker).
       - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
+          task-definition: ${{ steps.render_deck.outputs.task-definition || steps.render.outputs.task-definition }}
           service: ${{ matrix.service }}
           cluster: napkin-${{ env.TARGET }}
           wait-for-service-stability: ${{ matrix.service == 'web' }}

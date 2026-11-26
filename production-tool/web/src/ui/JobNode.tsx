@@ -1,12 +1,17 @@
 // A job in place: where its output will land, it shows the queue position and
 // elapsed time; when it fails, the error and one floating bar: Retry, Try another model (a menu),
-// Report, Clear. Never a toast.
+// Report, Clear. Never a toast. A job waiting for an answer (needs_input) shows its ask card
+// instead: no figure at work, no busy pointer (ui-behaviour 5.2). While it runs, the crew member
+// doing the work shows working (leans in, motion lines) with their sign-off; the turning Napkin
+// logo belongs only to the top bar and the busy pointer (owner, 2026-10-15; ui-behaviour 6.5).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfig, useDoc, useJobsTick, useServices, useUi } from '../app/context'
 import { choiceToSend, modelChoicesFor, modelLabel } from '../capabilities'
 import type { DocJob } from '../contracts/types'
-import { isActive } from '../jobs/runner'
+import { askOf, isActive, jobCtx } from '../jobs/runner'
+import { shotNumber } from '../model/selectors'
+import { AskCard } from './AskCard'
 import { cancelText, mayStillCharge } from './cancel'
 import { AgentFigure } from './agents/AgentFigure'
 import { whoIsWorking } from './agents/cast'
@@ -17,7 +22,8 @@ import { InlineConfirm } from './Undo'
 import { fmtElapsed, useElapsed } from './hooks'
 import { Thumbs } from '../dogfood/Dogfood'
 import { errorShown, feedback } from '../dogfood/recorder'
-import { failedActions } from './jobActions'
+import { failedActions, stepWords } from './jobActions'
+import { plainJobError } from '../jobs/errorWords'
 
 const STATE_LABEL: Record<string, string> = {
   queued: 'In the queue',
@@ -28,15 +34,21 @@ const STATE_LABEL: Record<string, string> = {
   uncertain: 'Checking with the provider…',
 }
 
-export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; compact?: boolean; onRetried?: (newId: string) => void }) {
+/** `row`: one line in a list (the Image editor's Edits row): status, elapsed time and Cancel with its confirm,
+ *  never a loader over the work. Its other states are the compact ones. */
+/** `askElsewhere`: the job's question is shown in a card of its own beside this node (the canvas: a placeholder
+ *  is too small to hold it, UAT round 1 IMG-1), so the node only says it waits for an answer. */
+export function JobNode({ jobId, compact: small = false, row = false, onRetried, askElsewhere = false }: { jobId: string; compact?: boolean; row?: boolean; onRetried?: (newId: string) => void; askElsewhere?: boolean }) {
+  const compact = small || row
   const { runner } = useServices()
   const doc = useDoc()
   useJobsTick()
-  const job = doc.jobs.find((j) => j.id === jobId)
+  const job = doc.jobs[jobId] as DocJob | undefined
   const live = runner.liveInfo(jobId)
   const ui = useUi()
   const state = live?.state ?? job?.state ?? 'queued'
-  const running = isActive(state)
+  const waiting = state === 'needs_input'
+  const running = isActive(state) && !waiting
   const elapsed = useElapsed(job?.created_at, running)
   const [reported, setReported] = useState<'no' | 'sending' | 'yes' | 'failed'>('no')
   const [confirming, setConfirming] = useState(false)
@@ -47,13 +59,30 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   }, [failed, jobId, job?.op, job?.provider])
 
   if (!job) return null
-  const ctx = ui.jobCtx[jobId]
+  const ctx = jobCtx(doc, ui, jobId)
   const shotId = ctx && 'shotId' in ctx ? ctx.shotId : undefined
-  const order = shotId ? (doc.shots ?? []).find((x) => x.id === shotId)?.order : undefined
+  const order = shotId ? shotNumber(doc, shotId) || undefined : undefined
   const who = whoIsWorking(job, state, ctx, order)
+  const ask = askOf(doc, jobId)
+
+  if (waiting) {
+    // The agent asked instead of guessing: the question, not a loader.
+    return ask && !askElsewhere
+      ? <AskCard ask={ask} />
+      : (
+        <div className={`pending waiting ${compact ? 'compact' : ''}`} role="status">
+          <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
+          {/* The question is in its card beside the node: a short line here, never clipped words. */}
+          <div className="state">{ask && compact ? 'Waiting for your answer' : who.line}</div>
+        </div>
+      )
+  }
 
   if (state === 'failed' || state === 'cancelled') {
-    const err = job.error
+    // The relay's internal words ("The director failed (DirectorError).") said plainly (jobs/errorWords.ts).
+    const stored = job.error
+    const err = stored ? plainJobError(stored, job.op) : undefined
+    const plain = err !== stored
     const cancelled = state === 'cancelled'
     const retryable = cancelled || (err?.retryable ?? true)
     const target = { kind: 'error' as const, id: err?.code ?? state, jobId, op: job.op, provider: job.provider, model: job.model }
@@ -70,7 +99,7 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
         {!compact && <AgentFigure agent={who.agent} state={who.state} size={46} decorative />}
         <div className="msg" title={compact ? err?.message : undefined}>{cancelled ? 'Cancelled.' : err?.message ?? 'Something went wrong.'}</div>
         {!compact && !cancelled && offer.note && <div className="faint" style={{ fontSize: 12, maxWidth: 260 }}>{offer.note}</div>}
-        {!compact && err?.code && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
+        {!compact && err?.code && !plain && <div className="code">{err.code}{err.providerCode ? ` · ${err.providerCode}` : ''}</div>}
         {/* One floating bar of what to do next: Retry, another model, Report, Clear. */}
         <div className="optbar" role="group" aria-label="What to do with this job">
           {retryable && (
@@ -115,20 +144,36 @@ export function JobNode({ jobId, compact = false, onRetried }: { jobId: string; 
   }
 
   const q = live?.queuePosition
+  const step = stepWords(live?.progress)
   const model = job.model ? modelLabel(job.provider, job.model) : undefined
+  const cancel = state !== 'fetching' && (confirming
+    ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
+    : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)
+  if (row) {
+    return (
+      <span className="jobrow" aria-live="polite" title={who.line}>
+        <span className="meta">{STATE_LABEL[state] ?? 'Working…'}{step}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}</span>
+        {cancel}
+      </span>
+    )
+  }
   return (
+    <>
     <div className={`pending ${compact ? 'compact' : ''}`} aria-live="polite">
-      <AgentFigure agent={who.agent} state={who.state} size={compact ? 34 : 52} decorative />
+      {/* Who is doing the work, at work, and their sign-off (ui-behaviour 5.1, 6.5). */}
+      {/* Big agent, small words (owner, 2026-11-19): the line already names who; no separate name label. */}
+      <AgentFigure agent={who.agent} state={who.state} size={compact ? 72 : 96} decorative />
       {!compact && <div className="state" title={ctx?.fallbackReason}>{who.line}</div>}
       <div className="meta" title={compact ? who.line : undefined}>
-        {STATE_LABEL[state] ?? 'Working…'}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
+        {STATE_LABEL[state] ?? 'Working…'}{step}{model && !compact ? ` · ${model}` : ''}{q ? ` · #${q} in queue` : ''} · {fmtElapsed(elapsed)}
       </div>
       {!compact && live?.note && <div className="meta" role="status">{live.note}</div>}
       {/* Downloading the result: it lands as it is, so there is nothing to cancel. */}
-      {!compact && state !== 'fetching' && (confirming
-        ? <InlineConfirm text={cancelText(job, config)} yes="Stop it" onYes={() => { setConfirming(false); void runner.cancel(jobId) }} onNo={() => setConfirming(false)} />
-        : <button className="btn xs ghost" onClick={() => (mayStillCharge(job, config) ? setConfirming(true) : void runner.cancel(jobId))}>Cancel</button>)}
+      {!compact && cancel}
     </div>
+    {/* Answered and back at work: who chose what, with Change. */}
+    {!compact && ask && <AskCard ask={ask} />}
+    </>
   )
 }
 

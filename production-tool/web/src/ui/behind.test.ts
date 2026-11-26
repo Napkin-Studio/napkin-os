@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductionDocument } from '../contracts/types'
-import { adBehindLabel, behindCount, behindLabel, driftLabel, notMadeCount, oldWordsLine } from './behind'
+import { behindCount, behindLabel, driftLabel, notMadeCount, oldWordsLine } from './behind'
 
+// Shot numbers come from rank on the storyboard, not from the ids.
 const d = {
-  shots: [{ id: 's1', order: 1 }, { id: 's2', order: 2 }, { id: 's3', order: 3 }],
-  frames: [{ id: 'f2', shot_id: 's2' }],
-  takes: [{ id: 't3', shot_id: 's3' }],
-  refs: [{ id: 'r1', key: 'maya', variant: 'front' }],
+  storyboards: { sb: { id: 'sb' } },
+  videos: {},
+  links: {},
+  shots: {
+    s3: { id: 's3', storyboard_id: 'sb', rank: 'c' },
+    s1: { id: 's1', storyboard_id: 'sb', rank: 'a' },
+    s2: { id: 's2', storyboard_id: 'sb', rank: 'b' },
+  },
+  frames: { f2: { id: 'f2', shot_id: 's2' } },
+  generations: { t3: { id: 't3', shot_ids: ['s3'] } },
+  refs: { r1: { id: 'r1', key: 'maya', variant: 'front' } },
 } as unknown as ProductionDocument
 
 describe('what an out-of-date item is behind', () => {
   it('names the frame, clip, reference or shot that changed', () => {
     expect(behindLabel(d, { caused_by: { kind: 'frame', id: 'f2' } })).toBe('Behind frame 2')
-    expect(behindLabel(d, { caused_by: { kind: 'take', id: 't3' } })).toBe('Behind clip 3')
+    expect(behindLabel(d, { caused_by: { kind: 'generation', id: 't3' } })).toBe('Behind clip 3')
     expect(behindLabel(d, { caused_by: { kind: 'ref', id: 'r1' } })).toBe('Behind @maya_front')
     expect(behindLabel(d, { caused_by: { kind: 'shot', id: 's1' } })).toBe('Behind shot 1')
   })
@@ -28,9 +36,7 @@ describe('what an out-of-date item is behind', () => {
     expect(oldWordsLine('take', 3, { reason: "Shot 3's length changed" })).toBe('Clip 3 uses the old length')
     expect(driftLabel(2)).toBe('Drawn from an older frame 2')
   })
-  it('the ad is behind its clips or the shots; the bar counts what is out of date, and what is not made yet apart', () => {
-    expect(adBehindLabel("Shot 2's clip changed")).toBe('Behind the clips')
-    expect(adBehindLabel('A shot was deleted')).toBe('Behind the shots')
+  it('the bar counts what is out of date, and what is not made yet apart', () => {
     expect(behindCount(3)).toBe('3 out of date')
     expect(notMadeCount(0, 3)).toBe('3 clips not made yet')
     expect(notMadeCount(1, 2)).toBe('1 frame and 2 clips not made yet')

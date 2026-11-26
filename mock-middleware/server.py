@@ -87,6 +87,10 @@ REGISTRY = {
     "start_campaign": {"task": "start_campaign", "versions": {1: "1.0"}},
     "answer_question": {"task": "answer_question", "versions": {1: "1.0"}},
     "compose_report": {"task": "compose_report", "versions": {1: "1.0"}},
+    "run_territories": {"task": "run_territories", "versions": {1: "1.0"}},
+    "fetch_territories_file": {"task": "fetch_territories_file", "versions": {1: "1.0"}},
+    "brand_identify": {"task": "brand_identify", "versions": {1: "1.0"}},
+    "brand_build": {"task": "brand_build", "versions": {1: "1.0"}},
 }
 # Used only when the document carries no pipeline (the declared built-in map).
 BUILTIN_PIPELINE = {
@@ -96,8 +100,14 @@ BUILTIN_PIPELINE = {
     "start_campaign": "start_campaign@1",
     "answer_question": "answer_question@1",
     "compose_report": "compose_report@1",
+    "run_territories": "run_territories@1",
+    "fetch_territories_file": "fetch_territories_file@1",
+    "brand_identify": "brand_identify@1",
+    "brand_build": "brand_build@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status"}
+# Tasks added after documents were made: a document whose pipeline predates one resolves it from the built-in map (as the real middleware does).
+LATER_TASKS = {"brand_identify", "brand_build"}
 LONG_TASKS = {"research_lens", "synthesise_findings", "start_campaign"}
 
 LENSES = [
@@ -232,6 +242,8 @@ def resolve_handler(task: str, clan: dict) -> str:
         if not isinstance(pipeline, dict) or not isinstance(pipeline.get("tasks"), dict):
             raise bad("clan.pipeline is present but has no tasks map")
         decl = pipeline["tasks"].get(task)
+        if decl is None and task in LATER_TASKS:
+            decl = BUILTIN_PIPELINE[task]
         if decl is None:
             raise bad(f"task '{task}' is not declared by this document's pipeline", "unknown_task")
         declared = decl.get("handler") if isinstance(decl, dict) else decl
@@ -2507,6 +2519,18 @@ def compose_report_task(doc, base, clan, handler):
                      "messages": [{"id": mid, "text": text, "stage": "report"}]}, change, hits)
 
 
+def run_territories_stub(doc, handler, inp):
+    """run_territories@1 (middleware-api.md §13): the real one runs engine/territory in the middleware. This stand-in runs nothing and says so: a
+    finished job, no change, and a summary that names what it is, so a screen wired to it shows the honest "nothing happened" and never a made-up run."""
+    t = iso(_dt.datetime.now(_dt.timezone.utc))
+    step = inp.get("step") or "run"
+    job = {"id": "job_" + _digest(SCOPE, doc, "run_territories", step, next(_SEQ)).hex()[:20], "state": "done", "progress": {"done": 1, "total": 1},
+           "stage": step, "question": None, "started_at": t, "finished_at": t, "error": None}
+    return envelope("run_territories", handler, job,
+                    {"summary": "The mock middleware does not run Territories: nothing was done and the document is unchanged. Run the real middleware to explore.",
+                     "step": step}, None, [])
+
+
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
@@ -2556,12 +2580,24 @@ def handle(body: dict) -> dict:
         return answer_question(doc, clan, inp)
     if task == "compose_report":
         return compose_report_task(doc, base, clan, handler)
+    if task == "run_territories":
+        return run_territories_stub(doc, handler, inp)
+    if task == "fetch_territories_file":
+        raise TaskError(503, "not_built", "Exports are not built yet, so there is no file to download. (The mock middleware makes no files.)")
     if task == "extract_ask":
         result, change, hits = run_extract(doc, base, clan, inp, handler)
         job = {"id": "job_" + _digest(SCOPE, doc, base, task, inp, next(_SEQ)).hex()[:20], "state": "done",
                "progress": {"done": 1, "total": 1}, "started_at": t0,
                "finished_at": iso(_dt.datetime.now(_dt.timezone.utc)), "error": None}
         return envelope(task, handler, job, result, change, hits)
+    if task == "brand_identify":
+        job = {"id": "job_" + _digest(SCOPE, doc, base, task, inp, next(_SEQ)).hex()[:20], "state": "done", "progress": {"done": 1, "total": 1},
+               "started_at": t0, "finished_at": iso(_dt.datetime.now(_dt.timezone.utc)), "error": None}
+        return envelope(task, handler, job, run_brand_identify(inp), None, [])
+    if task == "brand_build":
+        result = run_brand_build(inp)
+        job = submit(task, handler, doc, base, result, None, [], 2, inp)
+        return envelope(task, handler, job_view(job, "queued", 0), {"summary": "queued"}, None, [])
     if task == "research_lens":
         result, change, hits, total = run_research(doc, base, clan, inp, handler)
     else:
@@ -2569,6 +2605,49 @@ def handle(body: dict) -> dict:
     job = submit(task, handler, doc, base, result, change, hits, total, inp)
     return envelope(task, handler, job_view(job, "queued", 0),
                     {"summary": f"queued: {total} run(s)"}, None, [])
+
+
+# ---------------------------------------------------------------------------
+# Brand Clan (middleware-api.md section 14). No model and no host here: the stand-in decides by the file's name, answers a fixed question, and a
+# build ends `done` with counts and no write (a real host writes the Brand Clan). A file over 120 pages is asked about first, as the real one does.
+# ---------------------------------------------------------------------------
+BRAND_NAME = re.compile(r"brand[\s_-]*(book|bible|guide|guidelines|identity|standards|manual)|style[\s_-]*guide|guidelines", re.I)
+
+
+def brand_file(inp):
+    f = inp.get("file")
+    if not isinstance(f, dict) or not isinstance(f.get("name"), str) or not f["name"].strip() or "/" in f["name"]:
+        raise bad("input.file must be {name, ...}")
+    return f
+
+
+def run_brand_identify(inp):
+    f = brand_file(inp)
+    pages = f.get("pages") if isinstance(f.get("pages"), int) else 0
+    clans = [c for c in inp.get("brand_clans") or [] if isinstance(c, dict) and isinstance(c.get("name"), str)]
+    yes = bool(BRAND_NAME.search(f["name"]))
+    pick = next((c for c in clans if c.get("default")), clans[0] if len(clans) == 1 else None)
+    q = None
+    if yes:
+        q = {"mode": "choose" if clans else "new", "options": ["update", "new", "not_bible"] if clans else ["build", "not_bible"],
+             "update": {"document_id": pick.get("document_id"), "name": pick["name"]} if pick else None,
+             "pages": pages, "over_cap": pages > 120, "page_cap": 120}
+    return {"summary": "looks like a brand bible" if yes else "not asked about: not_a_bible_by_rules", "ask": yes,
+            "reason": None if yes else "not_a_bible_by_rules", "pages": pages, "model_called": False, "brand_bible": yes or None,
+            "brand_name": None, "confidence": 0.9 if yes else None, "matches_client": None, "question": q}
+
+
+def run_brand_build(inp):
+    f = brand_file(inp)
+    if inp.get("mode") not in ("new", "update"):
+        raise bad("input.mode must be new or update")
+    pages = f.get("pages") if isinstance(f.get("pages"), int) else 0
+    if pages > 120 and inp.get("confirmed_over_cap") is not True:
+        raise TaskError(409, "over_cap", f"the file has {pages} pages; Napkin reads 120 without asking. Say yes to read all of it")
+    name = inp.get("name") or (inp.get("brand_clan") or {}).get("name") or "Original"
+    counts = {"logos": 2, "colours": 4, "typography": 2, "rules": 3}
+    return {"summary": f"Built the Brand Clan \u201c{name}\u201d (the stand-in writes nothing).", "mode": inp["mode"], "document_id": None, "path": None,
+            "name": name, "pending": inp["mode"] == "update", "counts": counts, "gaps": ["imagery"], "actor": "process:brand_build"}
 
 
 def log(msg):

@@ -33,16 +33,18 @@ def _make(tmp_path, name: str, args: list[str]) -> bytes:
 
 
 def test_a_still_is_looped_and_a_short_clip_held_in_the_command():
-    a = stitch.load_assets("roll-up")
     clips = [{"path": "/t/a.png", "trimS": 3, "still": True}, {"path": "/t/b.png", "still": True},
              {"path": "/t/c.mp4", "trimS": 4}]
-    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "roll-up", a, "/t/o.mp4")
+    cmd = stitch.build_command("ffmpeg", clips, (1280, 720), "/t/o.mp4")
     i = cmd.index("/t/a.png")
     assert cmd[i - 7:i + 1] == ["-loop", "1", "-framerate", "24", "-t", "3", "-i", "/t/a.png"]
     j = cmd.index("/t/b.png")
     assert cmd[j - 3:j] == ["-t", "5", "-i"]  # no trimS: STILL_S
     graph = cmd[cmd.index("-filter_complex") + 1]
-    assert graph.count("tpad=stop_mode=clone") == 1  # the video only: a still is already as long as its shot
+    # Every clip with a length is held to it; a still too, since scaling a looped picture drops its last
+    # frame (features/connected-video.clan, 2026-10-15).
+    assert graph.count("tpad=stop_mode=clone") == 3
+    assert "tpad=stop_mode=clone:stop_duration=3,trim=duration=3,setpts=PTS-STARTPTS[v0]" in graph
     assert "tpad=stop_mode=clone:stop_duration=4,trim=duration=4,setpts=PTS-STARTPTS[v2]" in graph
 
 
@@ -69,7 +71,7 @@ def test_mock_stills_make_an_ad_as_long_as_the_shots(tmp_path):
     png = _make(tmp_path, "still.png", ["-f", "lavfi", "-i", "color=c=red:s=320x568", "-frames:v", "1"])
     res, _ = _run(tmp_path, {"a.mp4": png, "b.mp4": png}, [{"key": "a.mp4", "trimS": 2}, {"key": "b.mp4", "trimS": 1.5}])
     assert res["ok"], res
-    assert abs(res["durationS"] - (2 + 1.5 + stitch.CARD_S)) <= 0.15
+    assert abs(res["durationS"] - (2 + 1.5)) <= 0.15
 
 
 @needs_ffmpeg
@@ -77,4 +79,4 @@ def test_a_clip_shorter_than_its_shot_is_held_to_the_shots_length(tmp_path):
     clip = _make(tmp_path, "short.mp4", ["-f", "lavfi", "-i", "testsrc=d=1:s=360x640:r=30", "-pix_fmt", "yuv420p"])
     res, _ = _run(tmp_path, {"a.mp4": clip}, [{"key": "a.mp4", "trimS": 3}])
     assert res["ok"], res
-    assert abs(res["durationS"] - (3 + stitch.CARD_S)) <= 0.15
+    assert abs(res["durationS"] - 3) <= 0.15

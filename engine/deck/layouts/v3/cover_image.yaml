@@ -1,0 +1,45 @@
+id: cover_image
+version: 1
+group: functional
+purpose: title
+description: The cover with the picture as a full-height column on the right and the title set beside it on the dark ground (the words never sit on the picture).
+slot_summary: title, lead, picture 16:9
+for_types:
+- title
+when:
+  test: image_ready
+priority: 99
+alternatives:
+- cover
+without_image: cover
+density: lean
+pick: rule
+family: cover
+renderer: cover_image
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 4
+  lead:
+    kind: text
+    role: lead
+    from_blocks:
+    - text
+    - statement
+    max_chars: 136
+  picture:
+    kind: image
+    required: true
+    dominant: true
+    image:
+      aspect: '16:9'
+      kinds:
+      - photo
+      - illustration
+      - frame
+      fit: cover
+      text_over: false
+      scrim: none

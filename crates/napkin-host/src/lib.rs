@@ -20,6 +20,8 @@
 //! desktop binds that to a custom URI scheme and Tauri events; a web server
 //! binds the same table to HTTP.
 
+pub mod blobs;
+pub mod brand_clan;
 pub mod clients;
 pub mod config;
 pub mod ctx;
@@ -30,6 +32,7 @@ pub mod event;
 pub mod export;
 pub mod frame;
 pub mod html;
+pub mod inbox;
 pub mod library;
 pub mod listing;
 pub mod log;
@@ -49,6 +52,7 @@ pub use ctx::{Actor, Ctx, Scope};
 pub use document::{Base, Change, Document, Version};
 pub use error::{HostError, HostResult};
 pub use event::HostEvent;
+pub use inbox::{InboxStore, MemInbox};
 pub use library::{
     create_instance, create_instance_for, ensure_home, home_change, install_app, install_change,
     instance_change, scan_apps, scan_recent, spinoff_change, spinoff_document, spinoff_targets,
@@ -67,5 +71,5 @@ pub use session::{
 };
 #[cfg(feature = "native")]
 pub use store::FsStore;
-pub use store::{DocId, DocStore, Library, PartStore};
+pub use store::{BlobInfo, BlobStore, DocId, DocStore, Library, PartStore};
 pub use view::{LibraryView, ViewSource};

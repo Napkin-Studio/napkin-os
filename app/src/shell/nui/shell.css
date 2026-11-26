@@ -20,7 +20,24 @@
 .nui .tb-locked > .tb-app { flex: 1 1 auto !important; min-width: 0; overflow: hidden !important; }
 .nui .tb-locked > .tb-spacer { flex: 1 1 0; min-width: 0; }
 .nui .tb-app > * { flex-shrink: 0; }
-.nui .tb-app > .tba-name { flex-shrink: 1; min-width: 72px; }
+.nui .tb-app > .tba-name { flex-shrink: 1; min-width: min(196px, 100%); }
+/* The name keeps its room: a title that ends in an ellipsis at "P…" is no name (owner, 2026-11-23). */
+/* Continue in never clips: when the bar is tight Toolbar.tsx moves things out of the way (chip, second button, Share). */
+.nui .tb-status-compact { margin-left: 4px; padding: 4px 8px; gap: 5px; letter-spacing: 0; }
+.nui .tb-locked:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-cname { display: none; }
+.nui .tb-locked:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-client { padding-right: 8px; }
+.nui .tb-locked:is([data-fit="4"], [data-fit="5"], [data-fit="6"], [data-fit="7"]) { gap: 8px !important; padding-left: 16px; padding-right: 16px; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .stacked-lockup .sl-mono { display: none; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .stacked-lockup .sl-big { font-size: 12.5px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-tools { gap: 4px; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-vsep { display: none; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-app > .tba-name { min-width: min(184px, 100%); }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tba-acts { margin-left: 2px; gap: 4px; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tba-acts .tba-btn { padding-left: 9px; padding-right: 9px; }
+/* 6: Decisions keeps its count alone; its name stays on the button's label */
+.nui .tb-locked:is([data-fit="6"], [data-fit="7"]) .tb-decisions-btn > span:first-child { display: none; }
+.nui .tb-locked:is([data-fit="5"], [data-fit="6"], [data-fit="7"]) .tb-status-compact { margin-left: 0; }
+.nui .tba-more { padding: 0 10px; font-weight: 700; letter-spacing: .08em; }
 /* The name's column shrinks with it: its title and saved line end in an
    ellipsis inside the column, so neither runs under the caret, and the caret
    keeps its own room before Continue in. */
@@ -53,6 +70,7 @@
 /* States the mock does not draw. */
 .nui .nui-empty { padding: 10px 12px; font-size: 13px; color: var(--muted); }
 .nui .nui-more { margin-top: 14px; }
+.nui .nui-note { margin: 10px 0 0; padding: 8px 12px; font-size: 13px; border-left: 3px solid var(--accent, currentColor); background: color-mix(in srgb, currentColor 6%, transparent); max-width: 60ch; }
 .nui .nui-banner { margin: 18px 0 0; padding: 10px 14px; border-radius: var(--r-md); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
 .nui .nui-panel { margin: 0 0 18px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-md); }
 .nui .cl-add-err { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
@@ -65,7 +83,9 @@
 .nui .p33-drow.old { opacity: .6; }
 .nui .p33-drow details > code { display: block; margin: 6px 0; }
 .nui .p33-drow details .dp-ex { padding: 8px 0 0; }
-.nui .dial .dz[aria-disabled="true"] { opacity: .55; }
+/* A Soon quadrant dims its icon and words, never its fill: the whole group at .55 let the desk print
+   through the dial (live test 2026-11-16). */
+.nui .dial .dz[aria-disabled="true"] > :not(path) { opacity: .55; }
 
 /* The drawer sits over the document as it does over the desk. */
 .nui .dtree-drawer .dp-err { margin: 0; }

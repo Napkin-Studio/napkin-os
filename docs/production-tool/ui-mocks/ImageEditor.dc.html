@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Image editor: frame 3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#1E4ED8}a:hover{color:#1E4ED8}
+.grid{background-color:#FAFAFB;background-image:radial-gradient(#D6DAE2 1px, transparent 1px);background-size:24px 24px}
+button{font:inherit;cursor:pointer;color:#14161B}
+textarea,input{font:inherit;color:#14161B}
+.mono{font-family:'Geist Mono',monospace}
+/* Copied from app/src/studio/AgentFigure.css (the apps don't import across each
+   other); agents.test.ts checks the figures still match the house sheet.
+   Agent figures. States come in as data attributes on the <svg>:
+   data-state = idle | working | needs-you, data-walking when moving.
+   --af-phase (0–1, per agent) offsets every loop so figures don't sync. */
+
+/* The character sheet's colours. Ink bodies use the studio's --plan pair and
+   follow the theme; these five stay put in light and dark, with a dark face.
+   Coral is the sheet's own, redder than --create, which is only for needs-you. */
+.agent-figure,
+.agent-avatar {
+  --af-cobalt: #2F64F5;
+  --af-coral: #FF6A55;
+  --af-marigold: #FFC023;
+  --af-iris: #7D52F4;
+  --af-mint: #6CD3A2;
+  --af-mark: #16181D;
+}
+
+.agent-figure {
+  display: block;
+  overflow: visible;
+  flex-shrink: 0;
+  --af-bob: 2.8s;
+}
+
+.agent-figure .af-shadow { fill: var(--ink); opacity: 0.08; }
+.agent-figure .af-leg line { stroke: var(--ink); stroke-width: 2.1; stroke-linecap: round; }
+.agent-figure .af-leg rect { fill: var(--ink); }
+.agent-avatar .aa-tile { fill: var(--soft, #F2F3F6); }
+
+/* Legs swing from the hip: the top of each leg's own box. The body leans from
+   its base, so a working figure tips forward over its feet. */
+.agent-figure .af-leg { transform-box: fill-box; transform-origin: 50% 0; }
+.agent-figure .af-body { transform-box: fill-box; transform-origin: 50% 100%; }
+.agent-figure .af-eyes,
+.agent-figure .af-badge-ring { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* idle — a slow bob and the odd blink. */
+.agent-figure .af-body {
+  animation: af-bob var(--af-bob) ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -2.8s);
+}
+.agent-figure .af-eyes {
+  animation: af-blink 5.2s linear infinite;
+  animation-delay: calc(var(--af-phase, 0) * -5.2s);
+}
+
+/* working — leans in, small steps in place, motion lines off its shoulder. */
+.agent-figure .af-motion { display: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; fill: none; }
+.agent-figure[data-state='working'] .af-motion { display: inline; animation: af-flicker 0.55s steps(2, jump-none) infinite; }
+.agent-figure[data-state='working'] .af-leg-l,
+.agent-figure[data-state='working'] .af-leg-r {
+  animation: af-step 0.55s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -1.1s);
+}
+.agent-figure[data-state='working'] .af-leg-r { animation-name: af-step-r; }
+.agent-figure[data-state='working'] .af-body { animation: af-lean 0.275s ease-in-out infinite alternate; }
+
+/* walking — a full stride; wins over whatever the state says about legs. */
+.agent-figure[data-walking] .af-leg-l,
+.agent-figure[data-walking] .af-leg-r {
+  animation: af-stride 0.45s ease-in-out infinite alternate;
+  animation-delay: calc(var(--af-phase, 0) * -0.9s);
+}
+.agent-figure[data-walking] .af-leg-r { animation-name: af-stride-r; }
+.agent-figure[data-walking] .af-body { animation: af-bob-quick 0.225s ease-in-out infinite alternate; }
+
+/* needs-you — the sheet's speech bubble with a "!", in the accent: orange is
+   still the one colour that means a person is needed. */
+.agent-figure .af-badge-bubble { fill: var(--paper); stroke: var(--create); stroke-width: 1.4; stroke-linejoin: round; }
+.agent-figure .af-badge-mark { stroke: var(--create); stroke-width: 1.7; stroke-linecap: round; }
+.agent-figure .af-badge-dot { fill: var(--create); }
+.agent-figure .af-badge-ring { fill: none; stroke: var(--create); stroke-width: 1.4; animation: af-ping 1.8s var(--ease, ease-out) infinite; }
+
+@keyframes af-bob { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+@keyframes af-bob-quick { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+@keyframes af-lean { from { transform: rotate(8deg) translateY(0); } to { transform: rotate(8deg) translateY(-1.2px); } }
+@keyframes af-step { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+@keyframes af-step-r { from { transform: rotate(9deg); } to { transform: rotate(-9deg); } }
+@keyframes af-stride { from { transform: rotate(-20deg); } to { transform: rotate(20deg); } }
+@keyframes af-stride-r { from { transform: rotate(20deg); } to { transform: rotate(-20deg); } }
+@keyframes af-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes af-flicker { from { opacity: 1; } to { opacity: 0.35; } }
+@keyframes af-ping { 0% { transform: scale(1); opacity: 0.5; } 80%, 100% { transform: scale(1.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-figure *, .agent-figure { animation: none !important; }
+  .agent-figure .af-badge-ring { display: none; }
+  /* Still reads as working without motion. */
+  .agent-figure[data-state='working'] .af-body { transform: rotate(8deg); }
+}
+
+/* Ink bodies (Ellis, Jude) follow the theme, so in dark mode they turn light and
+   can vanish on a light ground (a paper page, a report). An outline in the
+   page's own ink keeps them visible on any ground. Coloured bodies need none. */
+.agent-figure .af-body [fill='var(--plan)'] {
+  stroke: var(--af-edge, var(--ink));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; position: relative; overflow: hidden; font-family: 'Geist', 'Helvetica Neue', sans-serif; color: #14161B; background: #FAFAFB; --ink: #14161B; --plan: #14161B; --plan-eye: #FFFFFF; --soft: #F2F3F6; --paper: #FFFFFF; --create: #FF4F2E">
+
+<!-- Top bar -->
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.92); border-bottom: 1px solid #E7E9EE; z-index: 6">
+  <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500">← Storyboard</button>
+  <span aria-hidden="true" style="width: 1px; height: 22px; background: #E7E9EE"></span>
+  <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="4" width="16" height="12" rx="2" fill="#2F64F5"></rect><path d="M4 14 L8 9.5 L11 12.5 L13 10.5 L16 14" fill="none" stroke="#16181D" stroke-width="1.3"></path></svg>
+  <h1 style="margin: 0; font-weight: 600; font-size: 14px">Frame 3 · Insert</h1>
+  <span class="mono" style="font-size: 11px; color: #6B7180">16:9 locked · 1920 × 1080</span>
+  <span style="flex: 1"></span>
+  <div role="group" aria-label="Zoom" style="display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #E7E9EE; border-radius: 999px; font-size: 12px">
+    <button aria-label="Zoom out" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent">−</button>
+    <span class="mono" style="width: 40px; text-align: center">100%</span>
+    <button aria-label="Zoom in" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: transparent">+</button>
+    <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: #F2F3F6; font-size: 12px">Fit</button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4A4F5C">
+    <span style="width: 26px; height: 26px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 11px; border: 2px solid #FFFFFF">S</span>
+    <span>Sai is here</span>
+  </div>
+  <span class="mono" style="font-size: 12px; color: #4A4F5C; padding: 4px 10px; border: 1px solid #E7E9EE; border-radius: 999px">3 edits not applied</span>
+  <button aria-haspopup="menu" aria-expanded="{{ versionsOpen }}" onClick="{{ toggleVersions }}" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px"><span class="mono" style="font-size: 12px">v3</span> of 3 <span aria-hidden="true" style="font-size: 10px; color: #6B7180">▼</span></button>
+  <button style="height: 32px; padding: 0 16px; border-radius: 999px; border: 0; background: #D63B1F; color: #FFFFFF; font-size: 13px; font-weight: 600">Apply as new version</button>
+  <button aria-label="Your account" style="width: 32px; height: 32px; border-radius: 999px; border: 0; background: #F2F3F6; font-weight: 600; font-size: 12px">SB</button>
+</header>
+
+<!-- Versions menu -->
+<sc-if value="{{ versionsOpen }}" hint-placeholder-val="{{ false }}">
+<div role="menu" aria-label="Versions of frame 3" style="position: absolute; right: 240px; top: 54px; width: 300px; box-sizing: border-box; padding: 8px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 12px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 2px; z-index: 7">
+  <button role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left">
+    <span style="width: 56px; height: 32px; border-radius: 4px; background: radial-gradient(circle at 45% 50%, #DCEBF5 0%, #A9C4D6 45%, #C9A27F 100%)"></span>
+    <span style="display: flex; flex-direction: column; gap: 2px; font-size: 12px"><span><span class="mono">v1</span> · drawn by Wren</span><span style="color: #6B7180">Gen-4 Image on Runway · Monday</span></span>
+  </button>
+  <button role="menuitem" style="display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left">
+    <span style="width: 56px; height: 32px; border-radius: 4px; background: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%)"></span>
+    <span style="display: flex; flex-direction: column; gap: 2px; font-size: 12px"><span><span class="mono">v2</span> · redrawn by Wren</span><span style="color: #6B7180">"warmer, bottle centred" · Maya</span></span>
+  </button>
+  <button role="menuitem" aria-current="true" style="display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 8px; background: rgba(47,100,245,0.06); text-align: left; color: #1E4ED8">
+    <span style="width: 56px; height: 32px; border-radius: 4px; background: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%); outline: 2px solid #2F64F5"></span>
+    <span style="display: flex; flex-direction: column; gap: 2px; font-size: 12px; font-weight: 600"><span><span class="mono">v3</span> · edited · open now</span><span style="font-weight: 400; color: #4A4F5C">Upscaled 2× · Sai · yesterday</span></span>
+  </button>
+  <div style="margin-top: 4px; padding: 8px; border-top: 1px solid #E7E9EE; font-size: 12px; color: #4A4F5C">Apply saves your 3 edits as <span class="mono">v4</span>. v3 stays.</div>
+</div>
+</sc-if>
+
+<!-- Work area -->
+<div class="grid" style="position: absolute; left: 0; top: 48px; width: 1440px; height: 852px"></div>
+
+<!-- Tool column -->
+<div role="toolbar" aria-label="Image tools" aria-orientation="vertical" style="position: absolute; left: 16px; top: 64px; width: 56px; box-sizing: border-box; padding: 6px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 4">
+  <button aria-label="Select (V)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2 L13 8 L8 9 L6 14 Z" fill="#14161B"></path></svg></button>
+  <button aria-label="Click-select, AI finds the object (A)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 4 L12 9.5 L8 10.3 L6.3 14.5 Z" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linejoin="round"></path><path d="M14 1.5 L14.7 3.3 L16.5 4 L14.7 4.7 L14 6.5 L13.3 4.7 L11.5 4 L13.3 3.3 Z" fill="#2F64F5"></path></svg></button>
+  <button aria-label="Brush mask (B), selected" aria-pressed="true" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: #14161B; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M15.5 2.5 L8 10" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"></path><path d="M7.6 9.2 C5 9.2 4.2 11 4 12.6 C3.8 14.2 2.8 15 2 15.4 C4.5 16.4 9 15.5 9.2 11.6 Z" fill="#FFFFFF"></path></svg></button>
+  <button aria-label="Lasso (L)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><ellipse cx="9.5" cy="7" rx="6.5" ry="4.2" fill="none" stroke="#14161B" stroke-width="1.3" stroke-dasharray="2.4 1.8"></ellipse><path d="M5 10.5 C4 12.5 6 13.5 5 16" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg></button>
+  <button aria-label="Eraser (E)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.5 2.8 L15.2 7.5 L8.5 14.2 L5.5 14.2 L2.8 11.5 Z" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linejoin="round"></path><path d="M6.6 6.7 L11.3 11.4" stroke="#14161B" stroke-width="1.3"></path><path d="M8.5 15.5 H15.5" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg></button>
+  <button aria-label="Text (T)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; font-weight: 600; font-size: 16px">T</button>
+  <button aria-label="Crop, kept at 16:9 (C)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 1.5 V13 H16.5" fill="none" stroke="#14161B" stroke-width="1.3"></path><path d="M1.5 5 H13 V16.5" fill="none" stroke="#14161B" stroke-width="1.3"></path></svg></button>
+  <span aria-hidden="true" style="width: 26px; height: 1px; background: #E7E9EE; margin: 2px 0"></span>
+  <button aria-label="Hand, pan the frame (H)" style="width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 8 V3.5 a1 1 0 0 1 2 0 V7 M7 7 V2.5 a1 1 0 0 1 2 0 V7 M9 7 V3.5 a1 1 0 0 1 2 0 V9 c0 3 -2 5 -4.5 5 C4 14 3 12 2.5 10 L2 8.5 a1 1 0 0 1 1.8 -0.8 L5 9" fill="none" stroke="#14161B" stroke-width="1.3" stroke-linecap="round"></path></svg></button>
+</div>
+<!-- Active tool tip -->
+<div role="tooltip" style="position: absolute; left: 80px; top: 178px; padding: 4px 10px; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 12px; z-index: 4">Brush mask <span class="mono" style="color: #C9CDD6">B</span></div>
+
+<!-- Brush options -->
+<div role="group" aria-label="Brush mask options" style="position: absolute; left: 148px; top: 64px; height: 44px; box-sizing: border-box; padding: 0 6px 0 14px; display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); font-size: 12px; color: #4A4F5C; z-index: 4">
+  <span style="font-weight: 600; color: #14161B">Mask 1</span>
+  <label for="brush-size" style="display: flex; align-items: center; gap: 8px">Size
+    <input id="brush-size" type="range" min="4" max="200" value="48" style="width: 96px; accent-color: #14161B">
+    <span class="mono" style="font-size: 11px; color: #14161B; width: 22px">48</span>
+  </label>
+  <label for="brush-soft" style="display: flex; align-items: center; gap: 8px">Soft
+    <input id="brush-soft" type="range" min="0" max="100" value="20" style="width: 72px; accent-color: #14161B">
+    <span class="mono" style="font-size: 11px; color: #14161B; width: 28px">20%</span>
+  </label>
+  <div role="group" aria-label="Brush mode" style="display: flex; padding: 2px; background: #F2F3F6; border-radius: 999px">
+    <button aria-pressed="true" style="height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: #FFFFFF; font-size: 12px; font-weight: 500; box-shadow: 0 1px 2px rgba(20,30,60,0.12)">Add</button>
+    <button aria-pressed="false" style="height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 12px; color: #4A4F5C">Subtract</button>
+  </div>
+  <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px">Snap to cut-out</button>
+  <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 0; background: transparent; font-size: 12px; color: #4A4F5C">Clear mask</button>
+</div>
+
+<!-- Stage: 16:9 locked -->
+<section aria-label="Frame 3, 16:9" style="position: absolute; left: 148px; top: 124px; width: 880px; height: 495px; border-radius: 6px; overflow: hidden; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); background: #FFFFFF">
+  <svg width="880" height="495" viewBox="0 0 880 495" aria-hidden="true" style="position: absolute; left: 0; top: 0">
+    <defs>
+      <radialGradient id="ie-bg" cx="0.42" cy="0.45" r="0.75">
+        <stop offset="0" stop-color="#E6F4FF"></stop>
+        <stop offset="0.45" stop-color="#A9D4F2"></stop>
+        <stop offset="1" stop-color="#D9A884"></stop>
+      </radialGradient>
+      <linearGradient id="ie-sun" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FFE7BF" stop-opacity="0.85"></stop>
+        <stop offset="0.5" stop-color="#FFE7BF" stop-opacity="0"></stop>
+      </linearGradient>
+      <linearGradient id="ie-glass" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7FB3D6"></stop>
+        <stop offset="0.3" stop-color="#E9F6FF"></stop>
+        <stop offset="0.55" stop-color="#B5DBF2"></stop>
+        <stop offset="1" stop-color="#5C93BA"></stop>
+      </linearGradient>
+      <linearGradient id="ie-skin" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#F3D2B8"></stop>
+        <stop offset="1" stop-color="#C08B68"></stop>
+      </linearGradient>
+      <linearGradient id="ie-counter" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#E5CBAE"></stop>
+        <stop offset="1" stop-color="#A47A5A"></stop>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="880" height="495" fill="url(#ie-bg)"></rect>
+    <rect x="0" y="400" width="880" height="95" fill="url(#ie-counter)"></rect>
+    <rect x="0" y="0" width="880" height="495" fill="url(#ie-sun)"></rect>
+    <ellipse cx="420" cy="440" rx="120" ry="14" fill="#6E4F3A" opacity="0.35"></ellipse>
+    <!-- bottle -->
+    <path d="M398 92 H442 V150 C442 168 492 180 492 214 V420 C492 434 482 442 468 442 H372 C358 442 348 434 348 420 V214 C348 180 398 168 398 150 Z" fill="url(#ie-glass)" opacity="0.96"></path>
+    <rect x="348" y="268" width="144" height="72" fill="#F7FBFF"></rect>
+    <rect x="348" y="268" width="144" height="5" fill="#2F64F5" opacity="0.55"></rect>
+    <text x="420" y="312" text-anchor="middle" font-family="Geist, sans-serif" font-size="22" font-weight="600" letter-spacing="5" fill="#14161B">LUMEN</text>
+    <text x="420" y="330" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#4A4F5C">SPARKLING WATER</text>
+    <path d="M372 190 C366 230 366 380 372 420" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" opacity="0.6"></path>
+    <rect x="394" y="64" width="52" height="32" rx="5" fill="#2A3442"></rect>
+    <!-- hand twisting the cap -->
+    <path d="M440 58 C480 40 560 44 610 60 C640 70 650 92 628 102 C600 112 520 104 470 100 C452 99 440 92 438 80 Z" fill="url(#ie-skin)"></path>
+    <path d="M470 100 C500 112 520 126 512 136 C500 144 470 128 452 112 Z" fill="url(#ie-skin)"></path>
+    <!-- bubbles -->
+    <circle cx="410" cy="220" r="4" fill="#FFFFFF" opacity="0.7"></circle>
+    <circle cx="436" cy="246" r="3" fill="#FFFFFF" opacity="0.7"></circle>
+    <circle cx="452" cy="210" r="2.5" fill="#FFFFFF" opacity="0.7"></circle>
+    <circle cx="398" cy="374" r="3.5" fill="#FFFFFF" opacity="0.7"></circle>
+    <circle cx="460" cy="392" r="2.5" fill="#FFFFFF" opacity="0.7"></circle>
+  </svg>
+
+  <sc-if value="{{ showEdits }}" hint-placeholder-val="{{ true }}">
+    <svg width="880" height="495" viewBox="0 0 880 495" aria-hidden="true" style="position: absolute; left: 0; top: 0">
+      <!-- cut-out outline (Rhea) -->
+      <path d="M394 64 H446 V150 C446 166 496 178 496 214 V420 C496 437 484 446 468 446 H372 C356 446 344 437 344 420 V214 C344 178 394 166 394 150 Z" fill="none" stroke="#1F8F5F" stroke-width="2" stroke-dasharray="6 4"></path>
+      <!-- Mask 1: brush strokes over the glass -->
+      <path d="M372 200 C420 186 460 192 472 222 C440 236 390 228 366 250 C400 262 452 254 474 258" fill="none" stroke="#2F64F5" stroke-opacity="0.38" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M370 362 C410 352 460 356 474 372 C440 388 392 382 368 400 C400 414 446 412 470 412" fill="none" stroke="#2F64F5" stroke-opacity="0.38" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M352 180 C400 168 470 168 494 196 L496 280 L346 280 Z M346 346 L496 346 L496 432 C470 440 380 440 346 432 Z" fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-dasharray="5 4"></path>
+      <!-- brush cursor -->
+      <circle cx="470" cy="412" r="24" fill="none" stroke="#FFFFFF" stroke-width="2"></circle>
+      <circle cx="470" cy="412" r="24" fill="none" stroke="#14161B" stroke-width="1" stroke-dasharray="3 3"></circle>
+      <circle cx="470" cy="412" r="1.8" fill="#14161B"></circle>
+    </svg>
+    <!-- mask tag -->
+    <div style="position: absolute; left: 516px; top: 206px; width: 260px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 8px 12px; background: rgba(255,255,255,0.96); border: 1px solid #E7E9EE; border-radius: 12px; box-shadow: 0 12px 32px rgba(20,30,60,0.16), 0 2px 6px rgba(20,30,60,0.08); font-size: 12px">
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span style="width: 10px; height: 10px; border-radius: 3px; background: rgba(47,100,245,0.45)"></span>
+        <span style="color: #4A4F5C; flex: 1">Mask 1 · fill with</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span style="font-weight: 600; flex: 1">"add condensation drops"</span>
+        <button style="height: 28px; padding: 0 12px; border-radius: 999px; border: 0; background: #14161B; color: #FFFFFF; font-size: 12px; font-weight: 600">Fill</button>
+      </div>
+    </div>
+    <!-- text layer -->
+    <div style="position: absolute; left: 40px; top: 428px; font-size: 30px; font-weight: 600; color: #FFFFFF; letter-spacing: -0.01em; text-shadow: 0 1px 8px rgba(20,22,27,0.35)">Drink the morning.</div>
+  </sc-if>
+  <sc-if value="{{ showBefore }}" hint-placeholder-val="{{ false }}">
+    <span class="mono" style="position: absolute; left: 12px; top: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(20,22,27,0.72); color: #FFFFFF; font-size: 11px">Before · v3 as saved</span>
+  </sc-if>
+
+  <!-- Sai's cursor -->
+  <div style="position: absolute; left: 700px; top: 150px; display: flex; align-items: flex-start; gap: 2px">
+    <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><path d="M1 1 L14 9 L8 10 L5 16 Z" fill="#7D52F4" stroke="#FFFFFF" stroke-width="1.2"></path></svg>
+    <span style="margin-top: 12px; padding: 2px 8px; border-radius: 999px; background: #7D52F4; color: #FFFFFF; font-size: 11px; font-weight: 600">Sai</span>
+  </div>
+</section>
+
+<!-- Under the stage: before/after and Rhea -->
+<div style="position: absolute; left: 148px; top: 636px; width: 880px; display: flex; align-items: center; gap: 12px">
+  <div role="group" aria-label="Compare" style="display: flex; padding: 3px; background: #FFFFFF; border: 1px solid #E7E9EE; border-radius: 999px; box-shadow: 0 10px 30px rgba(20,30,60,0.08)">
+    <sc-if value="{{ showBefore }}" hint-placeholder-val="{{ false }}">
+      <button aria-pressed="true" onClick="{{ showBeforeView }}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 12px; font-weight: 600">Before</button>
+      <button aria-pressed="false" onClick="{{ showAfterView }}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12px">After</button>
+    </sc-if>
+    <sc-if value="{{ showEdits }}" hint-placeholder-val="{{ true }}">
+      <button aria-pressed="false" onClick="{{ showBeforeView }}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; font-size: 12px">Before</button>
+      <button aria-pressed="true" onClick="{{ showAfterView }}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: #14161B; color: #FFFFFF; font-size: 12px; font-weight: 600">After</button>
+    </sc-if>
+  </div>
+  <div role="status" style="display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 999px; background: #E9F8F0; font-size: 12px; color: #14161B">
+    <svg class="agent-figure" data-state="idle" viewBox="0 0 48 64" width="18" height="24" role="img" aria-label="Rhea, Cut-outs, fills and upscales." style="--af-phase:0.497"><ellipse class="af-shadow" cx="24" cy="60" rx="10" ry="1.6"></ellipse><g class="af-leg af-leg-l"><line x1="19.5" y1="38" x2="19.5" y2="58"></line><rect x="18.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-leg af-leg-r"><line x1="28.5" y1="38" x2="28.5" y2="58"></line><rect x="27.1" y="57" width="4.6" height="2.2" rx="1.1"></rect></g><g class="af-body"><g><path d="M9.5 40 V26.5 A14.5 14.5 0 0 1 38.5 26.5 V40Z" fill="var(--af-mint)"></path><g class="af-emblem"><g fill="var(--af-mark)"><circle cx="20.4" cy="30" r="1.3"></circle><circle cx="24" cy="30" r="1.3"></circle><circle cx="27.6" cy="30" r="1.3"></circle></g></g><g class="af-eyes" fill="var(--af-mark)"><rect x="19.7" y="20.2" width="2.2" height="3.6" rx="1.1"></rect><rect x="26.099999999999998" y="20.2" width="2.2" height="3.6" rx="1.1"></rect></g></g></g><g class="af-motion"><path d="M39.5 9.5 l3.2 -2.6"></path><path d="M41 14 l4 -0.9"></path><path d="M36.5 6.5 l1 -3.6"></path></g></svg>
+    <span><span style="font-weight: 600">Rhea · retouches:</span> cut-out ready, ran on your device</span>
+  </div>
+  <span style="flex: 1"></span>
+  <span class="mono" style="font-size: 11px; color: #6B7180">Mask: blue paint marks what changes</span>
+</div>
+
+<!-- Edit list (non-destructive) -->
+<section aria-label="Edits not applied yet" style="position: absolute; left: 148px; top: 700px; width: 880px; box-sizing: border-box; padding: 12px 14px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 10px">
+  <div style="display: flex; align-items: center; gap: 8px">
+    <h2 class="mono" style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7180">Edits · not applied yet</h2>
+    <span style="flex: 1"></span>
+    <span style="font-size: 12px; color: #4A4F5C">Nothing changes until you run an action. v3 is never changed.</span>
+  </div>
+  <ol style="margin: 0; padding: 0; list-style: none; display: flex; gap: 8px">
+    <li style="display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF; font-size: 12px"><span class="mono" style="color: #6B7180">1</span> Cut-out: bottle <span style="font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #e7f6ed; color: #166534">ready</span><button aria-label="Undo edit 1, cut-out" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: #F2F3F6">↶</button></li>
+    <li style="display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid #2F64F5; border-radius: 999px; background: rgba(47,100,245,0.06); font-size: 12px; color: #1E4ED8; font-weight: 500"><span class="mono">2</span> Mask 1 · painting <button aria-label="Undo edit 2, mask" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: #FFFFFF">↶</button></li>
+    <li style="display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid #E7E9EE; border-radius: 999px; background: #FFFFFF; font-size: 12px"><span class="mono" style="color: #6B7180">3</span> Text "Drink the morning." <button aria-label="Undo edit 3, text" style="width: 28px; height: 28px; border: 0; border-radius: 999px; background: #F2F3F6">↶</button></li>
+    <li style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px dashed #D6DAE2; border-radius: 999px; font-size: 12px; color: #4A4F5C">Next: Fill Mask 1</li>
+  </ol>
+  <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; color: #4A4F5C">
+    <a href="#">← Frame 2 · Medium</a>
+    <span style="flex: 1"></span>
+    <span>Applying makes <span class="mono">v4</span> and updates shot 3 on the storyboard</span>
+    <span style="flex: 1"></span>
+    <a href="#">Frame 4 · Close →</a>
+  </div>
+</section>
+
+<!-- Layers panel -->
+<section aria-label="Layers" style="position: absolute; left: 1104px; top: 64px; width: 320px; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 4px; z-index: 4">
+  <div style="display: flex; align-items: center; padding: 2px 4px 8px">
+    <h2 class="mono" style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7180">Layers</h2>
+    <span style="flex: 1"></span>
+    <span style="font-size: 11px; color: #6B7180">top is front</span>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px">
+    <span style="width: 40px; height: 24px; border-radius: 4px; background: #F5F6F8; border: 1px solid #E7E9EE; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px">T</span>
+    <span style="font-size: 13px; flex: 1">Text</span>
+    <button aria-label="Hide Text" style="width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8 C3.5 4.5 12.5 4.5 14.5 8 C12.5 11.5 3.5 11.5 1.5 8 Z" fill="none" stroke="#4A4F5C" stroke-width="1.3"></path><circle cx="8" cy="8" r="2" fill="#4A4F5C"></circle></svg></button>
+  </div>
+  <div aria-current="true" style="display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px; background: rgba(47,100,245,0.06)">
+    <span style="width: 40px; height: 24px; border-radius: 4px; background: #14161B; position: relative; overflow: hidden"><span style="position: absolute; left: 14px; top: 3px; width: 12px; height: 18px; border-radius: 3px; background: #FFFFFF"></span></span>
+    <span style="font-size: 13px; flex: 1; color: #1E4ED8; font-weight: 600">Mask 1</span>
+    <span class="mono" style="font-size: 10px; color: #1E4ED8">editing</span>
+    <button aria-label="Hide Mask 1" style="width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8 C3.5 4.5 12.5 4.5 14.5 8 C12.5 11.5 3.5 11.5 1.5 8 Z" fill="none" stroke="#2F64F5" stroke-width="1.3"></path><circle cx="8" cy="8" r="2" fill="#2F64F5"></circle></svg></button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px">
+    <span style="width: 40px; height: 24px; border-radius: 4px; background-color: #FFFFFF; background-image: linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%), linear-gradient(45deg, #E7E9EE 25%, transparent 25%, transparent 75%, #E7E9EE 75%); background-size: 8px 8px; background-position: 0 0, 4px 4px; border: 1px solid #E7E9EE; position: relative"><span style="position: absolute; left: 15px; top: 3px; width: 10px; height: 17px; border-radius: 3px; background: linear-gradient(90deg, #7FB3D6, #E9F6FF, #5C93BA)"></span></span>
+    <span style="font-size: 13px; flex: 1; display: flex; flex-direction: column; gap: 1px"><span>Cut-out: bottle</span><span style="font-size: 11px; color: #4A4F5C">by Rhea · <a href="#">Save as reference</a></span></span>
+    <button aria-label="Hide Cut-out: bottle" style="width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8 C3.5 4.5 12.5 4.5 14.5 8 C12.5 11.5 3.5 11.5 1.5 8 Z" fill="none" stroke="#4A4F5C" stroke-width="1.3"></path><circle cx="8" cy="8" r="2" fill="#4A4F5C"></circle></svg></button>
+  </div>
+  <div style="display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border-radius: 8px">
+    <span style="width: 40px; height: 24px; border-radius: 4px; background: radial-gradient(circle at 40% 50%, #E6F4FF 0%, #A9D4F2 40%, #D9A884 100%)"></span>
+    <span style="font-size: 13px; flex: 1; display: flex; flex-direction: column; gap: 1px"><span>Frame</span><span class="mono" style="font-size: 11px; color: #4A4F5C">v3 · locked</span></span>
+    <span aria-label="Locked" role="img" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="2.5" y="6" width="9" height="6.5" rx="1.5" fill="none" stroke="#4A4F5C" stroke-width="1.3"></rect><path d="M4.5 6 V4.5 a2.5 2.5 0 0 1 5 0 V6" fill="none" stroke="#4A4F5C" stroke-width="1.3"></path></svg></span>
+  </div>
+</section>
+
+<!-- Actions panel -->
+<section aria-label="Actions" style="position: absolute; left: 1104px; top: 318px; width: 320px; height: 566px; box-sizing: border-box; padding: 12px; background: rgba(255,255,255,0.94); border: 1px solid #E7E9EE; border-radius: 18px; box-shadow: 0 10px 30px rgba(20,30,60,0.08); display: flex; flex-direction: column; gap: 8px; z-index: 4">
+  <div style="display: flex; align-items: center; padding: 2px 4px 2px">
+    <h2 class="mono" style="margin: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7180">Actions</h2>
+  </div>
+
+  <!-- Remove background -->
+  <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #E7E9EE; border-radius: 12px; background: #FFFFFF">
+    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+      <span style="font-size: 13px; font-weight: 600">Remove background</span>
+      <span style="font-size: 11px; color: #4A4F5C">On your device</span>
+    </div>
+    <span style="font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e7f6ed; color: #166534">Done</span>
+  </div>
+
+  <!-- Fill area (active) -->
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1.5px solid #2F64F5; border-radius: 12px; background: #FFFFFF">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 13px; font-weight: 600">Fill area</span>
+      <span style="font-size: 11px; padding: 1px 8px; border-radius: 999px; background: rgba(47,100,245,0.06); color: #1E4ED8">Mask 1</span>
+    </div>
+    <label for="fill-prompt" style="font-size: 11px; color: #4A4F5C">Fill with...</label>
+    <textarea id="fill-prompt" rows="2" style="resize: none; box-sizing: border-box; width: 100%; padding: 8px 10px; border: 1px solid #D6DAE2; border-radius: 8px; font-size: 13px; line-height: 1.4; background: #FFFFFF">add condensation drops</textarea>
+    <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4A4F5C"><input type="checkbox" checked="checked" style="accent-color: #14161B"> Keep the label exactly as it is</label>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 11px; color: #6B7180; flex: 1">Only the blue area changes</span>
+      <button style="height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: #14161B; color: #FFFFFF; font-size: 12px; font-weight: 600">Fill area</button>
+    </div>
+  </div>
+
+  <!-- Change whole frame -->
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid #E7E9EE; border-radius: 12px; background: #FFFFFF">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 13px; font-weight: 600">Change whole frame</span>
+    </div>
+    <div style="display: flex; gap: 6px">
+      <label for="whole-prompt" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Describe the change to the whole frame</label>
+      <input id="whole-prompt" type="text" placeholder="e.g. warmer light, keep the bottle" style="flex: 1; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid #D6DAE2; border-radius: 8px; font-size: 12px">
+      <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500">Change</button>
+    </div>
+  </div>
+
+  <!-- Upscale -->
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid #E7E9EE; border-radius: 12px; background: #FFFFFF">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <span style="font-size: 13px; font-weight: 600">Upscale</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div role="group" aria-label="Upscale amount" style="display: flex; padding: 2px; background: #F2F3F6; border-radius: 999px">
+        <button aria-pressed="true" class="mono" style="height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: #FFFFFF; font-size: 11px; box-shadow: 0 1px 2px rgba(20,30,60,0.12)">2×</button>
+        <button aria-pressed="false" class="mono" style="height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 11px; color: #4A4F5C">4×</button>
+      </div>
+      <span class="mono" style="font-size: 11px; color: #4A4F5C; flex: 1">→ 3840 × 2160</span>
+      <button style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #D6DAE2; background: #FFFFFF; font-size: 12px; font-weight: 500">Upscale</button>
+    </div>
+  </div>
+
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var before = st.view === 'before';
+    return {
+      versionsOpen: !!st.versionsOpen,
+      showBefore: before,
+      showEdits: !before,
+      toggleVersions: function () { self.setState({ versionsOpen: !(self.state && self.state.versionsOpen) }); },
+      showBeforeView: function () { self.setState({ view: 'before' }); },
+      showAfterView: function () { self.setState({ view: 'after' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

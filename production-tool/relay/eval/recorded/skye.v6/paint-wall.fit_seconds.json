@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front rolls a stripe of blue paint across the wall, steps back, tilts his head."
+     },
+     {
+      "type": "direction",
+      "text": "Locked off; he walks out of frame."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I trimmed the action line to fit 2.5 s and kept the direction as it was."
+   }
+  ],
+  "rationale": "Dropped \"bright\", \"a white\" and \"and\" so the action is 15 words, which rule 10 times at 2.5 s. Order of events and @sai_front are unchanged."
+ }
+}

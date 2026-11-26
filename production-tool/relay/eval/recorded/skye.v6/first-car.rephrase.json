@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "In her first car, @maya_front takes the wheel in both hands, breathes in, and turns the key."
+     },
+     {
+      "type": "direction",
+      "text": "Interior, low angle looking up at her."
+     }
+    ],
+    "note": "I rephrased the action and kept the same events, the same @name and the direction last."
+   }
+  ],
+  "rationale": "Rephrase keeps length, facts and the @maya_front reference. Block types and order are unchanged, with the direction last."
+ }
+}

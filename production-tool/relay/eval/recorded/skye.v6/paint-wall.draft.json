@@ -1,0 +1,54 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. LIVING ROOM - DAY"
+     },
+     {
+      "type": "action",
+      "text": "@sai_front pries open a can of @paint_blue and stirs it slowly."
+     },
+     {
+      "type": "action",
+      "text": "He rolls a bright blue stripe across the white wall."
+     },
+     {
+      "type": "action",
+      "text": "He steps back and tilts his head."
+     },
+     {
+      "type": "action",
+      "text": "A second, wider stripe follows. The wall comes alive."
+     },
+     {
+      "type": "action",
+      "text": "Morning light catches the wet blue, glowing against the white."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front grins, roller dripping onto the floor sheet."
+     },
+     {
+      "type": "character",
+      "text": "SAI"
+     },
+     {
+      "type": "dialogue",
+      "text": "Now that is the right blue."
+     }
+    ],
+    "note": "I drafted a one-room scene from your line: one stripe, a step back, then a grin and a short line."
+   }
+  ],
+  "rationale": "Built the scene around the existing action, using only the refs given (@sai_front, @paint_blue); six action lines plus a six-word line total about 14.4 s by rule 10."
+ }
+}

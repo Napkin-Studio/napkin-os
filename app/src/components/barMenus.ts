@@ -94,6 +94,8 @@ export interface DocBar {
   onLineage: () => void
   /** Its tool's own page for its client (the old trail's last crumb): its other documents, and New. */
   onToolPage?: { label: string; run: () => void } | null
+  /** Move it to the Trash (restorable for 30 days), after the bar's confirm. */
+  onTrash?: () => void
 }
 
 /** The account menu on the person's avatar, at the bar's right (owner, 2026-11-11). */
@@ -149,6 +151,8 @@ export interface LinkedDoc {
   changed?: boolean
   /** Which version of it this one holds: 1 on link, one more on each update. */
   taken?: number | null
+  /** A linked kit's (Brand Clan, Style Pack) own version held: what its page says ("built with v2"), so the chip says it too. */
+  kitVersion?: number | null
   noun?: string | null
 }
 
@@ -163,6 +167,7 @@ export function linksOf(view: RelatedView | null): { linked: LinkedDoc[]; madeIn
       dir: 'in' as const,
       changed: u.status === 'changed',
       taken: u.taken ?? null,
+      kitVersion: u.kit_version ?? null,
       noun: u.noun ?? null,
     })),
     ...view.downstream.filter(d => d.how === 'linked_in').map(d => ({
@@ -215,6 +220,8 @@ export interface MenuItem {
   run: () => void
   /** A rule above this item. */
   apart?: boolean
+  /** Pressing it changes it in place (a bar button's confirm step): the menu stays open. */
+  stays?: boolean
   /** Shown, but it cannot run yet; the hint says why. */
   disabled?: boolean
   /** The key that does the same anywhere (Feedback: F). */
@@ -255,11 +262,13 @@ export function continueItems(
   const noun = nounOfTool(doc.tool?.name)
   return {
     // The mock's words (gaps.md §7 L1): the tool, and what it makes from this one.
-    spin: doc.targets.map(t => ({
-      label: shortTool(t.name),
-      hint: spinHint(t, noun),
-      run: () => doc.onSpinoff(t.app_id),
-    })),
+    spin: [
+      ...doc.targets.map(t => ({
+        label: shortTool(t.name),
+        hint: spinHint(t, noun),
+        run: () => doc.onSpinoff(t.app_id),
+      })),
+    ],
     link: linkItems(doc, openLinkList),
     // Start fresh (gaps.md §7 L2): the same app, the same client, new notes.
     fresh: doc.onStartFresh
@@ -291,6 +300,7 @@ function shortTool(name: string): string {
 /** What the target makes from this one, in the mock's words. */
 function spinHint(t: { app_id: string; name: string; map?: string | null }, noun: string): string {
   const id = `${t.app_id} ${t.name}`
+  if (/territor/i.test(id)) return noun === 'report' ? 'Routes for a campaign, from these findings' : `Routes for a campaign, from this ${noun}`
   if (/deck/i.test(id)) return `A board deck from this ${noun}`
   if (/advertising|film|production/i.test(id)) return noun === 'report' ? 'A film treatment from the findings' : `Films and stills from this ${noun}`
   if (/research/i.test(id)) return noun === 'brief' ? 'A follow-up question from its open questions' : `Research from this ${noun}`
@@ -302,7 +312,7 @@ function spinHint(t: { app_id: string; name: string; map?: string | null }, noun
 export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => void): MenuItem[] {
   return [
     // The app's own buttons past the two the bar has room for, at the top, in the app's order.
-    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
+    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id), ...(b.stays ? { stays: true } : {}) })),
     ...(doc.onToggleEdit && !doc.editMode
       ? [{ label: 'Edit', hint: 'Change it yourself. Every change is kept as yours.', run: doc.onToggleEdit }]
       : []),
@@ -329,7 +339,7 @@ export function moreItems(doc: DocBar, user?: string | null, onSignOut?: () => v
  */
 export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] {
   return [
-    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id) })),
+    ...overflowButtons(doc.bar ?? []).map(b => ({ label: b.label, hint: b.title || undefined, run: () => doc.onBarAction?.(b.id), ...(b.stays ? { stays: true } : {}) })),
     ...(doc.onRename && startRename ? [{ label: 'Rename', hint: 'Or double-click the name', run: startRename }] : []),
     ...(doc.onToolPage ? [{ label: doc.onToolPage.label, hint: 'Its other documents for this client, and New', run: doc.onToolPage.run }] : []),
     { label: 'Open…', hint: 'A .clan, PDF or HTML file', run: doc.onOpenFile },
@@ -347,6 +357,7 @@ export function docMenuItems(doc: DocBar, startRename?: () => void): MenuItem[] 
       : []),
     { label: 'Export', hint: 'Make a PDF of it', run: () => doc.onExport('pdf') },
     { label: 'Where it came from', hint: 'Its parent, what it was made from, what it fed', run: doc.onLineage, apart: true },
+    ...(doc.onTrash && !doc.isTemplate ? [{ label: 'Move to Trash', hint: 'Restorable for 30 days', run: doc.onTrash, apart: true }] : []),
   ]
 }
 
@@ -439,7 +450,7 @@ function linkItems(
     if (l.changed && doc.onUpdateLinked) {
       out.push({
         label: `Update ${l.title}`,
-        hint: `It changed since this took it${l.taken ? ` (v${l.taken})` : ''}. Takes the newer version; your own work here stays.`,
+        hint: `It changed since this took it${l.kitVersion ? ` (v${l.kitVersion})` : l.taken ? ` (v${l.taken})` : ''}. Takes the newer version; your own work here stays.`,
         run: () => doc.onUpdateLinked!(l.documentId),
         ...(first ? { apart: true } : {}),
       })
@@ -471,6 +482,13 @@ export function plural(noun: string): string {
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Which version a linked document is held at: a kit's own version ("v2", as the deck says "built with v2"), else how
+ *  many times it was taken ("v1 taken"). A Brand Clan at v2 said "v1 taken" (UAT 5-tool run, 2026-11-26). */
+function heldWords(l: Pick<LinkedDoc, 'taken' | 'kitVersion'>): string {
+  if (l.kitVersion) return ` · v${l.kitVersion}`
+  return l.taken ? ` · v${l.taken} taken` : ''
+}
+
 /** The bar's one linked chip ("↔ N linked ▾"): how many, and whether one changed since it was taken. Null with none. */
 export function linkedChip(linked?: LinkedDoc[]): { count: number; changed: boolean } | null {
   const all = linked ?? []
@@ -496,7 +514,7 @@ export function linkedRows(doc: Pick<DocBar, 'linked' | 'onOpenDocument' | 'onUp
     if (l.dir === 'in') {
       into.push({
         doc: l,
-        sub: `${noun}${l.taken ? ` · v${l.taken} taken` : ''}${l.changed ? ' · changed since' : ''}`,
+        sub: `${noun}${heldWords(l)}${l.changed ? ' · changed since' : ''}`,
         actions: [
           ...(l.changed && doc.onUpdateLinked
             ? [{ label: 'Update', hint: 'Take its newer version; your own work here stays', run: () => doc.onUpdateLinked!(l.documentId) }]

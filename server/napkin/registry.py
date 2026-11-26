@@ -14,8 +14,8 @@ import re
 from pathlib import Path
 
 from .capabilities import CAPABILITY_VERSION
-from .handlers import (answer_question, ask_research, compose_report, draft_brief, extract_ask, fix_parts,
-                       reconsider, regenerate_field, research_lens, start_campaign, synthesise_findings)
+from .handlers import (answer_question, ask_research, attach_production, brand_build, brand_identify, build_deck, compose_report, draft_brief, extract_ask, fetch_deck_file,
+                       fetch_territories_file, fix_parts, reconsider, regenerate_field, research_lens, run_territories, start_campaign, synthesise_findings)
 from .util import bad
 
 REGISTRY = {
@@ -30,6 +30,13 @@ REGISTRY = {
     "fix_parts": {1: fix_parts},
     "ask_research": {1: ask_research},
     "reconsider": {2: reconsider},
+    "build_deck": {1: build_deck},
+    "attach_production": {1: attach_production},
+    "fetch_deck_file": {1: fetch_deck_file},
+    "run_territories": {1: run_territories},
+    "fetch_territories_file": {1: fetch_territories_file},
+    "brand_identify": {1: brand_identify},
+    "brand_build": {1: brand_build},
 }
 # Used only when a document carries no pipeline: the declared built-in map.
 BUILTIN_PIPELINE = {
@@ -38,7 +45,10 @@ BUILTIN_PIPELINE = {
     "answer_question": "answer_question@1", "compose_report": "compose_report@1",
     "draft_brief": "draft_brief@1", "regenerate_field": "regenerate_field@1",
     "ask_research": "ask_research@1", "fix_parts": "fix_parts@1",
-    "reconsider": "reconsider@2",
+    "reconsider": "reconsider@2", "build_deck": "build_deck@1",
+    "attach_production": "attach_production@1", "fetch_deck_file": "fetch_deck_file@1",
+    "run_territories": "run_territories@1", "fetch_territories_file": "fetch_territories_file@1",
+    "brand_identify": "brand_identify@1", "brand_build": "brand_build@1",
 }
 TASKS = set(BUILTIN_PIPELINE) | {"job_status", "cancel_job"}
 
@@ -70,15 +80,17 @@ def lookup(declared: str, task: str):
 # Tasks added after documents already carried their pipeline: such a document resolves them from the
 # built-in map. answer_question: a brief made before Brief Maker declared it could never answer its
 # intake questions (UAT round 4, 2026-11-12: every answer refused as unknown_task, the job waited 90 s).
-LATER_TASKS = {"ask_research", "reconsider", "fix_parts", "answer_question"}
+LATER_TASKS = {"ask_research", "reconsider", "fix_parts", "answer_question", "build_deck", "attach_production", "fetch_deck_file",
+               "run_territories", "fetch_territories_file", "brand_identify", "brand_build"}
 
 
 def resolve(task: str, clan: dict):
     """The document's pipeline decides; no pipeline -> the built-in map."""
     pipeline = clan.get("pipeline")
-    if pipeline and task in LATER_TASKS and isinstance(pipeline, dict) \
-            and task not in (pipeline.get("tasks") or {}):
-        return lookup(BUILTIN_PIPELINE[task], task)
+    if pipeline and task in LATER_TASKS and isinstance(pipeline, dict):
+        decl = (pipeline.get("tasks") or {}).get(task)
+        if decl is None or (isinstance(decl, dict) and not decl.get("handler")):   # not declared, or declared with no handler yet
+            return lookup(BUILTIN_PIPELINE[task], task)
     if pipeline:
         if not isinstance(pipeline, dict) or not isinstance(pipeline.get("tasks"), dict):
             raise bad("clan.pipeline is present but has no tasks map")

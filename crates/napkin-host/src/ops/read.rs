@@ -21,6 +21,7 @@ use crate::html::{
 };
 use crate::log::log;
 use crate::session::{AppMeta, LineageInfo, ManifestInfo, OpenResult};
+use crate::store::BlobStore;
 use crate::view;
 
 use super::edit::UPSTREAM_KEY;
@@ -214,8 +215,19 @@ fn reprojected(clan: &ClanFile, data: &Value) -> Option<Value> {
 /// the same name. With a library view, a name the document does not hold is
 /// then looked up in the installed template, so an asset a newer view added
 /// resolves.
-pub fn serve_asset(doc: &Document, rel: &str) -> HostResult<(String, Vec<u8>)> {
+///
+/// A link (`FileEntry::linked`) is read from the workspace's file store by
+/// its hash; with that file missing the asset answers 404 naming it and the
+/// document still opens.
+pub fn serve_asset(
+    doc: &Document,
+    rel: &str,
+    blobs: Option<&dyn BlobStore>,
+) -> HostResult<(String, Vec<u8>)> {
     let full = format!("human/assets/{rel}");
+    if let Some(bytes) = linked_asset(doc.clan(), &full, blobs)? {
+        return Ok((content_type_for(rel).to_string(), bytes));
+    }
     let bytes = doc
         .clan()
         .read_entry(&full)
@@ -225,6 +237,25 @@ pub fn serve_asset(doc: &Document, rel: &str) -> HostResult<(String, Vec<u8>)> {
         })
         .map_err(|_| HostError::not_found(format!("asset not found: {rel}")))?;
     Ok((content_type_for(rel).to_string(), bytes))
+}
+
+/// The bytes of `path` when the manifest lists it as a link; `None` when it
+/// is not one.
+fn linked_asset(
+    clan: &clan_sdk::ClanFile,
+    path: &str,
+    blobs: Option<&dyn BlobStore>,
+) -> HostResult<Option<Vec<u8>>> {
+    let Some(f) = clan.manifest().file_by_path(path).filter(|f| f.linked) else {
+        return Ok(None);
+    };
+    let sha = f.sha256.as_deref().unwrap_or_default();
+    match blobs {
+        Some(b) => crate::blobs::linked_bytes(b, path, sha).map(Some),
+        None => Err(HostError::not_found(format!(
+            "{path} is a link and this host holds no file store"
+        ))),
+    }
 }
 
 /// Refuse an asset path that could escape `human/assets/`. Checked before a
@@ -293,14 +324,21 @@ pub fn compose_export(
 /// decode it), while a task names it as written (`a b.pdf`): the lookup missed and the agent
 /// read nothing. Both spellings are tried, so files uploaded then are found without rewriting
 /// their documents.
-fn asset_bytes(doc: &Document, dir: &str, name: &str, suffix: &str) -> Option<Vec<u8>> {
+fn asset_bytes(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    dir: &str,
+    name: &str,
+    suffix: &str,
+) -> Option<Vec<u8>> {
     let clan = doc.clan();
-    clan.read_entry(&format!("{dir}{name}{suffix}"))
-        .ok()
-        .or_else(|| {
-            clan.read_entry(&format!("{dir}{}{suffix}", crate::routes::uri_encode(name)))
-                .ok()
-        })
+    let read = |path: String| match linked_asset(clan, &path, blobs) {
+        Ok(Some(bytes)) => Some(bytes),
+        Ok(None) => clan.read_entry(&path).ok(),
+        Err(_) => None,
+    };
+    read(format!("{dir}{name}{suffix}"))
+        .or_else(|| read(format!("{dir}{}{suffix}", crate::routes::uri_encode(name))))
 }
 
 /// For each attachment carrying a `name`, read its cached extracted-text
@@ -311,20 +349,20 @@ fn asset_bytes(doc: &Document, dir: &str, name: &str, suffix: &str) -> Option<Ve
 /// top level and reads the text as `extracted_text`. A `napkin.middleware/1`
 /// task lists them under `input` and reads it as `text` (middleware-api §1);
 /// an attachment there without it is recorded as unread and grounds nothing.
-pub fn attach_extracted_text(doc: &Document, payload: &mut Value) {
-    splice_text(doc, payload.get_mut("attachments"), "extracted_text");
+pub fn attach_extracted_text(doc: &Document, blobs: Option<&dyn BlobStore>, payload: &mut Value) {
+    splice_text(doc, blobs, payload.get_mut("attachments"), "extracted_text");
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_text(doc, under_input, "text");
+    splice_text(doc, blobs, under_input, "text");
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_images(doc, under_input);
+    splice_images(doc, blobs, under_input);
     let under_input = payload
         .get_mut("input")
         .and_then(|i| i.get_mut("attachments"));
-    splice_documents(doc, under_input);
+    splice_documents(doc, blobs, under_input);
 }
 
 /// The most bytes one PDF `document` may carry, decoded: the model API's own limit.
@@ -336,7 +374,11 @@ pub const DOCUMENT_MAX_BYTES: usize = 32 * 1024 * 1024;
 /// the model (reading.py): a deck, an image-heavy or scanned PDF is read page by page as a
 /// person sees it; a text-heavy report keeps to its text. This replaces the page rendering
 /// the TODO above asked of the host: the model reads the PDF's pages itself.
-fn splice_documents(doc: &Document, attachments: Option<&mut Value>) {
+fn splice_documents(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    attachments: Option<&mut Value>,
+) {
     use base64::Engine as _;
     let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
@@ -353,7 +395,7 @@ fn splice_documents(doc: &Document, attachments: Option<&mut Value>) {
         if !matches!(ext.as_str(), "pdf" | "docx" | "pptx") {
             continue;
         }
-        let Some(bytes) = asset_bytes(doc, "human/assets/", &name, "") else {
+        let Some(bytes) = asset_bytes(doc, blobs, "human/assets/", &name, "") else {
             continue;
         };
         let Some(obj) = a.as_object_mut() else {
@@ -404,7 +446,7 @@ pub const IMAGE_MAX_BYTES: usize = 5 * 1024 * 1024;
 /// and send them here as `images: [...]` (at most 20 per call). It needs a PDF
 /// rasteriser in the host (pdfium or mupdf bindings, native only), which this
 /// build does not carry yet.
-fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
+fn splice_images(doc: &Document, blobs: Option<&dyn BlobStore>, attachments: Option<&mut Value>) {
     use base64::Engine as _;
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
         return;
@@ -424,7 +466,7 @@ fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
         if !IMAGE_TYPES.contains(&media_type.as_str()) {
             continue;
         }
-        let Some(bytes) = asset_bytes(doc, "human/assets/", &name, "") else {
+        let Some(bytes) = asset_bytes(doc, blobs, "human/assets/", &name, "") else {
             continue;
         };
         if bytes.len() > IMAGE_MAX_BYTES {
@@ -442,7 +484,12 @@ fn splice_images(doc: &Document, attachments: Option<&mut Value>) {
     }
 }
 
-fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
+fn splice_text(
+    doc: &Document,
+    blobs: Option<&dyn BlobStore>,
+    attachments: Option<&mut Value>,
+    key: &str,
+) {
     let Some(atts) = attachments.and_then(|v| v.as_array_mut()) else {
         return;
     };
@@ -450,7 +497,7 @@ fn splice_text(doc: &Document, attachments: Option<&mut Value>, key: &str) {
         let Some(name) = a.get("name").and_then(|v| v.as_str()).map(str::to_string) else {
             continue;
         };
-        if let Some(text) = asset_bytes(doc, "human/assets/.extracted/", &name, ".txt")
+        if let Some(text) = asset_bytes(doc, blobs, "human/assets/.extracted/", &name, ".txt")
             .and_then(|b| String::from_utf8(b).ok())
         {
             if let Some(obj) = a.as_object_mut() {
@@ -496,11 +543,31 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         .unwrap_or(Value::Null);
     let m = clan.manifest();
     let pipeline = yaml_to_json("app/pipeline.yaml");
+    let raw_data = yaml_to_json("shared/data.yaml");
+    let production = production_upstream(&raw_data);
+    let territories = territories_upstream(&raw_data);
+    let carried = (doc.app_id() == Some(TERRITORIES_APP))
+        .then(|| carried_upstream(&raw_data))
+        .flatten();
+    let deck = m.app.as_ref().is_some_and(|a| a.app_id == DECK_MAKER_APP);
+    let brief = if deck {
+        brief_upstream(&raw_data)
+    } else {
+        None
+    };
+    let brand = if deck {
+        brand_upstream(clan, &raw_data)
+    } else {
+        None
+    };
+    let brand_clan_ctx = (doc.app_id() == Some(TERRITORIES_APP))
+        .then(|| brand_clan(clan, &raw_data))
+        .flatten();
     let mut context = serde_json::json!({
         "document_type": m.document_type,
         "app": m.app.as_ref().map(|a| serde_json::json!({ "name": a.name, "app_id": a.app_id, "version": a.version })),
         "schema": schema,
-        "data": with_upstream_index(clan, yaml_to_json("shared/data.yaml")),
+        "data": with_upstream_index(clan, raw_data),
         "decision_chain": yaml_to_json("agent/decision-chain.yaml"),
         "context": clan.read_entry_string("agent/context.md").unwrap_or_default(),
         "lineage": m.lineage.as_ref().map(|l| serde_json::json!({ "parent_id": l.parent_id, "delta": l.delta })),
@@ -515,6 +582,45 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         "edits": members::edits_map(clan),
         "pipeline": pipeline,
     });
+    // A deck spun off from a Production project is sent that project whole
+    // (its finals, assets and briefs; no picture bytes), beside the index:
+    // the build reads it and cannot from the index (production-spinoff).
+    if let Some(p) = production {
+        context["production_upstream"] = p;
+    }
+    // A deck spun off from a Territories document is sent that document whole
+    // (its routes, worlds, lines, checks, pictures by link), beside the
+    // index: its sent routes are the deck's territories and the build cannot
+    // read them from the index (territories-spinoff-out-deck).
+    if let Some(t) = territories {
+        context["territories_upstream"] = t;
+    }
+    // A Territories document reads the brief and research it was made from
+    // (the engine's input, and the exports): they travel whole beside the
+    // index, or its run finds no brief (territories-live-walk).
+    if let Some(c) = carried {
+        context["carried_upstream"] = c;
+    }
+    // A Deck spun off a brief is sent that brief whole beside the index, as a
+    // Production project is: the build reads the brief's fields and cannot
+    // from the index (UAT round 4 L2: a deck from a locked brief built from an
+    // empty brief, because the middleware only ever saw the index).
+    if let Some(b) = brief {
+        context["brief_upstream"] = b;
+    }
+    // A Deck wearing a Brand Clan is sent it whole beside the index, with its
+    // logo files, as the brief is: the engine dresses the deck from it and
+    // cannot from the index (acceptance A60: Start said the deck wore
+    // Copperell Original, and the build wore the default look).
+    if let Some(b) = brand {
+        context["brand_upstream"] = b;
+    }
+    // ... and the client's Brand Clan it holds, the look of its frames (Brand
+    // Clan phase 2 (d), docs/contracts/brand-clan.md section 8). A kit stays
+    // out of `carried_upstream`; this is the one it is attached to.
+    if let Some(b) = brand_clan_ctx {
+        context["brand_clan"] = b;
+    }
     // A research started from a brief is told the brief's ask, and only
     // that: extract_ask proposes from it (features/spinoff-and-links.clan).
     if let Some(ask) = upstream_ask(clan, &context["pipeline"]) {
@@ -539,6 +645,200 @@ pub fn clan_context_for_agent(doc: &Document) -> Value {
         }
     }
     context
+}
+
+/// The app id of Territories documents (`make_territories`).
+pub const TERRITORIES_APP: &str = "ie.napkin.territories";
+
+/// `{<id>: frozen copy}` of every entry of `data.upstream` that is a brief or
+/// research (not a kit, not a Production project): what a Territories
+/// document's engine reads. `None` when the document carries none.
+fn carried_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(_, v)| v.is_object() && !is_kit(v) && !is_production(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    (!carried.is_empty()).then(|| Value::Object(carried))
+}
+
+/// Deck Maker's app id: its documents are sent the brief they carry ([`brief_upstream`]).
+pub const DECK_MAKER_APP: &str = "ie.napkin.deck-maker";
+
+/// The fields a Brief Maker's data holds (the deck engine's `inputs.CLAN_FIELDS`
+/// values): an upstream copy with any of them is a brief.
+const BRIEF_KEYS: &[&str] = &[
+    "objectives",
+    "audience",
+    "single_minded_proposition",
+    "reasons_to_believe",
+    "desired_response",
+    "tone_and_world",
+    "mandatories",
+    "background",
+    "insight",
+    "competitor_context",
+    "budget_and_scope",
+];
+
+/// `{id, data}` of the first entry of `data.upstream` that is a brief (a
+/// Brief Maker's data: never a Production project or a kit), whole, for a
+/// Deck's build. `None` when the document carries none.
+///
+/// What the brief had carried itself (its research, and any other document
+/// the spin-off hoisted beside it; never a Production project, which travels
+/// as `production_upstream`, nor a kit) goes back under the brief's own
+/// `upstream`, as [`production_upstream`] does for a project: a Confidential
+/// mark the brief's chain holds on its research names that document, and the
+/// deck's marks check must find it there (5-tool run, 2026-11-26: every deck
+/// from a brief with marked research was refused, "names a document this deck
+/// does not hold").
+fn brief_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let (id, copy) = up.iter().find(|(_, copy)| {
+        copy.as_object()
+            .is_some_and(|o| BRIEF_KEYS.iter().any(|k| o.contains_key(*k)))
+            && !is_production(copy)
+            && !is_kit(copy)
+    })?;
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
+}
+
+/// The most logo bytes a Brand Clan carries to the deck engine in one
+/// context (base64 adds a third): its logos are small pictures.
+const BRAND_LOGOS_MAX: usize = 4 * 1024 * 1024;
+
+/// `{id, version, data, logos}` of the Brand Clan the document wears (its
+/// `lineage.attached[]` entry of app `ie.napkin.brand`, and the frozen copy
+/// at `data.upstream.<id>`), for a Deck's build. `logos` maps each logo
+/// file the host copied in on attach or Update
+/// (`human/assets/brand/<id>/<file>`, [`crate::library::brand_logo_entry`])
+/// to its bytes in base64. `None` when the document wears no Brand Clan.
+fn brand_upstream(clan: &ClanFile, data: &Value) -> Option<Value> {
+    use base64::Engine as _;
+    let att = clan
+        .manifest()
+        .attached()
+        .iter()
+        .find(|a| a.app_id == crate::library::BRAND_APP_ID)?;
+    let id = att.carried.document_id.as_str();
+    let copy = data.get(UPSTREAM_KEY)?.get(id)?;
+    if !copy.is_object() {
+        return None;
+    }
+    let mut logos = serde_json::Map::new();
+    let mut total = 0usize;
+    let assets = copy
+        .get("visual")
+        .and_then(|v| v.get("logos"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for l in assets {
+        let Some(asset) = l.get("asset").and_then(Value::as_str) else {
+            continue;
+        };
+        let entry = crate::library::brand_logo_entry(id, asset);
+        let Ok(bytes) = clan.read_entry(&entry) else {
+            continue;
+        };
+        total += bytes.len();
+        if total > BRAND_LOGOS_MAX {
+            break;
+        }
+        logos.insert(
+            entry,
+            Value::from(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+        );
+    }
+    Some(json!({ "id": id, "version": att.version, "data": copy, "logos": logos }))
+}
+
+/// `{document_id, version, title, data}` of the Brand Clan a document holds:
+/// its first `lineage.attached` record of [`crate::library::BRAND_APP_ID`] (attached here, or
+/// carried down by a spin-off) whose frozen copy is in `data.upstream`.
+/// `None` when it holds none.
+fn brand_clan(clan: &ClanFile, data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    clan.manifest()
+        .attached()
+        .iter()
+        .filter(|a| a.app_id == crate::library::BRAND_APP_ID)
+        .find_map(|a| {
+            let copy = up.get(&a.carried.document_id).filter(|v| v.is_object())?;
+            Some(serde_json::json!({
+                "document_id": a.carried.document_id,
+                "version": a.version,
+                "title": a.title,
+                "data": copy,
+            }))
+        })
+}
+
+/// The app id a Production project's data carries (`app`, production-tool/contracts/document.schema.json).
+pub const PRODUCTION_TOOL_APP: &str = "production-tool";
+
+/// `{id, data}` of the first entry of `data.upstream` that is a Production
+/// project (its `app` is [`PRODUCTION_TOOL_APP`]): the project whole, for the
+/// Deck's build. `None` when the document carries no such project.
+///
+/// The project is sent as the document it was (owner, 2026-11-23: a spin-off
+/// carries everything but the heavy media): what it had carried itself, its
+/// brief and its research whole, which the spin-off hoisted beside it, goes
+/// back under its own `upstream`, so the Deck reads the full brief there and
+/// not the spine the Brief node keeps. A kit (a Brand Clan, a Style Pack) is
+/// the Deck's own attachment, never the project's, and stays out.
+fn production_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let (id, copy) = up.iter().find(|(_, copy)| is_production(copy))?;
+    let mut whole = copy.clone();
+    let carried: serde_json::Map<String, Value> = up
+        .iter()
+        .filter(|(k, v)| *k != id && v.is_object() && !is_production(v) && !is_kit(v))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !carried.is_empty() {
+        whole[UPSTREAM_KEY] = Value::Object(carried);
+    }
+    Some(json!({ "id": id, "data": whole }))
+}
+
+/// `{id, data}` of the first entry of `data.upstream` that is a Territories
+/// document (routes, the greenlit list and the crew: the contract's required
+/// members, `docs/contracts/territories.md`): the document whole, for the
+/// Deck's build. The brief and research it was made from sit beside it in
+/// `data.upstream` (the spin-off hoisted them), where the index lists them; they
+/// are not repeated here. `None` when the document carries no such entry.
+fn territories_upstream(data: &Value) -> Option<Value> {
+    let up = data.get(UPSTREAM_KEY)?.as_object()?;
+    let (id, copy) = up.iter().find(|(_, copy)| is_territories(copy))?;
+    Some(json!({ "id": id, "data": copy }))
+}
+
+fn is_territories(copy: &Value) -> bool {
+    ["territories", "greenlit", "crew"]
+        .iter()
+        .all(|k| copy.get(k).is_some_and(Value::is_array))
+}
+
+fn is_production(copy: &Value) -> bool {
+    copy.get("app").and_then(Value::as_str) == Some(PRODUCTION_TOOL_APP)
+}
+
+/// A frozen kit holds `kit.version` (the engine tells it the same way).
+fn is_kit(copy: &Value) -> bool {
+    copy.get("kit")
+        .is_some_and(|k| k.is_object() && k.get("version").is_some())
 }
 
 /// The middleware tasks that read `clan.upstream_payload`.
@@ -791,8 +1091,12 @@ pub fn upstream_status(doc: &Document, parent: impl Fn(&str) -> Option<Document>
                     e["holds"] = holds(doc, &p);
                     e
                 }
+                // An ancestor further up (the research behind a brief) is not compared, but its
+                // own state is still told: locked by its own approve, and its version.
                 (false, None) => json!({
                     "document_id": id, "direct": false, "in_store": true, "status": "not_compared",
+                    "version": p.version().as_str(),
+                    "locked": review::lock_of(&chain_of(p.clan()), p.clan().document_id()).is_some(),
                 }),
             };
             entry["title"] = pm.title.clone().into();
@@ -1118,6 +1422,7 @@ mod tests {
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         }
     }
 
@@ -1401,6 +1706,30 @@ mod tests {
     }
 
     #[test]
+    fn a_territories_document_gets_its_carried_brief_whole_and_others_get_none() {
+        let data = "upstream:\n  doc-brief:\n    background: Sales are flat.\n    insight: Real beats shiny.\n  doc-kit:\n    kit: {version: 1}\n    colours: [red]\nterritories: []\n";
+        let t = open(&doc(
+            "Territories",
+            app("Territories", TERRITORIES_APP, None),
+            None,
+            &[("shared/data.yaml", data.as_bytes(), None)],
+        ));
+        let ctx = clan_context_for_agent(&t);
+        // the index is all `data.upstream` holds; the brief itself rides beside it
+        assert!(ctx["data"]["upstream"]["doc-brief"]
+            .get("background")
+            .is_none());
+        assert_eq!(
+            ctx["carried_upstream"]["doc-brief"]["background"],
+            "Sales are flat."
+        );
+        assert!(ctx["carried_upstream"].get("doc-kit").is_none());
+        assert!(clan_context_for_agent(&brief())
+            .get("carried_upstream")
+            .is_none());
+    }
+
+    #[test]
     fn a_brief_from_research_and_the_research_itself_get_no_ask() {
         // A brief runs no extract_ask; the research carries nothing.
         assert!(clan_context_for_agent(&brief())
@@ -1417,5 +1746,99 @@ mod tests {
         for (actor, name, _) in DUMMY_ACCOUNT {
             assert_eq!(people[*actor].name, *name);
         }
+    }
+    #[test]
+    fn a_library_production_project_is_found_by_its_document_id_with_no_addresses_and_its_hoisted_ancestors(
+    ) {
+        // A Deck spun off from a library Production document: the spin-off hoisted the project's brief and
+        // research beside it; the project carries no picture address (the tool writes none).
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Lumen Water", "objectives": { "commercial": "Sell more" } },
+            "doc-research": { "findings": [] },
+            "doc-8f1c2a4e-library-production": {
+                "app": "production-tool",
+                "assets": { "sha256:ab": { "mime": "image/png", "kind": "image" } },
+                "finals": { "f1": { "asset": "sha256:ab" }, "f2": { "asset": "sha256:ab" } },
+            },
+        } });
+        let got = production_upstream(&data).expect("a project");
+        assert_eq!(got["id"], "doc-8f1c2a4e-library-production");
+        assert_eq!(got["data"]["finals"].as_object().unwrap().len(), 2);
+        assert!(got["data"]["assets"]["sha256:ab"]
+            .get("locations")
+            .is_none());
+        assert_eq!(
+            got["data"]["upstream"]["doc-brief"],
+            data["upstream"]["doc-brief"]
+        );
+        assert!(got["data"]["upstream"].get("doc-research").is_some());
+    }
+
+    #[test]
+    fn a_carried_production_project_is_found_whole_with_what_it_carried_and_nothing_else_is() {
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Lumen Water", "app": "ie.napkin.brief-maker", "objectives": "Sell more" },
+            "doc-kit": { "kit": { "version": 1 }, "colours": ["red"] },
+            "doc-prod": { "app": "production-tool", "finals": { "final_1": { "asset": "sha256:ab" } } },
+        } });
+        let got = production_upstream(&data).expect("a project");
+        assert_eq!(got["id"], "doc-prod");
+        assert_eq!(
+            got["data"]["finals"],
+            data["upstream"]["doc-prod"]["finals"]
+        );
+        // the brief goes back under the project's own upstream, whole; the kit does not
+        assert_eq!(
+            got["data"]["upstream"],
+            json!({ "doc-brief": data["upstream"]["doc-brief"] })
+        );
+        assert_eq!(production_upstream(&json!({})), None);
+        let both = json!({ "upstream": {
+            "doc-research": { "campaign": { "name": "R" }, "report": {} },
+            "doc-kit": { "kit": { "version": 1 }, "objectives": "a kit is never the brief" },
+            "doc-brief": { "objectives": "Sell the starter bottle", "mandatories": ["End line: 'Refill. Not landfill.'"] },
+        } });
+        let b = brief_upstream(&both).expect("a brief");
+        assert_eq!(b["id"], "doc-brief");
+        assert_eq!(b["data"]["objectives"], "Sell the starter bottle");
+        // the research the spin-off hoisted beside the brief goes back under the brief's own
+        // upstream, whole (its Confidential marks name it); the kit does not
+        assert_eq!(
+            b["data"]["upstream"],
+            json!({ "doc-research": both["upstream"]["doc-research"] })
+        );
+        assert_eq!(
+            brief_upstream(
+                &json!({ "upstream": { "p": { "app": "production-tool", "objectives": "x" } } })
+            ),
+            None
+        );
+        assert_eq!(brief_upstream(&json!({})), None);
+        assert_eq!(
+            production_upstream(&json!({ "upstream": { "doc-brief": { "client": "x" } } })),
+            None
+        );
+    }
+
+    #[test]
+    fn a_carried_territories_document_is_found_whole_and_nothing_else_is() {
+        let doc = json!({ "title": "Linea", "crew": [], "territories": [{ "id": "t_a" }], "greenlit": [{ "territory_id": "t_a" }], "sends": [] });
+        let data = json!({ "upstream": {
+            "doc-brief": { "client": "Linea", "objectives": "Sell more" },
+            "doc-prod": { "app": "production-tool", "finals": {} },
+            "doc-terr": doc,
+        } });
+        let got = territories_upstream(&data).expect("a document");
+        assert_eq!(got["id"], "doc-terr");
+        assert_eq!(got["data"], data["upstream"]["doc-terr"]);
+        // a Production project or a brief is not one, and neither is a document with no routes
+        assert_eq!(territories_upstream(&json!({})), None);
+        assert_eq!(
+            territories_upstream(
+                &json!({ "upstream": { "doc-brief": { "client": "x" }, "p": { "app": "production-tool" },
+                "half": { "territories": [], "crew": [] } } })
+            ),
+            None
+        );
     }
 }

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deck import assemble, inputs, intake, refs, run_deck, spec, stages, validate
+from deck import assemble, inputs, intake, layouts, refs, run_deck, spec, stages, validate
 from deck.inputs import Inputs
 
 FIX = Path(__file__).parent / "fixtures"
@@ -73,14 +73,16 @@ def test_run_deck_with_a_brief_writes_the_golden_deck(monkeypatch, tmp_path):
     """The CLI path, not only assemble: --brief and no prompt text writes the golden deck.json."""
     out = tmp_path / "out"
     _run_main(monkeypatch, tmp_path, ["--brief", str(BRIEF / "brief_object.json"), "--stages", str(BRIEF), "--client", "Lumen Water",
-                                      "--project", "National awareness campaign", "--out", str(out)])
-    deck = json.loads((out / "deck.json").read_text())
+                                      "--project", "National awareness campaign", "--out", str(out), "--density", "detailed"])
+    deck = layouts.strip_plan(json.loads((out / "deck.json").read_text()))   # the plan's keys are stripped for good: golden_plan.json holds them
     deck["meta"].pop("built_at")
     deck["meta"].pop("built_from")
     assert deck["meta"].pop("audience") == "review"   # run_deck stamps who the render is for
     assert deck["meta"].pop("confirm") and deck["meta"].pop("confirm_summary")["verified"] == 0   # run_deck stamps the confirm list; the build itself is untouched
     assert deck == json.loads((BRIEF / "golden_deck.json").read_text())
-    assert json.loads((out / "validation.json").read_text()) == json.loads((BRIEF / "golden_validation.json").read_text())
+    gold = [f for f in json.loads((BRIEF / "golden_validation.json").read_text())
+            if not (f["check"] == "internal_leak" and f.get("slide") == "s01" and "[Agency]" in f["message"])]   # the cover's "A response from [Agency]" now sits in the notes, not on the slide
+    assert layouts.without_plan_findings(json.loads((out / "validation.json").read_text())) == gold
     assert "intake" not in json.loads((out / "report.json").read_text())   # a complete brief runs no intake
 
 
@@ -133,6 +135,8 @@ def test_from_upstream_matches_the_brief_clan_loader(tmp_path):
     fields, htw, oq, cov = inputs.load_brief_clan(clan)
     inp = inputs.from_upstream({"upstream": {"brief-1": _brief_clan_data()}}, {})
     assert inp.brief == fields and inp.how_to_win == htw and inp.open_questions == oq
+    cov.pop("marks", None)   # the loaders pop the marks into Inputs.marks
+    assert inp.answered == cov.pop("answered", [])   # and the brief's answered questions into Inputs.answered (UAT round 4)
     assert inp.coverage == cov
     assert inputs.CLAN_FIELDS and inp.has_brief() and not inp.has_research()
 
@@ -175,6 +179,44 @@ def test_rejected_finding_in_the_chain_reaches_no_slide():
     deck = assemble.build(inp, {"a0": {"fields": {"insight": {"value": "x", "kind": "research", "refs": ["fi_bad"]}}}}, client="Lumen Water", project="P")
     assert not any(f["check"] == "rejected_used" for f in validate.run(deck, inp))
     assert inp.brief["insight"]["value"] is None   # the field that cited it was dropped
+
+
+#: The Research Tool's own example (fabricated, committed): the same files crates/clan-sdk/tests/spinoff.rs
+#: spins off Research -> Brief -> Deck, which proves the members reach the deck byte for byte and the chain whole.
+RESEARCH_EXAMPLE = Path(__file__).resolve().parents[3] / "app/templates/campaign-research/example"
+RESEARCH_DOC = "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17"
+REJECTED_FINDING = "fi_01JA0F5E"   # rejected by a person in the example (d_01JA0D07REJ, reject_finding)
+
+
+def _research_example():
+    """The example's data and members as a spun-off Deck holds them (the SDK test proves the carry)."""
+    rd = lambda n: yaml.safe_load((RESEARCH_EXAMPLE / n).read_text())  # noqa: E731
+    data = rd("shared/data.yaml")
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    return data, members
+
+
+@pytest.mark.parametrize("member_says", ["rejected", "proposed"])
+def test_the_research_tools_rejected_finding_reaches_no_slide_after_three_hops(member_says):
+    """Research -> Brief -> Deck on the Research Tool's real shapes: the brief and the research side by side
+    under data.upstream, the members and the carried chain as the spin-off leaves them. The finding a person
+    rejected is never offered to a stage, and a slide citing it fails validation. With ``proposed`` the
+    findings member has lost the status and the chain's verdict (``<doc>#findings[<id>]``) alone keeps it out."""
+    research, members = _research_example()
+    findings = members["findings"]["findings"]
+    assert any(f["id"] == REJECTED_FINDING and f["status"] == "rejected" for f in findings)
+    members["findings"] = {"findings": [{**f, "status": member_says} if f["id"] == REJECTED_FINDING else f for f in findings]}
+    data = {"upstream": {RESEARCH_DOC: research, "brief-doc": _brief_clan_data()}, "inputs": {"prompt": {"text": ""}}}
+
+    inp = inputs.from_upstream(data, members)
+    assert inp.has_brief() and inp.has_research() and inp.research_doc_id == RESEARCH_DOC
+    assert inp.findings[REJECTED_FINDING]["status"] == "rejected"
+    assert any(f["status"] == "verified" for f in inp.findings.values())
+    block = stages._facts_block(inp)
+    assert f"[{REJECTED_FINDING}]" not in block and "FINDING (verified)" in block
+    sl = _sl(claims=[{"text": "The occasion was taken", "refs": [REJECTED_FINDING], "basis": "sourced"}])
+    assert ("rejected_used", "error") in {(f["check"], f["level"]) for f in validate.run(_deck([sl]), inp)}
 
 
 def test_load_doc_reads_docx_md_txt_eml_and_keeps_pdf_page_locators(tmp_path, monkeypatch):

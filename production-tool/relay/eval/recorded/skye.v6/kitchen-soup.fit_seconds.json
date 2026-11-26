@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front lifts the steaming lid, tastes the soup from a wooden spoon and nods slowly."
+     },
+     {
+      "type": "direction",
+      "text": "Warm morning light from the left."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one beat of 15 words so the shot plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "The action was 20 words (about 3.3 s). Cutting it to 15 words gives 2.5 s by the length rule. The @name, the order of events and the direction are unchanged."
+ }
+}

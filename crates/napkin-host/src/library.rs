@@ -245,7 +245,7 @@ fn load_template(store: &dyn DocStore, app_id: &str) -> HostResult<ClanFile> {
     store
         .read(&tpl_id)
         .and_then(|b| Ok(ClanFile::from_bytes(b)?))
-        .map_err(|e| HostError::new(e.status, format!("app not installed: {e}")))
+        .map_err(|e| HostError::new(e.status, format!("app not installed: {app_id} ({e})")))
 }
 
 /// A new document's id: the library's name for it, from the first characters
@@ -508,7 +508,7 @@ pub fn spinoff_document_as(
         ctx,
         &template,
         &source_clan,
-        source,
+        source_uri(source, source_clan.raw_bytes()),
         target_app_id,
         title,
         map,
@@ -530,7 +530,8 @@ pub fn spinoff_change(
     spinoff_change_as(store, &Ctx::local(), source, target_app_id, title, map)
 }
 
-/// [`spinoff_change`] under an explicit context.
+/// [`spinoff_change`] under an explicit context. The new document records
+/// the source as `doc:<doc id>@<version>` ([`source_uri`]): it is a document of this store.
 pub fn spinoff_change_as(
     store: &dyn DocStore,
     ctx: &Ctx,
@@ -539,17 +540,45 @@ pub fn spinoff_change_as(
     title: Option<String>,
     map: Option<String>,
 ) -> HostResult<Change> {
+    let uri = source_uri(source.id(), source.clan().raw_bytes());
     let template = load_template(store, target_app_id)?;
     spinoff_from(
         store,
         ctx,
         &template,
         source.clan(),
-        source.id(),
+        uri,
         target_app_id,
         title,
         map,
     )
+}
+
+/// How a spin-off names its source: `doc:<doc id>@<version>`, the version being
+/// the document's `sha256:<hex>` over its archive bytes, the same string the
+/// save route's `ETag` carries (docs/contracts/production-clan-app.md §2.6).
+pub fn source_uri(source: &DocId, bytes: &[u8]) -> String {
+    format!("doc:{source}@{}", clan_sdk::hash::sha256_prefixed(bytes))
+}
+
+/// The Production Tool's canvas checkpoint: the scene of one project, 4 to 12 MB
+/// and read by nothing downstream, so a spin-off never carries it.
+const CHECKPOINT: &str = "human/assets/canvas.ybin.zst";
+
+/// `source` less the canvas checkpoint, or `None` when it has none.
+fn without_checkpoint(source: &ClanFile) -> HostResult<Option<ClanFile>> {
+    if !source.has_entry(CHECKPOINT) {
+        return Ok(None);
+    }
+    let mut manifest = source.manifest().clone();
+    manifest.files.retain(|f| f.path != CHECKPOINT);
+    let mut b = ClanBuilder::new(manifest);
+    for (path, bytes) in source.read_all_entries()? {
+        if path != clan_sdk::MANIFEST_PATH && path != CHECKPOINT {
+            b.add_entry(path, bytes);
+        }
+    }
+    Ok(Some(ClanFile::from_bytes(b.build()?)?))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -558,7 +587,7 @@ fn spinoff_from(
     ctx: &Ctx,
     template: &ClanFile,
     source: &ClanFile,
-    source_id: &DocId,
+    source_uri: String,
     target_app_id: &str,
     title: Option<String>,
     map: Option<String>,
@@ -572,6 +601,18 @@ fn spinoff_from(
             ),
         ));
     }
+    let trimmed = without_checkpoint(source)?;
+    let source = trimmed.as_ref().unwrap_or(source);
+    // A workspace with a file store carries the source's files as links:
+    // the bytes go into the store first (written once, whatever the chain
+    // length), the copy names them by hash. A store without one embeds.
+    let link_assets = match store.blobs() {
+        Some(blobs) => {
+            crate::blobs::ingest_assets(blobs, source)?;
+            true
+        }
+        None => false,
+    };
     // With `upstream` declared the SDK refuses a `map` (422, Contract 4
     // §5.1) and carries the source whole.
     let bytes = spinoff(
@@ -581,14 +622,43 @@ fn spinoff_from(
             title: title.unwrap_or_default(),
             map,
             instance_id: None,
-            // A DocId is the store's own address for the file; recording it is
-            // what lets a restore find the parent again.
-            source_uri: Some(format!("clan-store:{source_id}")),
+            // `clan-store:<DocId>` is the store's own address for the file;
+            // recording it is what lets a restore find the parent again.
+            source_uri: Some(source_uri),
+            link_assets,
         },
     )?;
     let bytes = with_projection(bytes)?;
+    let bytes = with_brand_logos_embedded(store, bytes)?;
     let out = allocate(store, target_app_id, &bytes)?;
     Ok(Change::create(out, bytes))
+}
+
+/// A spin-off carries the Brand Clan the source holds (`lineage.attached`) and the logo files its attach copied
+/// ([`brand_logo_entry`]); a workspace with a file store carries those files as links, which the deck's carrier
+/// (`ops::read::brand_upstream`, a read of the archive alone) cannot follow, so a deck made by Continue in wore the
+/// Brand Clan's colours with no logo (UAT 5-tool run, 2026-11-26). They are put back inside, as attach puts them.
+fn with_brand_logos_embedded(store: &dyn DocStore, bytes: Vec<u8>) -> HostResult<Vec<u8>> {
+    let Some(blobs) = store.blobs() else {
+        return Ok(bytes);
+    };
+    let clan = ClanFile::from_bytes(bytes.clone())?;
+    let linked: Vec<(String, String)> = clan
+        .manifest()
+        .files
+        .iter()
+        .filter(|f| f.linked && f.path.starts_with("human/assets/brand/") && !f.path.contains(".."))
+        .map(|f| (f.path.clone(), f.sha256.clone().unwrap_or_default()))
+        .collect();
+    let mut out = bytes;
+    for (path, sha) in linked {
+        let Ok(file) = crate::blobs::linked_bytes(blobs, &path, &sha) else {
+            continue;
+        };
+        let now = ClanFile::from_bytes(out.clone())?;
+        out = clan_sdk::patch_asset(&now, &path, file)?;
+    }
+    Ok(out)
 }
 
 /// A document spun off with `upstream` arrives with the source's pins and
@@ -688,7 +758,7 @@ pub(crate) fn chain_of(clan: &ClanFile) -> DecisionChain {
 /// `child` carries it in `data.upstream`.
 ///
 /// The direct parent is looked for first where the spin-off recorded it
-/// (`lineage.parent_uri`, `clan-store:<DocId>`); a write to the child moves
+/// (`lineage.parent_uri`, `doc:<DocId>@<version>`); a write to the child moves
 /// its lineage on, so after that, and for a hoisted ancestor, the library is
 /// searched by `document_id`. A fork branch of the parent shares its id and is
 /// not the parent; a document of another tenant is skipped.
@@ -703,8 +773,8 @@ pub fn find_upstream(
         .carried()
         .filter(|c| c.document_id == document_id)
         .and(m.lineage.as_ref())
-        .and_then(|l| l.parent_uri.strip_prefix("clan-store:"))
-        .map(DocId::new);
+        .and_then(|l| parse_source_uri(&l.parent_uri).ok())
+        .map(|(id, _)| id);
     recorded
         .into_iter()
         .chain(store.documents())
@@ -717,6 +787,24 @@ pub fn find_upstream(
                 && dm.document_type.as_deref() != Some("template")
                 && !foreign(ctx, doc.clan());
             is_it.then_some(doc)
+        })
+}
+
+/// The document and version a `lineage.parent_uri` names: only `doc:<id>@<version>`.
+/// A document spun off before the library held every project (`clan-store:<id>`,
+/// the relay-project form, `file:///...`) is refused, in words a person can use.
+pub fn parse_source_uri(uri: &str) -> HostResult<(DocId, String)> {
+    uri.strip_prefix("doc:")
+        .and_then(|rest| rest.rsplit_once('@'))
+        .filter(|(id, v)| !id.is_empty() && v.starts_with("sha256:"))
+        .map(|(id, v)| (DocId::new(id), v.to_string()))
+        .ok_or_else(|| {
+            HostError::new(
+                422,
+                format!(
+                    "This document was made before projects lived in the library (it names its source as \"{uri}\"), so its source cannot be followed. Start again from the original."
+                ),
+            )
         })
 }
 
@@ -951,6 +1039,18 @@ pub fn update_from_upstream(
     update_from_upstream_of(store, ctx, doc, None)
 }
 
+/// `document_id` is what `doc` was made from (`lineage.carried`, a Continue in
+/// or spin-off) and is not also linked to it: an Update on it takes the
+/// parent's newer version (owner 2026-11-26, "Update refreshes the parent").
+pub fn made_from_only(doc: &Document, document_id: &str) -> bool {
+    let m = doc.clan().manifest();
+    m.carried().is_some_and(|c| c.document_id == document_id)
+        && !m
+            .attached()
+            .iter()
+            .any(|a| a.carried.document_id == document_id)
+}
+
 /// [`update_from_upstream`], or, when `document_id` names a document linked
 /// to this one (`lineage.attached`), take that one's newer version: the same
 /// carry as `POST /attach/update`, one `update_from_<noun>` decision.
@@ -1113,9 +1213,42 @@ pub struct AttachTarget {
     /// The open document is locked: a link would be refused, and the shell
     /// says why rather than offer it.
     pub locked: bool,
+    /// The version the open document holds of it (`lineage.attached[].version`)
+    /// when it is linked; a newer `version` than this is what Update takes.
+    pub held_version: Option<u64>,
+    /// It is its client's default Brand Clan (`default_brand_clan` on the
+    /// client record): what new work of that client starts on.
+    pub default: bool,
+    /// For a Brand Clan: its first colours (`visual.colours[].hex`, at most
+    /// three, in its own order), so a picker can show each look (mock e2).
+    /// Empty for anything else.
+    pub swatches: Vec<String>,
     /// Who the target is for, as the library names it: the registry's id and
     /// name, else the name its own manifest carries. `null` when it has none.
     pub client: Option<clan_sdk::ClientRef>,
+}
+
+/// A Brand Clan's first colours, at most three, as `#RRGGBB`.
+fn brand_swatches(clan: &ClanFile) -> Vec<String> {
+    let Some(data) = clan
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Vec::new();
+    };
+    data.get("visual")
+        .and_then(|v| v.get("colours"))
+        .and_then(|c| c.as_sequence())
+        .map(|cs| {
+            cs.iter()
+                .filter_map(|c| c.get("hex").and_then(|h| h.as_str()))
+                .filter(|h| h.len() == 7 && h.starts_with('#'))
+                .take(3)
+                .map(|h| h.to_uppercase())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
@@ -1127,6 +1260,9 @@ pub(crate) fn kit_version(clan: &ClanFile) -> Option<u64> {
 /// (`app.attach.accepts`), by title. Empty when the app declares none. A fork
 /// branch, a template, another tenant's document, the document itself and
 /// what it was made from are never offered.
+/// The Brand Clan app (`ie.napkin.brand`).
+pub const BRAND_APP_ID: &str = "ie.napkin.brand";
+
 pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<AttachTarget> {
     let manifest = doc.clan().manifest();
     let spec = manifest
@@ -1138,11 +1274,17 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
         return Vec::new();
     }
     let here = manifest.document_id().to_string();
+    let here_client = manifest.client.as_ref().map(|c| c.id.clone());
     let made_from = manifest.carried().map(|c| c.document_id.clone());
     let attached: Vec<String> = manifest
         .attached()
         .iter()
         .map(|a| a.carried.document_id.clone())
+        .collect();
+    let held: std::collections::HashMap<String, Option<u64>> = manifest
+        .attached()
+        .iter()
+        .map(|a| (a.carried.document_id.clone(), a.version))
         .collect();
     let locked = locked_error(doc.clan()).is_some();
     // Client names are resolved from the registry, as the library does, so a
@@ -1166,12 +1308,31 @@ pub fn attach_targets(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Vec<At
                 || document_id == here
                 || Some(&document_id) == made_from.as_ref()
                 || foreign(ctx, d.clan())
+                // A Brand Clan belongs to one client: a document of a client
+                // is offered only that client's Brand Clans.
+                || (app.app_id == BRAND_APP_ID
+                    && here_client.is_some()
+                    && m.client.as_ref().map(|c| &c.id) != here_client.as_ref())
             {
                 return None;
             }
+            let d_path = d.id().to_string();
+            let default = m
+                .client
+                .as_ref()
+                .and_then(|r| registry.get(&r.id))
+                .and_then(|rec| rec.default_brand_clan.as_deref())
+                .is_some_and(|d| d == document_id || d == d_path.as_str());
             Some(AttachTarget {
                 app_id: app.app_id.clone(),
                 app_name: app.name.clone(),
+                held_version: held.get(&document_id).copied().flatten(),
+                default,
+                swatches: if app.app_id == BRAND_APP_ID {
+                    brand_swatches(d.clan())
+                } else {
+                    Vec::new()
+                },
                 attached: attached.contains(&document_id),
                 many: spec.many.contains(&app.app_id),
                 locked,
@@ -1354,6 +1515,9 @@ pub fn attach_change(
     }
     let out = clan_sdk::attach(doc.clan(), source.clan())?;
     let bytes = with_projection(out.bytes)?;
+    // A Brand Clan's logo files travel with its frozen copy (owner 2026-11-24, "Yes it reaches deck"): attach takes
+    // shared/data.yaml only, so the files its logos name are copied too, for the deck to place.
+    let bytes = with_brand_logos(store, source.clan(), source_document_id, bytes)?;
     let bytes = attribute_attach(bytes, doc.clan(), ctx)?;
     let after = ClanFile::from_bytes(bytes.clone())?;
     let mut change = doc.change(bytes)?;
@@ -1379,6 +1543,63 @@ pub fn attach_change(
         "carried_decisions": out.carried_decisions,
     });
     Ok((change, reply))
+}
+
+/// Where a Brand Clan's logo file sits in a work document that holds it: `human/assets/brand/<brand document id>/<file name>`.
+/// The deck reads the logo from here (contract brand-clan.md section 8).
+pub fn brand_logo_entry(brand_document_id: &str, asset: &str) -> String {
+    let name = asset.rsplit('/').next().unwrap_or(asset);
+    format!("human/assets/brand/{brand_document_id}/{name}")
+}
+
+/// Copy the files a Brand Clan's published logos name (`visual.logos[].asset`) into `bytes` (the work document after
+/// attach), under [`brand_logo_entry`]. Anything that is not a Brand Clan, or a logo whose file cannot be read, is left
+/// as it is: the copy never blocks a link. A linked file is read from the store's blobs.
+fn with_brand_logos(
+    store: &dyn DocStore,
+    source: &ClanFile,
+    source_id: &str,
+    bytes: Vec<u8>,
+) -> HostResult<Vec<u8>> {
+    let is_brand = source
+        .manifest()
+        .app
+        .as_ref()
+        .is_some_and(|a| a.app_id == BRAND_APP_ID);
+    if !is_brand {
+        return Ok(bytes);
+    }
+    let Some(data) = source
+        .read_entry(DATA)
+        .ok()
+        .and_then(|b| serde_yaml::from_slice::<serde_yaml::Value>(&b).ok())
+    else {
+        return Ok(bytes);
+    };
+    let assets: Vec<String> = data
+        .get("visual")
+        .and_then(|v| v.get("logos"))
+        .and_then(|l| l.as_sequence())
+        .map(|ls| {
+            ls.iter()
+                .filter_map(|l| l.get("asset").and_then(|a| a.as_str()).map(String::from))
+                .filter(|a| a.starts_with("human/assets/") && !a.contains(".."))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut out = bytes;
+    for asset in assets {
+        let file = match source.manifest().file_by_path(&asset) {
+            Some(f) if f.linked => store.blobs().and_then(|b| {
+                crate::blobs::linked_bytes(b, &asset, f.sha256.as_deref().unwrap_or("")).ok()
+            }),
+            _ => source.read_entry(&asset).ok(),
+        };
+        let Some(file) = file else { continue };
+        let now = ClanFile::from_bytes(out.clone())?;
+        out = clan_sdk::patch_asset(&now, &brand_logo_entry(source_id, &asset), file)?;
+    }
+    Ok(out)
 }
 
 /// The change that unlinks `which` (a source's `document_id`, or the
@@ -1438,7 +1659,8 @@ pub fn linked_status(a: &clan_sdk::Attached, source: &Document) -> &'static str 
 
 /// `GET /related` for `doc`: what it was made from and what is linked into it
 /// (`upstream`), and what was made from it or links it (`downstream`), each
-/// `{document_id, title, app_id, path, how, version?, status?}`. `how` is
+/// `{document_id, title, app_id, path, how, version?, taken?, kit_version?, status?}`
+/// (`kit_version`: a linked kit's own `kit.version` held). `how` is
 /// `made_from`, `linked` (upstream) or `made_into`, `linked_in` (downstream).
 /// A read of manifests only: nothing is written, no data is parsed past the
 /// manifest for the downstream half.
@@ -1455,7 +1677,7 @@ pub fn related(store: &dyn DocStore, ctx: &Ctx, doc: &Document) -> Value {
             serde_json::json!({
                 "document_id": u["document_id"], "title": u["title"], "app_id": u["app_id"],
                 "path": u["path"], "how": u["how"], "version": u["version"], "noun": u["noun"],
-                "taken": u["taken"], "status": u["status"],
+                "taken": u["taken"], "kit_version": u["kit_version"], "status": u["status"],
             })
         })
         .collect();
@@ -1732,6 +1954,7 @@ mod tests {
             content_type: "image/svg+xml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
         let clan = ClanFile::from_bytes(b.build().unwrap()).unwrap();
         let mut info = app_info("Iconic", "ie.napkin.iconic", None);
@@ -1847,6 +2070,268 @@ mod tests {
         assert!(store.exists(&source));
     }
 
+    use crate::store::BlobStore as _;
+
+    /// A workspace store: the in-memory documents plus a file store.
+    #[derive(Default)]
+    struct LinkStore {
+        docs: MemStore,
+        blobs: crate::blobs::testing::MemBlobs,
+    }
+
+    impl PartStore for LinkStore {
+        fn read(&self, id: &DocId) -> HostResult<Vec<u8>> {
+            self.docs.read(id)
+        }
+        fn exists(&self, id: &DocId) -> bool {
+            self.docs.exists(id)
+        }
+        fn apply(&self, change: &Change) -> HostResult<Version> {
+            self.docs.apply(change)
+        }
+        fn blobs(&self) -> Option<&dyn crate::store::BlobStore> {
+            Some(&self.blobs)
+        }
+    }
+
+    impl Library for LinkStore {
+        fn app_candidates(&self) -> Vec<DocId> {
+            self.docs.app_candidates()
+        }
+        fn app_template(&self, app_id: &str) -> DocId {
+            self.docs.app_template(app_id)
+        }
+        fn documents(&self) -> Vec<DocId> {
+            self.docs.documents()
+        }
+        fn new_document(&self, app_id: &str, id_short: &str) -> HostResult<DocId> {
+            self.docs.new_document(app_id, id_short)
+        }
+        fn home(&self, version_tag: &str) -> HostResult<DocId> {
+            self.docs.home(version_tag)
+        }
+        fn fork_branch(&self, parent: &DocId, agent: &str) -> DocId {
+            self.docs.fork_branch(parent, agent)
+        }
+    }
+
+    const PDF: &[u8] = b"%PDF-1.4 a client brief that must be stored once";
+
+    fn chain_spec(accepts: &[&str]) -> SpinoffSpec {
+        SpinoffSpec {
+            accepts: accepts.iter().map(|s| s.to_string()).collect(),
+            upstream: true,
+            ..Default::default()
+        }
+    }
+
+    /// A brief that still holds its file inside (the way documents made
+    /// before links do).
+    fn brief_with_embedded_pdf(store: &LinkStore) -> DocId {
+        let id = source_document(store, "ie.napkin.brief");
+        let clan = ClanFile::from_bytes(store.read(&id).unwrap()).unwrap();
+        let bytes = clan_sdk::patch_asset_with(&clan, "client.pdf", PDF.to_vec(), None).unwrap();
+        let base = store.version(&id).unwrap();
+        store
+            .apply(&Change::replace(id.clone(), base, bytes))
+            .unwrap();
+        id
+    }
+
+    fn links(store: &dyn DocStore, id: &DocId) -> (ClanFile, Option<String>) {
+        let clan = ClanFile::from_bytes(store.read(id).unwrap()).unwrap();
+        let sha = clan
+            .manifest()
+            .file_by_path("human/assets/client.pdf")
+            .filter(|f| f.linked)
+            .and_then(|f| f.sha256.clone());
+        (clan, sha)
+    }
+
+    #[test]
+    fn a_spinoff_chain_shares_one_stored_file_and_survives_the_source_going() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Production",
+            "ie.napkin.prod",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief", "ie.napkin.prod"])),
+        );
+
+        let prod = spinoff_document(&store, &brief, "ie.napkin.prod", None, None).unwrap();
+        let deck = spinoff_document(&store, &prod, "ie.napkin.deck", None, None).unwrap();
+
+        let want = clan_sdk::hash::sha256_prefixed(PDF);
+        for id in [&prod, &deck] {
+            let (clan, sha) = links(&store, id);
+            assert_eq!(sha.as_deref(), Some(want.as_str()), "{id}");
+            assert!(
+                !clan.has_entry("human/assets/client.pdf"),
+                "no bytes in {id}"
+            );
+        }
+        assert_eq!(store.blobs.len(), 1, "one stored file for the whole chain");
+
+        // The source goes; the copies still open and still serve the file.
+        store.docs.files.lock().unwrap().remove(brief.as_str());
+        store.docs.files.lock().unwrap().remove(prod.as_str());
+        let doc = crate::Document::load(&store, deck.clone()).unwrap();
+        let (ct, bytes) = crate::ops::read::serve_asset(&doc, "client.pdf", store.blobs()).unwrap();
+        assert_eq!(bytes, PDF);
+        assert_eq!(ct, "application/pdf");
+
+        // What leaves the workspace carries the bytes.
+        let (clan, _) = links(&store, &deck);
+        let whole =
+            ClanFile::from_bytes(crate::blobs::materialise(&clan, store.blobs()).unwrap()).unwrap();
+        assert_eq!(whole.read_entry("human/assets/client.pdf").unwrap(), PDF);
+        assert!(clan_sdk::validate(&whole).is_valid());
+    }
+
+    #[test]
+    fn an_upload_is_stored_once_and_the_document_holds_a_link() {
+        let store = LinkStore::default();
+        let id = source_document(&store, "ie.napkin.brief");
+        let doc = crate::Document::load(&store, id.clone()).unwrap();
+        let out = crate::ops::edit::upload_asset(
+            &Ctx::local(),
+            &doc,
+            store.blobs(),
+            "client.pdf",
+            None,
+            PDF.to_vec(),
+        )
+        .unwrap();
+        let change = &out.changes[0];
+        let clan = ClanFile::from_bytes(change.bytes.clone()).unwrap();
+        let f = clan
+            .manifest()
+            .file_by_path("human/assets/client.pdf")
+            .unwrap();
+        assert!(f.linked);
+        assert!(!clan.has_entry("human/assets/client.pdf"));
+        assert_eq!(
+            f.sha256.as_deref(),
+            Some(clan_sdk::hash::sha256_prefixed(PDF).as_str())
+        );
+        assert!(clan_sdk::validate(&clan).is_valid());
+        // The same file again is the same stored file.
+        crate::ops::edit::upload_asset(
+            &Ctx::local(),
+            &doc,
+            store.blobs(),
+            "again.pdf",
+            None,
+            PDF.to_vec(),
+        )
+        .unwrap();
+        assert_eq!(store.blobs.len(), 1);
+    }
+
+    #[test]
+    fn a_missing_file_does_not_stop_the_document_but_names_itself() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let deck = spinoff_document(&store, &brief, "ie.napkin.deck", None, None).unwrap();
+        let sha = clan_sdk::hash::sha256_prefixed(PDF);
+        store.blobs.remove(&sha).unwrap();
+
+        let doc = crate::Document::load(&store, deck.clone()).unwrap();
+        let err = crate::ops::read::serve_asset(&doc, "client.pdf", store.blobs()).unwrap_err();
+        assert_eq!(err.status, 404);
+        assert!(err.message.contains("client.pdf"), "{}", err.message);
+        let (clan, _) = links(&store, &deck);
+        let err = crate::blobs::materialise(&clan, store.blobs()).unwrap_err();
+        assert!(err.message.contains("client.pdf"), "{}", err.message);
+        let err = crate::blobs::materialise(&clan, None).unwrap_err();
+        assert_eq!(err.status, 409);
+    }
+
+    #[test]
+    fn a_store_without_files_still_embeds() {
+        let store = MemStore::default();
+        let source = source_document(&store, "ie.napkin.brief");
+        let clan = ClanFile::from_bytes(store.read(&source).unwrap()).unwrap();
+        let bytes = clan_sdk::patch_asset_with(&clan, "client.pdf", PDF.to_vec(), None).unwrap();
+        let base = store.version(&source).unwrap();
+        store
+            .apply(&Change::replace(source.clone(), base, bytes))
+            .unwrap();
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let deck = spinoff_document(&store, &source, "ie.napkin.deck", None, None).unwrap();
+        let deck = ClanFile::from_bytes(store.read(&deck).unwrap()).unwrap();
+        assert_eq!(deck.read_entry("human/assets/client.pdf").unwrap(), PDF);
+        assert!(
+            !deck
+                .manifest()
+                .file_by_path("human/assets/client.pdf")
+                .unwrap()
+                .linked
+        );
+    }
+
+    #[test]
+    fn the_sweep_keeps_what_is_linked_or_young_and_removes_the_rest() {
+        let store = LinkStore::default();
+        let brief = brief_with_embedded_pdf(&store);
+        install_template_app(
+            &store,
+            "Deck",
+            "ie.napkin.deck",
+            Some(chain_spec(&["ie.napkin.brief"])),
+        );
+        let _deck = spinoff_document(&store, &brief, "ie.napkin.deck", None, None).unwrap();
+        // The brief still embeds its copy, so only the deck links the PDF.
+        *store.blobs.clock.lock().unwrap() = 100;
+        let orphan = store.blobs.put(b"nobody links this").unwrap();
+        let held = store.blobs.put(b"a relay project links this").unwrap();
+        store.blobs.pin(&held).unwrap();
+        *store.blobs.clock.lock().unwrap() = 200;
+        let young = store.blobs.put(b"just written").unwrap();
+
+        let week = 7 * 24 * 3600;
+        let dry = crate::blobs::sweep(&store, 100 + week + 1, week, true).unwrap();
+        assert_eq!(dry.removed, vec![orphan.clone()]);
+        assert!(store.blobs.has(&orphan), "a dry run removes nothing");
+        // The PDF (written at clock 0, linked) and the pinned one stay.
+        assert_eq!(dry.referenced, 2);
+        assert_eq!(dry.young, 1);
+
+        let done = crate::blobs::sweep(&store, 100 + week + 1, week, false).unwrap();
+        assert_eq!(done.removed, vec![orphan.clone()]);
+        assert!(!store.blobs.has(&orphan));
+        assert!(store.blobs.has(&held) && store.blobs.has(&young));
+        assert!(store.blobs.has(&clan_sdk::hash::sha256_prefixed(PDF)));
+    }
+
+    #[test]
+    fn spinoff_documents_across_workspaces_stay_refused_with_links() {
+        // The store is the workspace: a hash another workspace holds does not
+        // resolve in this one.
+        let a = crate::blobs::testing::MemBlobs::default();
+        let b = crate::blobs::testing::MemBlobs::default();
+        let sha = crate::store::BlobStore::put(&a, PDF).unwrap();
+        assert!(!crate::store::BlobStore::has(&b, &sha));
+    }
+
     #[test]
     fn spinoff_document_refuses_a_source_the_target_does_not_accept() {
         let store = MemStore::default();
@@ -1872,6 +2357,11 @@ mod tests {
         let err = spinoff_document(&store, &source, "ie.napkin.absent", None, None)
             .expect_err("an uninstalled target must be an error");
         assert!(err.message.contains("app not installed"), "{}", err.message);
+        assert!(
+            err.message.contains("ie.napkin.absent"),
+            "the refusal names the tool that is missing: {}",
+            err.message
+        );
     }
 
     #[test]
@@ -2047,5 +2537,143 @@ mod tests {
             .map(|t| t.app_id)
             .collect();
         assert_eq!(ids, vec!["ie.napkin.film".to_string()]);
+    }
+
+    const BRIEF_APP: &str = "ie.napkin.brief-maker";
+    const RESEARCH_APP: &str = "ie.napkin.campaign-research";
+    const TERR_APP: &str = "ie.napkin.territories";
+    const PROD_APP: &str = "ie.napkin.production";
+    const DECK_APP: &str = "ie.napkin.deck-maker";
+
+    /// Production takes a brief, research or territories; the Deck takes Production.
+    fn install_chain(store: &dyn DocStore) {
+        install_template_app(
+            store,
+            "Production",
+            PROD_APP,
+            Some(chain_spec(&[BRIEF_APP, RESEARCH_APP, TERR_APP])),
+        );
+        install_template_app(store, "Deck Maker", DECK_APP, Some(chain_spec(&[PROD_APP])));
+    }
+
+    #[test]
+    fn production_is_a_target_for_brief_research_territory_and_a_source_for_the_deck() {
+        let store = MemStore::default();
+        install_chain(&store);
+        for from in [BRIEF_APP, RESEARCH_APP, TERR_APP] {
+            let ids: Vec<_> = spinoff_targets(&store, Some(from))
+                .into_iter()
+                .map(|t| t.app_id)
+                .collect();
+            assert!(ids.contains(&PROD_APP.to_string()), "{from}: {ids:?}");
+            assert!(!ids.contains(&DECK_APP.to_string()));
+        }
+        let ids: Vec<_> = spinoff_targets(&store, Some(PROD_APP))
+            .into_iter()
+            .map(|t| t.app_id)
+            .collect();
+        assert_eq!(ids, vec![DECK_APP.to_string()], "never itself");
+    }
+
+    #[test]
+    fn a_spinoff_to_production_carries_the_whole_source_and_names_it_by_version() {
+        let store = MemStore::default();
+        install_chain(&store);
+        let brief = source_document(&store, BRIEF_APP);
+        let source_bytes = store.read(&brief).unwrap();
+        let source = ClanFile::from_bytes(source_bytes.clone()).unwrap();
+        let source_data: serde_yaml::Value =
+            serde_yaml::from_slice(&source.read_entry("shared/data.yaml").unwrap()).unwrap();
+
+        let out = spinoff_document(&store, &brief, PROD_APP, None, None).unwrap();
+        let clan = ClanFile::from_bytes(store.read(&out).unwrap()).unwrap();
+        let data: serde_yaml::Value =
+            serde_yaml::from_slice(&clan.read_entry("shared/data.yaml").unwrap()).unwrap();
+        // Every key of the brief, nothing summarised.
+        assert_eq!(data["upstream"][source.document_id()], source_data);
+        assert_eq!(
+            clan.manifest().lineage.as_ref().unwrap().parent_uri,
+            format!(
+                "doc:{brief}@{}",
+                clan_sdk::hash::sha256_prefixed(&source_bytes)
+            )
+        );
+        // The parent is found again by that address.
+        let child = Document::load(store.parts(), out).unwrap();
+        let found = find_upstream(&store, &Ctx::local(), &child, source.document_id());
+        assert_eq!(found.map(|d| d.id().clone()), Some(brief));
+    }
+
+    #[test]
+    fn production_to_deck_drops_the_canvas_checkpoint_and_keeps_the_rest() {
+        let store = MemStore::default();
+        install_chain(&store);
+        let brief = source_document(&store, BRIEF_APP);
+        let prod = spinoff_document(&store, &brief, PROD_APP, None, None).unwrap();
+        // The tool's save adds the canvas checkpoint.
+        let clan = ClanFile::from_bytes(store.read(&prod).unwrap()).unwrap();
+        let mut b = ClanBuilder::new(clan.manifest().clone());
+        for (path, bytes) in clan.read_all_entries().unwrap() {
+            if path != "manifest.yaml" {
+                b.add_entry(path, bytes);
+            }
+        }
+        b.add_entry(CHECKPOINT, vec![7u8; 2048]);
+        let base = store.version(&prod).unwrap();
+        store
+            .apply(&Change::replace(prod.clone(), base, b.build().unwrap()))
+            .unwrap();
+
+        let deck = spinoff_document(&store, &prod, DECK_APP, None, None).unwrap();
+        let out = ClanFile::from_bytes(store.read(&deck).unwrap()).unwrap();
+        assert!(!out.has_entry(CHECKPOINT));
+        assert!(out.manifest().files.iter().all(|f| f.path != CHECKPOINT));
+        let data: serde_yaml::Value =
+            serde_yaml::from_slice(&out.read_entry("shared/data.yaml").unwrap()).unwrap();
+        // The brief the project carried is still whole in the deck.
+        let brief_doc = ClanFile::from_bytes(store.read(&brief).unwrap())
+            .unwrap()
+            .document_id()
+            .to_string();
+        assert_eq!(
+            data["upstream"][&brief_doc]["insight"].as_str(),
+            Some("people forget")
+        );
+        assert!(clan_sdk::validate(&out).is_valid());
+    }
+
+    #[test]
+    fn only_the_doc_form_of_a_source_is_read() {
+        let (id, v) = parse_source_uri("doc:doc-1a2b@sha256:abc123").unwrap();
+        assert_eq!(
+            (id.to_string().as_str(), v.as_str()),
+            ("doc-1a2b", "sha256:abc123")
+        );
+        for old in [
+            "clan-store:doc-1a2b",
+            "production:prj_X@abc",
+            "file:///unknown/x.clan",
+            "doc:doc-1a2b",
+            "doc:doc-1a2b@abc",
+        ] {
+            let e = parse_source_uri(old).unwrap_err();
+            assert_eq!(e.status, 422, "{old}");
+            assert!(
+                e.message
+                    .contains("made before projects lived in the library")
+                    && e.message.contains("Start again from the original"),
+                "{old}: {}",
+                e.message
+            );
+        }
+    }
+
+    #[test]
+    fn a_target_that_is_not_installed_is_named() {
+        let store = MemStore::default();
+        let brief = source_document(&store, BRIEF_APP);
+        let e = spinoff_document(&store, &brief, DECK_APP, None, None).unwrap_err();
+        assert_eq!(e.status, 404);
+        assert!(e.message.contains("app not installed"), "{}", e.message);
     }
 }

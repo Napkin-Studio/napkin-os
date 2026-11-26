@@ -3,9 +3,18 @@
 
 import type { ShellEvent } from '../dogfood/recorder'
 import type {
-  AssetRef, Config, ContractError, InputMime, Job, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish, LogEntry, Output,
-  Me,
+  AnswerConflict, AssetRef, Config, ContractError, InputMime, Job, JobAnswer, JobRequest, Key, LibraryEntry, LibraryIndex, LibraryPublish,
+  LogEntry, Output, Me,
 } from '../contracts/types'
+import type { Access } from './access'
+
+/** A job that finished with no tab open: the relay's Job as the host read it, once. */
+export interface InboxEntry {
+  job: string
+  state: 'completed' | 'failed' | 'cancelled'
+  outcome: Job
+  at: string
+}
 
 export interface UploadResult extends AssetRef {
   exists: boolean
@@ -17,8 +26,9 @@ export interface Relay {
   /** GET /me: who is signed in. No token: the relay's identity seam knows (features/drop-hackathon-extras.clan).
    *  null when it answers 401 (no one is). */
   me(): Promise<Me | null>
-  /** Called when any route answers 401. The app forgets who was signed in and says to sign in through Napkin Studio. */
-  onUnauthorised?: () => void
+  /** Called when an answer says this person cannot use the tool (relay/access.ts): signed out of Napkin OS
+   *  (napkin-web's 401), not confirmed (the relay's 401), or the agency not on (403 flag_off on GET /me). */
+  onUnauthorised?: (why: Access) => void
   /** Hash in the browser, POST /uploads, PUT the bytes when the relay doesn't have them. */
   upload(blob: Blob, mime: InputMime): Promise<UploadResult>
   /** POST /jobs (idempotent on jobId) */
@@ -27,32 +37,46 @@ export interface Relay {
   getJob(jobId: string): Promise<Job>
   /** DELETE /jobs/{jobId} */
   cancelJob(jobId: string): Promise<Job>
+  /** POST /jobs/{jobId}/answer: the job resumes on the same jobId. Someone answered first: their answer
+   *  (409 AnswerConflict), never an error. */
+  answerJob(jobId: string, answer: JobAnswer): Promise<AnswerResult>
   /** POST /log */
   log(entry: LogEntry): Promise<void>
   /** GET /config, or null when the relay doesn't serve one. */
   config(): Promise<Config | null>
   /** The bytes of a job output or an uploaded image (our S3 behind the relay; the mock keeps them locally). */
   fetchOutput(output: Output | AssetRef): Promise<Blob>
-  /** GET /library: the workspace's solid keys, latest version each. */
-  library(): Promise<LibraryIndex>
-  /** GET /library/{key}[/{ver}] */
-  libraryEntry(key: Key, ver?: number): Promise<LibraryEntry>
-  /** POST /library/{key}: publish the next version (409 conflict when baseVer is not the latest). */
-  publish(key: Key, req: LibraryPublish): Promise<LibraryEntry>
+  /** GET /library/{shelf}: a shelf's keys, latest version each (the agency's shelf by default). */
+  library(shelf?: string): Promise<LibraryIndex>
+  /** GET /library/{shelf}/{key}[/{ver}] */
+  libraryEntry(key: Key, ver?: number, shelf?: string): Promise<LibraryEntry>
+  /** POST /library/{shelf}/{key}: publish the next version (409 conflict when baseVer is not the latest). */
+  publish(key: Key, req: LibraryPublish, shelf?: string): Promise<LibraryEntry>
+  /** GET .../inbox: jobs that finished while no tab had the project open, each as the relay's Job (only the real relay). */
+  inbox?(): Promise<InboxEntry[]>
+  /** POST .../inbox/{job}/ack: this job is landed (from the inbox, or directly while the tab was open). */
+  ackJob?(jobId: string): Promise<void>
+  /** The host says a job of this project finished and waits in its inbox. Returns how to stop listening. */
+  onSettled?(doc: string, listener: () => void): () => void
   /** POST /dogfood/consent: this person read the beta notice. Only the real relay records. */
   dogfoodConsent?(): Promise<void>
   /** POST /dogfood/events: a batch of the beta's events. Never awaited; failures are dropped. */
   dogfoodEvents?(events: ShellEvent[], leaving: boolean): void
 }
 
-/** A non-2xx relay answer, carrying the contract error. */
+/** What answering a job's question came to: the job, resumed; or the answer that won. */
+export type AnswerResult = { job: Job } | { conflict: AnswerConflict }
+
+/** A non-2xx relay answer, carrying the contract error (and the whole body, for a 409 AnswerConflict). */
 export class RelayError extends Error {
   readonly error: ContractError
   readonly status: number
-  constructor(error: ContractError, status = 0) {
+  readonly body?: unknown
+  constructor(error: ContractError, status = 0, body?: unknown) {
     super(error.message)
     this.error = error
     this.status = status
+    this.body = body
   }
 }
 

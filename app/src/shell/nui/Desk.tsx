@@ -13,6 +13,7 @@
 // Keyboard: the circles are one tab stop (arrows, Home and End rove them),
 // Enter opens a circle's dial, 1 to 4 pick a quadrant, Escape closes it.
 
+import { readableInk } from '../agency/palette'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ClientRecord, LegacyName } from '../../host'
 import { ACTIVITY_WORD, adoptLabel, agencySummary, countsLine, matches, pageOf } from '../landing/model'
@@ -47,6 +48,9 @@ interface Props {
   offlineCount?: number | null
   /** Said in the polite live region (a restore, an adoption). */
   onSay: (words: string) => void
+  /** Where the Production Tool opens, when this server serves it: the desk links to it even with no
+   *  clients yet (its tile otherwise lives only on a client's dial). */
+  productionHref?: string
 }
 
 type PopKey = 'archived' | 'more'
@@ -61,7 +65,7 @@ function placeOf(row: HTMLElement, circle: HTMLElement): { left: number; top: nu
   return { left, top, origin: `${cx - left}px ${dr.height / 2 + 12}px` }
 }
 
-export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay }: Props) {
+export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, onOpenTool, onSoon, onOpenDocument, onOpenFile, onOffline, offlineCount, onSay, productionHref }: Props) {
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -185,6 +189,9 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                   data-testid="client-search" onChange={e => { setQuery(e.target.value); setDial(null) }} />
               </label>
               <span className="sp" />
+              {productionHref && (
+                <a className="side-link p33-prod" href={productionHref} data-testid="desk-production" title="Script, storyboard and video for an ad">Production</a>
+              )}
               {manage && (
                 <button type="button" className="side-link" id="p33-archived" aria-haspopup="menu" aria-expanded={pop.open?.key === 'archived'}
                   data-testid="archived-link" onClick={e => pop.toggle('archived', e.currentTarget)}>Archived · {archived.length}</button>
@@ -215,6 +222,7 @@ export function Desk({ data, facts, live, first, manage, onAdd, onOpenClient, on
                 <span className="cl-name">{none ? 'Add your first client' : 'New client'}</span>
                 <span className="cl-line">Start a client desk</span>
               </button>
+              {open && place && <div className="dial-scrim" aria-hidden="true" data-testid="dial-scrim" />}
               {open && place && (
                 <Dial
                   client={{ id: open.id, name: open.name, sector: sectorOf(open.id), look: open.look }}
@@ -331,7 +339,7 @@ function ClientCircle({ c, tab, open, onFocus, onClick }: {
   return (
     <button type="button" className={`cl-circle${open ? ' is-open' : ''}`} data-client={c.id} aria-pressed={open} tabIndex={tab ? 0 : -1}
       aria-label={said} data-testid="client-circle" data-activity={c.summary.activity} onFocus={onFocus} onClick={e => onClick(e.currentTarget, e.detail === 0)}>
-      <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: c.look.ink }}>
+      <span className="cl-disc" style={{ ['--cl' as string]: c.look.cl, ['--cl-ink' as string]: readableInk(c.look.cl, c.look.ink) }}>
         <svg viewBox="0 0 116 116" aria-hidden><circle cx="58" cy="58" r="52" className="cl-track" /></svg>
         <b>{c.mono}</b>
         {c.badge > 0 && <span className="cl-badge" data-testid="needs-badge">{c.badge}</span>}
@@ -373,7 +381,7 @@ export function AddForm({ onAdd, onClose }: { onAdd: (name: string, sector: stri
   return (
     <form className="cl-add-form" id="cl-add-form" noValidate data-testid="add-form" aria-label="Add a client"
       onSubmit={submit} onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }}>
-      <label>Client name<input id="cl-add-name" type="text" placeholder="e.g. Kerrygold" required autoFocus autoComplete="off" maxLength={60}
+      <label>Client name<input id="cl-add-name" type="text" placeholder="e.g. Larkfield Dairy" required autoFocus autoComplete="off" maxLength={60}
         value={name} onChange={e => setName(e.target.value)} aria-invalid={error ? true : undefined} aria-describedby={error ? 'cl-add-err' : undefined} /></label>
       <label>Sector<input id="cl-add-sector" type="text" placeholder="e.g. Dairy · Export" autoComplete="off" maxLength={60}
         value={sector} onChange={e => setSector(e.target.value)} /></label>

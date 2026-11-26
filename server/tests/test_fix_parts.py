@@ -75,7 +75,8 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
     last = replies[-1]
     assert last["task"] == "fix_parts" and last["handler"] == "fix_parts@1.0"
     assert last["job"]["state"] == "done" and last["job"]["progress"] == {"done": 3, "total": 3}
-    assert last["result"]["summary"].startswith("Fixed 1 of 2 part(s), 1 proposed")
+    # the Review agent still notes the rewritten objective (below), so it is not counted as fixed (acceptance run A10)
+    assert last["result"]["summary"].startswith("Fixed 0 of 2 part(s); 1 rewritten but still needs you (commercial objective), 1 proposed")
     # The Strategy agent: the problem in the Review agent's words, then the person's; only the named parts; the research it lacks
     assert [p["by"] for p in seen["plan_fix"]["problem"]] == ["the Review agent", "a person"]
     assert "last year's" in seen["plan_fix"]["problem"][1]["said"]
@@ -106,7 +107,9 @@ def test_the_crew_fixes_the_parts_a_note_names_and_nothing_else(tmp_path):
         "The Review agent still notes the objectives: no pass"
     assert all(any("#objectives" in t for t in d["targets"]) for d in mine), "no note on a part the fix left alone"
     got = standing_problem(DOC, host.chain, note["id"])
-    assert got is not None and got[0] == ["objectives.behavioural"]
+    # the page's rule: the held part waits for the person, and the written one for the Review agent's pass
+    # (here it still notes the objectives), so the note still stands on both
+    assert got is not None and sorted(got[0]) == OBJ
     check_change_rules(host)
 
 
@@ -196,3 +199,22 @@ def test_with_jev_the_check_reads_only_the_named_parts_and_a_mended_argument_lea
     assert len(passed) == 1 and sorted(t.split("#", 1)[1] for t in passed[0]["targets"]) == OBJ
     assert passed[0]["reasoning"]["decided"].startswith("Checked the fix")
     check_change_rules(host)
+
+
+def test_a_note_still_stands_after_an_agent_rewrote_the_part():
+    """UAT 2026-11-22: "Fix this with the agents" did nothing on Review-rejected parts. The page keeps a bad
+    note open until a person writes the part or the Review agent passes it with a reason; an agent's rewrite
+    (a redraft the Review agent still flagged) does not answer it, so the fix must still run."""
+    parts = ["insight", "single_minded_proposition", "reasons_to_believe", "barrier"]
+    note = {"id": "d_note", "kind": "verdict", "polarity": "bad", "actor": "agent:judge",
+            "targets": [f"{DOC}#{k}" for k in parts], "rationale": "The parts do not make one argument."}
+    redraft = {"id": "d_redraft", "kind": "edit", "action": "draft", "actor": "agent:drafter",
+               "targets": [f"{DOC}#{k}" for k in parts]}
+    got = standing_problem(DOC, [redraft, note], "d_note")
+    assert got is not None and got[0] == parts
+    # a person's write answers it; so does the Review agent's pass with a reason
+    person = {"id": "d_p", "kind": "edit", "action": "edit", "actor": "human:local", "targets": [f"{DOC}#insight"]}
+    assert standing_problem(DOC, [person, redraft, note], "d_note")[0] == parts[1:]
+    passed = {"id": "d_ok", "kind": "verdict", "polarity": "good", "actor": "agent:judge",
+              "targets": [f"{DOC}#barrier"], "rationale": "Checked the fix."}
+    assert "barrier" not in standing_problem(DOC, [passed, redraft, note], "d_note")[0]

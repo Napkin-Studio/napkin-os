@@ -1,0 +1,231 @@
+/* The canvas chrome of the approved UI (docs/production-tool/ui-mocks/Main.dc.html):
+   the Boards rail, the bottom tool bar and the zoom pill, floating over either canvas engine. */
+
+/* The rail, tool bar and zoom sit above the pen's live-ink layer (engine INK_OVER_Z = 4, over the
+   cards' node layer at 3), or with the pen in hand they take no clicks: no ink, no Select, no way out
+   (owner, 2026-10-15). */
+/* ── Boards: frames on the canvas with ⌥1…⌥9 (features/production-new-ui.clan); the floating rail is gone.
+   On touch, where there is no ⌥, a Boards pill opens the jump sheet. ── */
+.br-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; border: 0; background: transparent;
+  font-size: 13px; color: var(--ink); text-align: left; cursor: pointer; width: 100%;
+}
+.br-row:hover:not(:disabled) { background: var(--soft); }
+.br-row:disabled { color: var(--ink3); cursor: default; }
+.br-row.current { color: var(--tool-ink); background: var(--tool-soft); font-weight: 600; }
+.br-row .br-key { color: var(--ink3); font-family: var(--f-mono); font-size: 11px; }
+.br-new { margin-top: 6px; text-align: left; padding: 7px 8px; border: 1px dashed var(--line); border-radius: 8px; background: transparent; font-size: 13px; color: var(--ink2); width: 100%; }
+.br-pill { position: absolute; left: 16px; top: 16px; z-index: 5; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border-radius: var(--r-pill); font-size: 14px; cursor: pointer; color: var(--ink); }
+.br-pill .br-cur { color: var(--tool-ink); font-weight: 600; }
+.br-sheet { width: 300px; padding: 8px; }
+.br-sheet .br-row { min-height: 48px; font-size: 15px; }
+.br-sheethead { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 10px; }
+.br-close { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; font-size: 20px; cursor: pointer; color: var(--ink2); }
+
+/* ── The tool bar (bottom, centred) ──────────────────────────────────────── */
+.canvas-toolbar {
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 4px; padding: 6px;
+  background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line-soft); border-radius: var(--r-pill); box-shadow: var(--shadow-pop);
+}
+:root[data-theme='dark'] .canvas-toolbar { background: rgba(22, 26, 31, 0.94); }
+.tb-tool {
+  width: 36px; height: 36px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 0; font-size: 12px;
+}
+.tb-tool.wide { width: auto; padding: 0 12px; }
+.tb-tool:hover:not(:disabled) { background: var(--soft); }
+.tb-tool.on { background: var(--ink-fixed); color: #FFFFFF; }
+.tb-tool:disabled { color: var(--ink3); opacity: 0.55; cursor: default; }
+.tb-tool .tb-t { font-weight: 600; font-size: 15px; }
+.tb-sep { width: 1px; height: 22px; background: var(--line-soft); margin: 0 4px; }
+.tb-node { white-space: nowrap; height: 36px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--action); color: var(--action-fg); font-size: 13px; font-weight: 600; cursor: pointer; }
+.tb-node:hover { background: var(--action-hover); }
+
+/* ── The tool rail (mock v2 .cv-tools): a quiet column on the canvas's left ── */
+.canvas-toolbar.rail {
+  left: 14px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; gap: 2px; padding: 5px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-card);
+}
+:root[data-theme='dark'] .canvas-toolbar.rail { background: var(--paper); }
+.canvas-toolbar.rail .tb-tool { width: 36px; height: 36px; border-radius: 8px; color: var(--ink-soft); }
+.canvas-toolbar.rail .tb-tool svg { width: 18px; height: 18px; }
+.canvas-toolbar.rail .tb-tool:hover:not([aria-disabled='true']) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.canvas-toolbar.rail .tb-tool.on, :root[data-theme='dark'] .canvas-toolbar.rail .tb-tool.on { background: var(--ag-act); color: var(--ag-act-ink); }
+.canvas-toolbar.rail .tb-node { background: transparent; padding: 0; }
+
+/* ── Show all links (mock v2 .cv-links: bottom right) ──────────────────────── */
+.cv-links { position: absolute; right: 14px; bottom: 14px; z-index: 5; }
+.cv-links .sp-btn { height: 30px; box-shadow: var(--shadow-card, none); }
+.cv-links .sp-btn svg { width: 14px; height: 14px; }
+
+/* ── Zoom and undo (mock v2 .cv-zoom: bottom left) ─────────────────────────── */
+.zoom-pill {
+  position: absolute; left: 14px; bottom: 14px; z-index: 5; display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); font: 500 11.5px var(--font-mono);
+}
+.zoom-pill button { min-width: 28px; height: 28px; padding: 0 9px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; color: var(--ink); padding: 0; font-size: 13px; }
+.zoom-pill button:hover:not(:disabled) { background: var(--soft); }
+.zoom-pill button:disabled { color: var(--ink3); cursor: default; }
+.zoom-pill .zp-value { width: auto; font: 600 12px var(--font-ui); }
+.zoom-pill .zp-sep { width: 1px; height: 18px; background: var(--line-soft); }
+.zoom-pill .undonote { bottom: calc(100% + 8px); top: auto; left: 0; right: auto; } /* the pill sits at the left edge: the note opens rightwards, never off-screen (UAT round 4 S3-3) */
+
+/* ── The selection bar (ui-behaviour 3.9; mock CanvasLinking) ────────────── */
+.canvas-wrap .toolbar { padding: 6px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.96); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); }
+.canvas-wrap .toolbar .sep { background: var(--line-soft); height: 22px; }
+.canvas-wrap .toolbar .btn:not(.primary):not(.dark) { border-color: transparent; background: transparent; }
+.canvas-wrap .toolbar .btn:not(.primary):not(.dark):hover:not(:disabled) { background: var(--soft); }
+
+/* ── "What Dex will send" (ui-behaviour 3.16; mock Scope) ────────────────── */
+.popover.send-tray { width: 380px; padding: 12px 14px; border-radius: var(--r-panel); background: rgba(255, 255, 255, 0.98); display: flex; flex-direction: column; gap: 8px; }
+.tray-head { display: flex; align-items: center; gap: 8px; }
+.tray-fold { width: 26px; height: 26px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: var(--ink); }
+.tray-title { display: flex; flex-direction: column; }
+.tray-title b { font-weight: 600; font-size: 13px; }
+.tray-title span { font-size: 11px; color: var(--ink3); }
+.tray-line { align-self: flex-start; height: 30px; padding: 0 12px; border: 1px solid var(--line-soft); border-radius: var(--r-pill); background: var(--card); font-size: 12.5px; cursor: pointer; color: var(--ink); }
+.tray-rows { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); padding: 6px 0; }
+.tray-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 2px; font-size: 12px; line-height: 1.4; cursor: pointer; }
+.tray-row input { margin: 2px 0 0; width: 14px; height: 14px; accent-color: var(--tool); flex: none; }
+.tray-row b { font-weight: 600; }
+/* A row with what it goes as (UAT round 1 IMG-6/7/8): person or thing, switchable on an unnamed picture. */
+.tray-rows { max-height: 38vh; overflow: auto; }
+.tray-rowline { display: flex; align-items: flex-start; gap: 6px; }
+.tray-rowline .tray-row { flex: 1; min-width: 0; }
+.tray-kind { flex: none; margin-top: 4px; padding: 1px 7px; border-radius: var(--r-pill); border: 1px solid var(--line-soft); background: var(--soft); font-family: var(--f-mono); font-size: 10.5px; line-height: 1.5; color: var(--ink2); white-space: nowrap; }
+.tray-kind.person { border-color: color-mix(in srgb, var(--tool) 40%, transparent); color: var(--tool-ink, var(--tool)); background: var(--tool-soft, var(--soft)); }
+button.tray-kind { cursor: pointer; }
+button.tray-kind:hover { border-color: var(--tool); }
+.tray-count { font-size: 11px; color: var(--ink3); }
+.tray-count.over { color: var(--danger); }
+/* A shot's references under its row (features/canvas-nodes.clan): asked-for ones, then Dex's additions. */
+.tray-refs { display: flex; flex-direction: column; gap: 1px; margin: -2px 0 4px 26px; }
+.tray-ref { font-size: 11.5px; line-height: 1.4; padding: 1px 0; overflow-wrap: break-word; }
+.tray-ref .pt-ref { white-space: nowrap; }
+.tray-ref.added { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.tray-ref input { margin: 2px 0 0; width: 13px; height: 13px; accent-color: var(--tool); flex: none; }
+.tray-words { display: flex; flex-direction: column; gap: 4px; }
+.tray-words .textarea { min-height: 56px; font-size: 13px; }
+.send-tray .taghints { margin: 0; }
+.tray-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tray-model { line-height: 1.4; margin-right: auto; }
+.tray-error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+/* What a slow send is doing (features/pt-canvas-r2.clan, R2-3). */
+.tray-slow { font-size: 12.5px; }
+
+/* ── Today's engine under the chrome: its own bars give way to ours ──────── */
+.canvas-wrap .excalidraw .App-toolbar-container,
+.canvas-wrap .excalidraw .main-menu-trigger,
+.canvas-wrap .excalidraw .layer-ui__wrapper__top-right,
+.canvas-wrap .excalidraw .layer-ui__wrapper__footer-left,
+.canvas-wrap .excalidraw .layer-ui__wrapper__footer-right,
+.canvas-wrap .excalidraw .disable-zen-mode,
+.canvas-wrap .excalidraw .HintViewer { display: none !important; }
+/* Its properties panel (stroke, fill) opens on the right, clear of the Boards rail. */
+.canvas-wrap .excalidraw .App-menu_top { display: flex; justify-content: flex-end; pointer-events: none; }
+.canvas-wrap .excalidraw .App-menu_top > * { pointer-events: auto; }
+.canvas-wrap .excalidraw .App-menu_top__left { position: absolute; right: 0; top: 0; }
+.canvas-wrap .excalidraw .App-menu__left { transform: translateX(-100%); }
+.tray-foot.nowrap { flex-wrap: nowrap; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+/* The dot grid, moving with the canvas (Character sets --grid-x, --grid-y and --grid-s). */
+.canvas-wrap.pt-grid { background-position: var(--grid-x, 0) var(--grid-y, 0); background-size: var(--grid-s, 24px) var(--grid-s, 24px); }
+
+/* A new project's first card (mock States: the Ad template's Skye card). */
+.start-card { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 420px; padding: 16px 18px; z-index: 4; display: flex; flex-direction: column; gap: 10px; }
+.start-card b { font-size: 14px; font-weight: 600; }
+.start-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink2); }
+
+/* ── iPad (mock TabletCanvas): the tool bar is a column on the left, 44px targets ── */
+.canvas-toolbar.vertical { left: 12px; top: 16px; bottom: auto; transform: none; flex-direction: column; gap: 2px; padding: 6px; border-radius: 20px; }
+.canvas-toolbar.vertical .tb-tool { width: 64px; height: 56px; border-radius: 14px; flex-direction: column; gap: 3px; font-size: 11px; }
+.canvas-toolbar.vertical .tb-name { font-size: 11px; font-weight: 500; }
+.canvas-toolbar.vertical .tb-sep { width: 40px; height: 1px; margin: 4px 0; }
+.canvas-toolbar.vertical .tb-undo { display: flex; flex-direction: column; align-items: center; }
+.canvas-toolbar.vertical .tb-undo button { width: 56px; height: 48px; border: 0; background: transparent; font-size: 20px; border-radius: 12px; cursor: pointer; color: var(--ink); }
+.canvas-toolbar.vertical .tb-undo button:disabled { color: var(--ink3); }
+.canvas-toolbar.vertical .tb-node { width: 64px; height: 60px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding: 0; }
+.canvas-toolbar.vertical .tb-node b { font-size: 18px; }
+.zoom-pill.touch { padding: 6px 10px; }
+.zoom-pill.touch button { width: 44px; height: 44px; font-size: 18px; }
+.zoom-pill.touch .zp-value { width: 56px; font-size: 13px; }
+.zoom-pill.touch .zp-fit { width: auto; padding: 0 12px; font-size: 14px; }
+.br-pill { left: 100px; }
+
+/* ── The boards over today's canvas (mock Main) ───────────────────────────── */
+/* Layers, bottom up: the board frames, the canvas (transparent), the node cards, the chrome, the overlays. */
+.boards-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.boards-layer.frames { z-index: 0; }
+.canvas-wrap > .excalidraw { position: relative; z-index: 1; }
+.boards-layer.cards { z-index: 2; }
+.bl-cardbox { position: absolute; transform-origin: 0 0; }
+.bl-links { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.bl-links path { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.bl-linklabel { position: absolute; padding: 2px 8px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line); font-size: 11px; color: var(--ink2); }
+.bl-board { position: absolute; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--r-board); background: rgba(255, 255, 255, 0.55); }
+:root[data-theme='dark'] .bl-board { background: rgba(22, 26, 31, 0.45); }
+.bl-board.current { border: 2px solid var(--tool); }
+.bl-title { position: absolute; left: 14px; top: -11px; padding: 2px 8px; background: var(--canvas-bg); font-size: 12px; font-weight: 600; color: var(--ink2); }
+.bl-board.current .bl-title { color: var(--tool-ink); top: -12px; }
+.bl-card {
+  position: absolute; left: 16px; right: 16px; top: 22px; pointer-events: auto; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+}
+.bl-cardhead { display: flex; align-items: center; gap: 8px; }
+.bl-cardhead b { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.bl-av { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line-soft); border-radius: 8px; overflow: hidden; font-size: 11.5px; line-height: 1.45; }
+.bl-avhead { padding: 6px 8px; background: var(--soft); font-family: var(--f-mono); font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.06em; }
+.bl-avcell { padding: 6px 8px; border-top: 1px solid var(--line-soft); }
+.bl-avcell.muted { color: var(--ink2); }
+.bl-excerpt { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.bl-meta { font-size: 12px; color: var(--ink3); }
+.bl-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.bl-frame { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.bl-frame img, .bl-noframe { width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; display: block; }
+.bl-noframe { border: 1.5px dashed var(--line); display: flex; align-items: center; justify-content: center; font-size: 10.5px; color: var(--ink3); background: var(--card); }
+.bl-frame figcaption { font-size: 11px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bl-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); }
+.bl-atwork { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-pill); font-size: 12px; color: var(--ink2); background: var(--soft); }
+.bl-atwork.warm { background: #FFF7E0; }
+:root[data-theme='dark'] .bl-atwork.warm { background: #3A321E; }
+.bl-videorow { display: flex; gap: 10px; }
+.bl-poster { position: relative; width: 150px; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: linear-gradient(180deg, var(--soft), var(--line)); flex: none; }
+.bl-poster img, .bl-poster video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bl-len { position: absolute; right: 6px; bottom: 6px; font-family: var(--f-mono); font-size: 10px; color: #FFFFFF; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.bl-facts { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink2); }
+
+/* ── Dark (features/theme-and-pencil.clan): the light-only fills above, in the dark tokens ── */
+/* The tool in use: near-black on the dark bar was invisible; light ink on it instead. */
+:root[data-theme='dark'] .tb-tool.on { background: var(--ink); color: var(--paper); }
+:root[data-theme='dark'] .canvas-wrap .toolbar { background: rgba(22, 26, 31, 0.96); }
+:root[data-theme='dark'] .popover.send-tray { background: rgba(22, 26, 31, 0.98); }
+
+/* ── Tooltips: every bar button says its name and key, or why it is off ──── */
+.canvas-toolbar [data-tip], .zoom-pill [data-tip], .pt-menu [data-tip] { position: relative; }
+.canvas-toolbar [data-tip]:hover::after, .canvas-toolbar [data-tip]:focus-visible::after,
+.zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after,
+.pt-menu [data-tip]:hover::after, .pt-menu [data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; z-index: 10; pointer-events: none; white-space: nowrap;
+  padding: 5px 10px; border-radius: 8px; background: var(--ink-fixed, #16181D); color: #FFFFFF;
+  font: 500 12px/1.3 var(--f-display, inherit); letter-spacing: 0; text-transform: none; box-shadow: var(--shadow-pill);
+}
+.canvas-toolbar:not(.vertical):not(.rail) [data-tip]:hover::after, .canvas-toolbar:not(.vertical):not(.rail) [data-tip]:focus-visible::after,
+.zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after { bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); }
+.zoom-pill [data-tip]:hover::after, .zoom-pill [data-tip]:focus-visible::after { left: 0; right: auto; transform: none; }
+.canvas-toolbar.vertical [data-tip]:hover::after, .canvas-toolbar.vertical [data-tip]:focus-visible::after,
+.canvas-toolbar.rail [data-tip]:hover::after, .canvas-toolbar.rail [data-tip]:focus-visible::after,
+.pt-menu [data-tip]:hover::after, .pt-menu [data-tip]:focus-visible::after { left: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+/* Off (not built on this canvas yet): shown, greyed, saying why in the tooltip. */
+.tb-tool[aria-disabled='true'], .br-new[aria-disabled='true'], .pt-menu [aria-disabled='true'] { color: var(--ink3); opacity: 0.5; cursor: not-allowed; }
+.tb-tool[aria-disabled='true']:hover { background: transparent; }
+.br-new:not([aria-disabled='true']) { cursor: pointer; }
+.br-new:not([aria-disabled='true']):hover { border-color: var(--tool); color: var(--tool-ink); background: var(--tool-soft); }
+/* An open menu's button keeps its tooltip to itself. */
+.canvas-toolbar [aria-expanded='true'][data-tip]::after { display: none; }
+/* The sketch area shape picker (3.7): four radios, each with its shape. */
+.tb-shapes { min-width: 210px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.tb-shapes .pt-label { padding: 2px 8px 4px; }
+.tb-shapes .pt-menurow.on { color: var(--tool-ink); background: var(--tool-soft); font-weight: 600; }
+.tb-shape { display: inline-block; height: 12px; border: 1.3px solid currentColor; border-radius: 2px; margin-right: 4px; }
+.tb-shapenote { padding: 6px 8px 2px; font-size: 11.5px; color: var(--ink3); max-width: 220px; }

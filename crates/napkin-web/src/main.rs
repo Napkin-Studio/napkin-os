@@ -127,6 +127,38 @@ fn dogfood(data_root: &std::path::Path) -> Option<Arc<napkin_web::dogfood::Dogfo
     ))
 }
 
+/// The Production Tool at `/production` (features/os-sign-in.clan):
+///   NAPKIN_PRODUCTION_RELAY_URL     the relay (unset: no /production, no card)
+///   NAPKIN_PRODUCTION_RELAY_SECRET  32+ bytes; signs the read-only assets pass a deck
+///                                   build is given (the first of `new,old` in a rotation)
+///   NAPKIN_PRODUCTION_SERVICE_KEY   32+ bytes; napkin-web's credential for every other
+///                                   relay call (Authorization: Bearer, plus a signed user
+///                                   claim; the first of `new,old`)
+///   NAPKIN_PRODUCTION_STATIC        the tool's build (default /srv/napkin/production)
+///   NAPKIN_PRODUCTION_MEDIA_BASE    https base of Production's pictures; told to the
+///                                   tool in /api/session as `media_base` (unset: null)
+///   NAPKIN_PRODUCTION_UPLOAD_ORIGIN the S3 origin the relay's presigned upload links point at;
+///                                   the page's CSP connect-src names it (unset: not named)
+/// Refuses to start with a relay and no sign-in, or with a short secret.
+fn production(identity: &Identity) -> Option<Arc<napkin_web::production::Relay>> {
+    let accounts = matches!(identity.mode, Mode::Accounts { .. });
+    napkin_web::production::Config::from_vars(
+        accounts,
+        env_string("NAPKIN_PRODUCTION_RELAY_URL").as_deref(),
+        env_string("NAPKIN_PRODUCTION_RELAY_SECRET").as_deref(),
+        env_string("NAPKIN_PRODUCTION_SERVICE_KEY").as_deref(),
+        env_string("NAPKIN_PRODUCTION_STATIC").as_deref(),
+    )
+    .unwrap_or_else(|e| panic!("{e}"))
+    .map(|c| {
+        Arc::new(
+            napkin_web::production::Relay::new(c)
+                .with_media_base(napkin_web::media::from_env())
+                .with_upload_origin(napkin_web::media::upload_origin_from_env()),
+        )
+    })
+}
+
 fn env_string(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
@@ -237,10 +269,17 @@ async fn main() {
             settings.agent_cap,
         )
         .with_seed(settings.seed_dir.clone())
-        .with_dogfood(dogfood.clone()),
+        .with_dogfood(dogfood.clone())
+        .with_media_base(napkin_web::media::from_env()),
     );
 
-    let app = napkin_web::router_with(ctx, settings.static_dir.as_deref(), identity);
+    let production = production(&identity);
+    let app = napkin_web::router_full(
+        ctx,
+        settings.static_dir.as_deref(),
+        identity,
+        production.clone(),
+    );
 
     let listener = tokio::net::TcpListener::bind(settings.addr)
         .await
@@ -253,6 +292,7 @@ async fn main() {
         agent_cap = settings.agent_cap,
         auth,
         dogfood = dogfood.is_some(),
+        production = %production.as_ref().map(|p| p.config.relay_url.clone()).unwrap_or_else(|| "(off)".into()),
         seed = %settings.seed_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "(none)".into()),
         "Napkin Studio OS — web",
     );

@@ -277,6 +277,16 @@ module "services" {
   # included, until the dogfood ends and it is purged (owner, 2026-10-05;
   # features/dogfood-telemetry.clan). Staging only.
   web_dogfood = true
+  # The Production Tool at /production (features/os-sign-in.clan): the
+  # hackathon relay and the key napkin-web signs each call to it with. Empty
+  # until a person sets them (the design's rollout step 4).
+  production_relay_url        = var.production_relay_url
+  production_relay_secret_arn = var.production_relay_secret_arn
+  production_service_key_arn  = var.production_service_key_arn
+  production_upload_origin    = var.production_upload_origin
+  production_media_base       = var.production_media_base
+  # Daily AWS Backup of web's EFS, 35 days (features/production-in-library)
+  backup_enabled = true
   # The middleware's run log beside the record (features/dogfood-log-quality.clan),
   # with what every model call and search saw, so a brief can be traced claim
   # by claim (owner, 2026-10-19; features/brief-fact-provenance.clan). Napkin

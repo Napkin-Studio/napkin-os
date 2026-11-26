@@ -177,7 +177,6 @@ def test_grading_that_never_answers_is_regraded_next_time(tmp_path, monkeypatch)
 def test_preflight_stops_without_claude(monkeypatch):
     sys.path.insert(0, str(HERE.parent))
     import parse_brief as pb
-    monkeypatch.setenv("BRIEF_CLAUDE_TRANSPORT", "api")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("BRIEF_ALLOW_NONCLAUDE", raising=False)
     with pytest.raises(pb.NoClaudeAvailable):

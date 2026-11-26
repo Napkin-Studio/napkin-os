@@ -1,0 +1,1472 @@
+{
+  "projection": {
+    "built_from": {
+      "built_at": "",
+      "facts_sha256": "sha256:196b20d0dedb57d122f41578b8ec7c83d3a272b28a0c07caf8c47168348cc0de",
+      "findings_sha256": "sha256:56584aee45440ab02bcc9176add2aa5a7968b748d39f94a4c210714ed5fc37b2"
+    },
+    "findings": {
+      "fi_01JA0F1A": {
+        "cites": [
+          "f_01JA0B6D6G",
+          "f_01JA0B6D7H",
+          "f_01JA0B3R5S"
+        ],
+        "confidence": "medium",
+        "statement": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.",
+        "status": "verified"
+      },
+      "fi_01JA0F2B": {
+        "cites": [
+          "f_01JA0B2K7M",
+          "f_01JA0B2K8N"
+        ],
+        "confidence": "medium",
+        "statement": "Lúnasa arrives in Ireland with permission and in GB as a stranger: the IE launch can lean on the parent brand, the GB launch has to introduce it.",
+        "status": "proposed"
+      },
+      "fi_01JA0F3C": {
+        "cites": [
+          "f_01JA0B4A1B",
+          "f_01JA0B4A2C"
+        ],
+        "confidence": "high",
+        "statement": "No/low value is growing about twice as fast in Ireland as in GB, so Ireland should lead the spend.",
+        "status": "proposed"
+      },
+      "fi_01JA0F4D": {
+        "cites": [
+          "f_01JA0B6D6G",
+          "f_01JA0B3R5S"
+        ],
+        "confidence": "medium",
+        "statement": "Core audience: adults 25–44 who are cutting back midweek but still drink cider at weekends.",
+        "status": "proposed"
+      },
+      "fi_01JA0F5E": {
+        "cites": [
+          "f_01JA0B5C4E"
+        ],
+        "confidence": "low",
+        "statement": "Orchard Hill's March launch has taken the spring occasion; a Lúnasa launch before May would be second in.",
+        "status": "rejected"
+      }
+    },
+    "pins": {
+      "f_01JA0B1C2D": {
+        "as_of": "2026-01-15",
+        "confidence": "high",
+        "entity": "brand/lunasa",
+        "key": "roster.categories.primary",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "method": "report",
+        "pin_reason": "Roster row: primary category, proposed for campaign.categories",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_r0st"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "code",
+        "value": "drinks.cider",
+        "version": 1
+      },
+      "f_01JA0B1C3E": {
+        "as_of": "2026-01-15",
+        "confidence": "high",
+        "entity": "brand/lunasa",
+        "key": "roster.categories.secondary",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "method": "report",
+        "pin_reason": "Roster row: secondary category, proposed for campaign.categories",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_r0st"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "code",
+        "value": "drinks.no_low_alcohol",
+        "version": 1
+      },
+      "f_01JA0B1C4F": {
+        "as_of": "2026-01-15",
+        "confidence": "high",
+        "entity": "brand/lunasa",
+        "key": "roster.client_org",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "method": "report",
+        "pin_reason": "Roster row: the client that holds the brand, proposed for campaign.client_org",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_r0st"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "code",
+        "value": "org/glenmore-drinks",
+        "version": 1
+      },
+      "f_01JA0B2K7M": {
+        "as_of": "2026-06-30",
+        "confidence": "high",
+        "entity": "brand/lunasa",
+        "key": "awareness.prompted",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "IE awareness is the launch's starting asset",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_4f2a",
+          "src_9c11"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.47,
+        "version": 3
+      },
+      "f_01JA0B2K8N": {
+        "as_of": "2026-06-30",
+        "confidence": "medium",
+        "entity": "brand/lunasa",
+        "key": "awareness.prompted",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "market": "GB",
+        "method": "measurement",
+        "pin_reason": "GB awareness — a market difference, not a conflict, with the IE figure",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_4f2a"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.12,
+        "version": 1
+      },
+      "f_01JA0B3P4Q": {
+        "as_of": "2026-03-31",
+        "confidence": "high",
+        "current_value": 0.86,
+        "current_version": 3,
+        "entity": "brand/lunasa",
+        "key": "distribution.off_trade_weighted",
+        "layer": "brand",
+        "licence": "licensed-internal",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "The parent brand's shelf presence the 0.0 variant can borrow",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_n1el"
+        ],
+        "stale": true,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.82,
+        "version": 2
+      },
+      "f_01JA0B3R5S": {
+        "as_of": "2026-06-30",
+        "confidence": "medium",
+        "entity": "brand/lunasa",
+        "key": "consideration.among_nolo_drinkers",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "How many no/low drinkers would consider the brand today",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_4f2a"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.18,
+        "version": 1
+      },
+      "f_01JA0B4A1B": {
+        "as_of": "2026-06-30",
+        "confidence": "high",
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "market.value_growth_yoy",
+        "layer": "category",
+        "licence": "licensed-internal",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "Size of the prize in IE",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_n1el",
+          "src_k4nt"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.24,
+        "version": 5
+      },
+      "f_01JA0B4A2C": {
+        "as_of": "2026-06-30",
+        "confidence": "high",
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "market.value_growth_yoy",
+        "layer": "category",
+        "licence": "licensed-internal",
+        "market": "GB",
+        "method": "measurement",
+        "pin_reason": "Size of the prize in GB",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_n1el",
+          "src_k4nt"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.11,
+        "version": 4
+      },
+      "f_01JA0B4B3D": {
+        "as_of": "2026-06-30",
+        "confidence": "medium",
+        "entity": "category/drinks.cider",
+        "key": "market.volume_share_top3",
+        "layer": "category",
+        "licence": "licensed-internal",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "How concentrated the cider category is — chosen in the resolved contest",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_n1el"
+        ],
+        "stale": false,
+        "status": "contested",
+        "unit": "proportion",
+        "value": 0.71,
+        "version": 2
+      },
+      "f_01JA0B5C4E": {
+        "as_of": "2026-03-09",
+        "confidence": "medium",
+        "entity": "brand/orchard-hill",
+        "key": "launch.date",
+        "layer": "category",
+        "licence": "open",
+        "market": "IE",
+        "method": "report",
+        "pin_reason": "A comparator launched an alcohol-free cider this year",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_tr4d"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "date",
+        "value": "2026-03-09",
+        "version": 1
+      },
+      "f_01JA0B5C5F": {
+        "as_of": "2026-07-01",
+        "confidence": "medium",
+        "entity": "brand/kestrel-press",
+        "key": "positioning.claim",
+        "layer": "category",
+        "licence": "open",
+        "method": "observation",
+        "pin_reason": "Territory a comparator already claims",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_ad7r"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "text",
+        "value": "The grown-up alcohol-free",
+        "version": 1
+      },
+      "f_01JA0B6D6G": {
+        "as_of": "2026-05-31",
+        "confidence": "medium",
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "consumer.adults_moderating",
+        "layer": "category",
+        "licence": "open",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "Audience size: adults who say they are cutting back",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_0mn1"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.31,
+        "version": 2
+      },
+      "f_01JA0B6D7H": {
+        "as_of": "2026-05-31",
+        "confidence": "medium",
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "consumer.top_occasion",
+        "layer": "category",
+        "licence": "open",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "Audience behaviour: when 0.0 gets chosen",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_0mn1",
+          "src_s0c1"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "text",
+        "value": "Weeknight socialising at home",
+        "version": 1
+      },
+      "f_01JA0B7E8J": {
+        "as_of": "2025-11-01",
+        "confidence": "high",
+        "current_value": "EXAMPLE: an ad for a 0.0 variant is assessed as alcohol advertising if it shares the parent's livery, or if 'alcohol-free' is not shown with equal prominence to the brand name.",
+        "current_version": 3,
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "regulation.parent_livery_rule",
+        "layer": "category",
+        "licence": "open",
+        "market": "IE",
+        "method": "report",
+        "pin_reason": "Clearance rule behind the livery constraint",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_asa1"
+        ],
+        "stale": true,
+        "status": "active",
+        "unit": "text",
+        "value": "EXAMPLE: an ad for a 0.0 variant that shares the parent alcohol brand's livery is assessed as alcohol advertising.",
+        "version": 1
+      },
+      "f_01JA0B8F9K": {
+        "as_of": "2025-12-31",
+        "confidence": "high",
+        "entity": "category/drinks.cider",
+        "key": "rhythm.peak_months",
+        "layer": "category",
+        "licence": "licensed-internal",
+        "market": "IE",
+        "method": "measurement",
+        "pin_reason": "Drives the in-market window",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_n1el"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "text",
+        "value": "May–August",
+        "version": 3
+      },
+      "f_01JA0B9G1L": {
+        "as_of": "2025-12-31",
+        "confidence": "medium",
+        "entity": "category/drinks.no_low_alcohol",
+        "key": "media.digital_share_of_spend",
+        "layer": "category",
+        "licence": "licensed-internal",
+        "market": "GB",
+        "method": "measurement",
+        "pin_reason": "How the category spends in GB",
+        "retrieved_at": "2026-09-21",
+        "sources": [
+          "src_k4nt"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "proportion",
+        "value": 0.58,
+        "version": 1
+      },
+      "f_01JA0C9V4X": {
+        "as_of": "2026-09-22",
+        "confidence": "medium",
+        "entity": "brand/lunasa",
+        "key": "insight.nolo_occasion_is_social",
+        "layer": "brand",
+        "licence": "client-confidential",
+        "market": "IE",
+        "method": "synthesis",
+        "pin_reason": "Verified finding fi_01JA0F1A, written to the layer and pinned",
+        "retrieved_at": "2026-09-22",
+        "sources": [
+          "human:u_aoife",
+          "f_01JA0B6D6G",
+          "f_01JA0B6D7H",
+          "f_01JA0B3R5S"
+        ],
+        "stale": false,
+        "status": "active",
+        "unit": "text",
+        "value": "For Irish moderators the 0.0 occasion is social: weeknights at home with friends, where being seen to drink cider still matters.",
+        "version": 1
+      }
+    }
+  },
+  "upstream": {
+    "5b0d3a7e-4c1f-4e2a-9a55-1d6c0f2b7e11": {
+      "audience": {
+        "origin": "stated",
+        "value": "Moderate drinkers in their thirties who still go out most weekends."
+      },
+      "background": "Lúnasa is launching an alcohol-free version of its cider.",
+      "insight": "Nobody wants to be the person with the odd drink in their hand.",
+      "locked": true,
+      "mandatories": [
+        "0.0% ABV on the front of pack",
+        "No health claims"
+      ],
+      "objectives": "Trial among people who cut back on alcohol this year.",
+      "project_name": "Lúnasa 0.0 launch brief",
+      "single_minded_proposition": "The same round, the same good time.",
+      "tone_and_world": "Warm, dry, never worthy."
+    },
+    "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17": {
+      "campaign": {
+        "ask_source": {
+          "by": "human:u_aoife",
+          "decision": "d_01JA0D01CRT",
+          "gate": "created",
+          "origin": "stated",
+          "value": {
+            "material_id": "mat_email01",
+            "sha256": "sha256:a796e424b0ffb4a85aa917d09f42528a3fc2f4bd08369ba51ab39548bc46aff4"
+          }
+        },
+        "audience": {
+          "decision": "d_01JA0D06SYN",
+          "fact_ids": [
+            "f_01JA0B6D6G",
+            "f_01JA0B6D7H",
+            "f_01JA0B3R5S",
+            "f_01JA0C9V4X"
+          ],
+          "finding_ids": [
+            "fi_01JA0F4D"
+          ],
+          "gate": "brief",
+          "origin": "proposed",
+          "value": {
+            "attitudes": [
+              {
+                "fact_ids": [
+                  "f_01JA0C9V4X"
+                ],
+                "id": "a_seen_to_drink",
+                "statement": "Still wants to be seen holding a cider."
+              }
+            ],
+            "behaviours": [
+              {
+                "fact_ids": [
+                  "f_01JA0B6D7H"
+                ],
+                "id": "b_weeknight_home",
+                "statement": "Chooses alcohol-free for weeknights at home with friends."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B3R5S"
+                ],
+                "id": "b_low_consideration",
+                "statement": "Few no/low drinkers consider Lúnasa today."
+              }
+            ],
+            "definition": "Irish adults who are cutting back on alcohol midweek but have not given up cider, and still want a drink that looks like one when friends are round.",
+            "size": {
+              "fact_ids": [
+                "f_01JA0B6D6G"
+              ],
+              "note": "Adults who say they are moderating; the Lúnasa-drinker subset is not measured (see gaps)."
+            },
+            "synthesis_finding_ids": [
+              "fi_01JA0F4D"
+            ]
+          }
+        },
+        "audience_stated": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "brief",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶5",
+            "material_id": "mat_email01",
+            "quote": "existing Lúnasa drinkers who are cutting back, plus anyone who has gone alcohol-free and misses cider."
+          },
+          "value": "existing Lúnasa drinkers who are cutting back, plus anyone who has gone alcohol-free and misses cider."
+        },
+        "brand": {
+          "by": "human:u_aoife",
+          "confirmed_from": "extracted",
+          "decision": "d_01JA0D03CNF",
+          "gate": "created",
+          "origin": "confirmed",
+          "source": {
+            "locator": "¶1",
+            "material_id": "mat_email01",
+            "quote": "we're launching Lúnasa 0.0, an alcohol-free version of Lúnasa"
+          },
+          "value": {
+            "name": "Lúnasa",
+            "ref": "brand/lunasa"
+          }
+        },
+        "budget_band": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "brief",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶7",
+            "material_id": "mat_email01"
+          },
+          "value": "250k_1m"
+        },
+        "campaign_type": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "none",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶1",
+            "material_id": "mat_email01",
+            "quote": "we're launching Lúnasa 0.0"
+          },
+          "value": "launch"
+        },
+        "categories": {
+          "by": "human:u_aoife",
+          "confirmed_from": "proposed",
+          "decision": "d_01JA0D07CNC",
+          "fact_ids": [
+            "f_01JA0B1C3E",
+            "f_01JA0B1C2D"
+          ],
+          "gate": "research",
+          "origin": "confirmed",
+          "value": [
+            "drinks.no_low_alcohol",
+            "drinks.cider"
+          ]
+        },
+        "channels_mandated": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "none",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶8",
+            "material_id": "mat_email01",
+            "quote": "TV and BVOD are a must."
+          },
+          "value": [
+            "tv",
+            "bvod"
+          ]
+        },
+        "client_org": {
+          "decision": "d_01JA0D03IDN",
+          "fact_ids": [
+            "f_01JA0B1C4F"
+          ],
+          "gate": "created",
+          "origin": "proposed",
+          "value": {
+            "name": "Glenmore Drinks",
+            "ref": "org/glenmore-drinks"
+          }
+        },
+        "competitor_set": {
+          "decision": "d_01JA0D04MRG",
+          "fact_ids": [
+            "f_01JA0B5C4E",
+            "f_01JA0B5C5F"
+          ],
+          "gate": "none",
+          "item_provenance": {
+            "brand/brightwater": {
+              "origin": "extracted",
+              "source": {
+                "locator": "¶6",
+                "material_id": "mat_email01",
+                "quote": "We see Brightwater 0.0 as the one to beat."
+              }
+            },
+            "brand/kestrel-press": {
+              "fact_ids": [
+                "f_01JA0B5C5F"
+              ],
+              "origin": "proposed"
+            },
+            "brand/orchard-hill": {
+              "fact_ids": [
+                "f_01JA0B5C4E"
+              ],
+              "origin": "proposed"
+            }
+          },
+          "origin": "proposed",
+          "value": [
+            {
+              "name": "Brightwater 0.0",
+              "ref": "brand/brightwater"
+            },
+            {
+              "name": "Orchard Hill Zero",
+              "ref": "brand/orchard-hill"
+            },
+            {
+              "name": "Kestrel Press",
+              "ref": "brand/kestrel-press"
+            }
+          ]
+        },
+        "constraints": {
+          "decision": "d_01JA0D04MRG",
+          "fact_ids": [
+            "f_01JA0B7E8J"
+          ],
+          "gate": "none",
+          "item_provenance": {
+            "c_no_under_25": {
+              "origin": "extracted",
+              "source": {
+                "locator": "¶9",
+                "material_id": "mat_email01",
+                "quote": "no creative may show anyone who is or looks under 25"
+              }
+            },
+            "c_parent_livery": {
+              "fact_ids": [
+                "f_01JA0B7E8J"
+              ],
+              "origin": "proposed"
+            },
+            "c_sunburst_badge": {
+              "origin": "extracted",
+              "source": {
+                "locator": "¶9",
+                "material_id": "mat_email01",
+                "quote": "the Lúnasa sunburst and the 0.0 badge must be on every piece"
+              }
+            }
+          },
+          "origin": "proposed",
+          "value": [
+            {
+              "id": "c_sunburst_badge",
+              "kind": "brand",
+              "text": "The Lúnasa sunburst and the 0.0 badge on every piece."
+            },
+            {
+              "id": "c_no_under_25",
+              "kind": "mandatory",
+              "text": "No one who is or looks under 25 in any creative."
+            },
+            {
+              "id": "c_parent_livery",
+              "kind": "legal",
+              "text": "Work that shares the parent brand's livery clears as alcohol advertising."
+            }
+          ]
+        },
+        "deliverables": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "none",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶8",
+            "material_id": "mat_email01",
+            "quote": "We need a 30\" TVC with a BVOD cut, social cutdowns and 48-sheet posters."
+          },
+          "value": [
+            "tvc_30",
+            "bvod_30",
+            "social_cutdowns",
+            "ooh_48sheet"
+          ]
+        },
+        "id": {
+          "by": "human:u_aoife",
+          "decision": "d_01JA0D01CRT",
+          "gate": "created",
+          "origin": "stated",
+          "value": "cmp_01JA0A9Z4KQ3"
+        },
+        "in_market": {
+          "decision": "d_01JA0D06SYN",
+          "fact_ids": [
+            "f_01JA0B8F9K"
+          ],
+          "finding_ids": [
+            "fi_01JA0F5E"
+          ],
+          "gate": "none",
+          "origin": "proposed",
+          "value": {
+            "from": "2027-05-01",
+            "to": "2027-08-31"
+          }
+        },
+        "markets": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "research",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶1",
+            "material_id": "mat_email01",
+            "quote": "in Ireland and Northern Ireland/GB"
+          },
+          "value": [
+            "IE",
+            "GB"
+          ]
+        },
+        "name": {
+          "by": "human:u_aoife",
+          "decision": "d_01JA0D01CRT",
+          "gate": "created",
+          "origin": "stated",
+          "value": "Lúnasa 0.0 launch [EXAMPLE]"
+        },
+        "objective": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "brief",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶3",
+            "material_id": "mat_email01",
+            "quote": "Lúnasa 0.0 to be the alcohol-free cider people ask for by name, winning back the midweek occasions we're losing."
+          },
+          "value": "Lúnasa 0.0 to be the alcohol-free cider people ask for by name, winning back the midweek occasions we're losing."
+        },
+        "problem": {
+          "decision": "d_01JA0D02EXT",
+          "gate": "brief",
+          "origin": "extracted",
+          "source": {
+            "locator": "¶2",
+            "material_id": "mat_email01",
+            "quote": "people who love Lúnasa are drinking less of it midweek, and when they choose an alcohol-free option they reach for a beer, not a cider."
+          },
+          "value": "people who love Lúnasa are drinking less of it midweek, and when they choose an alcohol-free option they reach for a beer, not a cider."
+        },
+        "success_measures": {
+          "decision": "d_01JA0D08STD",
+          "gate": "none",
+          "item_provenance": {
+            "sm_ask_by_name": {
+              "by": "human:u_ciaran",
+              "origin": "stated"
+            },
+            "sm_ie_volume_share": {
+              "origin": "extracted",
+              "source": {
+                "locator": "¶4",
+                "material_id": "mat_email01",
+                "quote": "We'd like it to reach 5% of our total volume in Ireland within the first year."
+              }
+            }
+          },
+          "origin": "extracted",
+          "source": {
+            "locator": "¶4",
+            "material_id": "mat_email01",
+            "quote": "We'd like it to reach 5% of our total volume in Ireland within the first year."
+          },
+          "value": [
+            {
+              "id": "sm_ie_volume_share",
+              "text": "Lúnasa 0.0 reaches 5% of Lúnasa's total volume in Ireland within the first year."
+            },
+            {
+              "id": "sm_ask_by_name",
+              "text": "Spontaneous mention of Lúnasa 0.0 among alcohol-free cider buyers, tracked from launch."
+            }
+          ]
+        }
+      },
+      "example_notice": "EXAMPLE — fabricated for testing. Every brand, person, figure and source in this document is invented.",
+      "intake": {
+        "messages": {
+          "msg_01JA0A01U": {
+            "at": "2026-09-21T08:58:40Z",
+            "attachments": [
+              "mat_email01"
+            ],
+            "by": "human:u_aoife",
+            "material_id": "mat_prompt01",
+            "role": "user",
+            "text": "Brief from Glenmore attached — they're launching in Ireland and GB next spring. Can you pull together the landscape and the audience before Thursday's kick-off? Effectiveness cases only matter for Ireland, where Niamh has to sell the budget in."
+          },
+          "msg_01JA0A02A": {
+            "at": "2026-09-21T09:00:05Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "extract",
+            "text": "Read your note and Niamh's email. A launch in Ireland and GB: the problem, objective, audience, budget band, channels, deliverables and mandatories are quoted from the email. Nothing names dates, so the in-market window is left open."
+          },
+          "msg_01JA0A03A": {
+            "at": "2026-09-21T09:00:06Z",
+            "job_id": "job_01JA0C2288",
+            "question": {
+              "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.brand",
+              "allow_text": true,
+              "id": "q_01JA0A03SUBJ",
+              "options": [
+                {
+                  "id": "lunasa",
+                  "label": "Lúnasa",
+                  "origin": "extracted",
+                  "source": {
+                    "locator": "¶1",
+                    "material_id": "mat_email01",
+                    "quote": "we're launching Lúnasa 0.0, an alcohol-free version of Lúnasa"
+                  },
+                  "value": {
+                    "name": "Lúnasa",
+                    "ref": "brand/lunasa"
+                  }
+                },
+                {
+                  "id": "brightwater",
+                  "label": "Brightwater 0.0",
+                  "origin": "extracted",
+                  "source": {
+                    "locator": "¶6",
+                    "material_id": "mat_email01",
+                    "quote": "We see Brightwater 0.0 as the one to beat."
+                  },
+                  "value": {
+                    "name": "Brightwater 0.0",
+                    "ref": "brand/brightwater"
+                  }
+                },
+                {
+                  "id": "none",
+                  "label": "None of these"
+                }
+              ],
+              "text": "Which brand is the client's?"
+            },
+            "role": "agent",
+            "stage": "identify",
+            "text": "The email names two brands, Lúnasa and Brightwater 0.0. Which one is your client's? The other is treated as a comparator. Research waits for your answer."
+          },
+          "msg_01JA0A04U": {
+            "answer": {
+              "option_id": "lunasa",
+              "question_id": "q_01JA0A03SUBJ"
+            },
+            "at": "2026-09-21T09:05:00Z",
+            "by": "human:u_aoife",
+            "job_id": "job_01JA0C2288",
+            "role": "user",
+            "text": "Lúnasa"
+          },
+          "msg_01JA0A05A": {
+            "at": "2026-09-21T09:05:02Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "identify",
+            "text": "Lúnasa it is; Brightwater 0.0 is a comparator. Lúnasa's roster row gives two categories, cider and no/low alcohol, and the client, Glenmore Drinks. Both are proposed for you to confirm."
+          },
+          "msg_01JA0A06A": {
+            "at": "2026-09-21T09:05:03Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "select",
+            "text": "Researching all eight lenses in Ireland and seven in GB. Effectiveness evidence is skipped in GB: you said it only matters for Ireland."
+          },
+          "msg_01JA0A07A": {
+            "at": "2026-09-21T11:42:10Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "research",
+            "text": "Fifteen lens runs merged. Two things were looked for and not found, and two sources disagree on Orchard Hill Zero's strength — left open for you."
+          },
+          "msg_01JA0A08A": {
+            "at": "2026-09-21T12:10:00Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "synthesise",
+            "text": "Five findings, each derived by the agent and waiting for a person to verify or reject."
+          },
+          "msg_01JA0A09A": {
+            "at": "2026-09-21T12:10:30Z",
+            "job_id": "job_01JA0C2288",
+            "role": "agent",
+            "stage": "report",
+            "text": "Report ready. The short list under it is what to confirm before the brief."
+          },
+          "msg_01JA0A10A": {
+            "at": "2026-09-23T08:10:00Z",
+            "job_id": "job_01JA0C3104",
+            "role": "agent",
+            "stage": "report",
+            "text": "Report refreshed from the document as it stands: one finding verified, one rejected and left out, two pins stale."
+          }
+        }
+      },
+      "materials": {
+        "mat_email01": {
+          "asset": "assets/client-email.txt",
+          "kind": "email",
+          "licence": "client-confidential",
+          "media_type": "text/plain",
+          "name": "Lúnasa 0.0 — launch brief (client email)",
+          "received_at": "2026-09-21T08:58:40Z",
+          "sha256": "sha256:a796e424b0ffb4a85aa917d09f42528a3fc2f4bd08369ba51ab39548bc46aff4"
+        },
+        "mat_prompt01": {
+          "kind": "prompt",
+          "licence": "client-confidential",
+          "media_type": "text/plain",
+          "name": "Planner prompt",
+          "received_at": "2026-09-21T08:58:40Z",
+          "sha256": "sha256:952a75c29bf57d0f444c23e86e2f9035a1364eb896ba414a3d5a29929b5958e3"
+        }
+      },
+      "report": {
+        "based_on": {
+          "facts_sha256": "sha256:196b20d0dedb57d122f41578b8ec7c83d3a272b28a0c07caf8c47168348cc0de",
+          "findings_sha256": "sha256:56584aee45440ab02bcc9176add2aa5a7968b748d39f94a4c210714ed5fc37b2",
+          "version": "sha256:3b9d0c41e7a25f86d1c07e4a9b3f5d28c6e1a70b94d2f38e5c61a0b7d9e4f213"
+        },
+        "built_at": "2026-09-23T08:10:00Z",
+        "confirm": [
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.markets",
+            "label": "Markets: Ireland and GB",
+            "why": "Read from Niamh's email; research ran once per market."
+          },
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.competitor_set",
+            "label": "Comparators: Brightwater 0.0, Orchard Hill Zero, Kestrel Press",
+            "why": "Brightwater is named in the email; the other two come from the category layer."
+          },
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.client_org",
+            "label": "Client: Glenmore Drinks",
+            "why": "From Lúnasa's roster row."
+          },
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.audience",
+            "label": "The researched audience",
+            "why": "Proposed from pins and a finding nobody has verified yet."
+          },
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.in_market",
+            "label": "In market May to August",
+            "why": "It cites a rejected finding and needs revising."
+          },
+          {
+            "address": "7c1e9a42-5b3d-4f8e-9a6c-2d1f0e8b4a17#campaign.constraints",
+            "label": "Constraints",
+            "why": "The livery rule came from the category layer, and its pin is stale."
+          }
+        ],
+        "handler": "compose_report@1.0",
+        "headline": {
+          "cites": [
+            "fi_01JA0F2B",
+            "fi_01JA0F3C"
+          ],
+          "text": "Lúnasa 0.0 lands in Ireland with permission and in GB as a stranger, and Ireland is where no/low is growing faster."
+        },
+        "not_researched": [
+          {
+            "lens": "effectiveness_evidence",
+            "market": "GB",
+            "reason": "The prompt asks for effectiveness cases for Ireland only (\"Effectiveness cases only matter for Ireland\")."
+          }
+        ],
+        "sections": [
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B4A1B",
+                  "f_01JA0B4A2C"
+                ],
+                "kind": "claim",
+                "text": "No/low is growing faster in Ireland than in GB."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B4A1B",
+                  "f_01JA0B4A2C"
+                ],
+                "kind": "pins"
+              },
+              {
+                "finding_id": "fi_01JA0F3C",
+                "kind": "finding"
+              },
+              {
+                "cites": [
+                  "f_01JA0B4B3D"
+                ],
+                "kind": "claim",
+                "text": "Three brands hold most of Irish cider volume."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B4B3D"
+                ],
+                "kind": "pins"
+              },
+              {
+                "contest_id": "ct_cider_top3_share",
+                "kind": "contest"
+              }
+            ],
+            "id": "s_market",
+            "lens": "market_structure",
+            "title": "The market"
+          },
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B2K7M",
+                  "f_01JA0B2K8N"
+                ],
+                "kind": "claim",
+                "text": "Lúnasa is well known in Ireland and barely known in GB."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B2K7M",
+                  "f_01JA0B2K8N"
+                ],
+                "kind": "pins"
+              },
+              {
+                "finding_id": "fi_01JA0F2B",
+                "kind": "finding"
+              },
+              {
+                "cites": [
+                  "f_01JA0B5C4E",
+                  "f_01JA0B5C5F"
+                ],
+                "kind": "claim",
+                "text": "Orchard Hill Zero launched in Ireland this March; Kestrel Press claims the grown-up alcohol-free position."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B5C4E",
+                  "f_01JA0B5C5F"
+                ],
+                "kind": "pins"
+              },
+              {
+                "contest_id": "ct_orchard_hill_abv",
+                "kind": "contest"
+              },
+              {
+                "gap_id": "g_gb_spontaneous_awareness",
+                "kind": "gap"
+              }
+            ],
+            "id": "s_brands",
+            "lens": "brands_positioning",
+            "title": "Lúnasa and its comparators"
+          },
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B6D6G",
+                  "f_01JA0B6D7H"
+                ],
+                "kind": "claim",
+                "text": "A large share of Irish adults say they are moderating, and their top alcohol-free occasion is weeknight socialising at home."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B6D6G",
+                  "f_01JA0B6D7H",
+                  "f_01JA0B3R5S"
+                ],
+                "kind": "pins"
+              },
+              {
+                "finding_id": "fi_01JA0F1A",
+                "kind": "finding"
+              },
+              {
+                "finding_id": "fi_01JA0F4D",
+                "kind": "finding"
+              }
+            ],
+            "id": "s_audience",
+            "lens": "consumer_culture",
+            "market": "IE",
+            "title": "Who it is for"
+          },
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B8F9K"
+                ],
+                "kind": "claim",
+                "text": "Irish cider peaks in the summer months."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B8F9K"
+                ],
+                "kind": "pins"
+              }
+            ],
+            "id": "s_rhythm",
+            "lens": "rhythm_moments",
+            "market": "IE",
+            "title": "Timing"
+          },
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B7E8J"
+                ],
+                "kind": "claim",
+                "text": "An ad for a 0.0 variant in the parent brand's livery is assessed as alcohol advertising. The pinned rule is stale."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B7E8J"
+                ],
+                "kind": "pins"
+              }
+            ],
+            "id": "s_clearance",
+            "lens": "regulation_clearance",
+            "market": "IE",
+            "title": "Clearance"
+          },
+          {
+            "blocks": [
+              {
+                "cites": [
+                  "f_01JA0B9G1L"
+                ],
+                "kind": "claim",
+                "text": "Most no/low media spend in GB is digital."
+              },
+              {
+                "fact_ids": [
+                  "f_01JA0B9G1L"
+                ],
+                "kind": "pins"
+              }
+            ],
+            "id": "s_media",
+            "lens": "media_spend",
+            "market": "GB",
+            "title": "Media"
+          },
+          {
+            "blocks": [
+              {
+                "gap_id": "g_nolo_launch_cases",
+                "kind": "gap"
+              }
+            ],
+            "id": "s_effectiveness",
+            "lens": "effectiveness_evidence",
+            "market": "IE",
+            "title": "Effectiveness"
+          }
+        ],
+        "summary": [
+          {
+            "cites": [
+              "f_01JA0B4A1B",
+              "f_01JA0B4A2C",
+              "fi_01JA0F3C"
+            ],
+            "text": "No/low value is growing about twice as fast in Ireland as in GB."
+          },
+          {
+            "cites": [
+              "f_01JA0C9V4X",
+              "fi_01JA0F1A"
+            ],
+            "text": "For Irish moderators the alcohol-free occasion is social: weeknights at home with friends, where being seen with a cider still matters."
+          },
+          {
+            "cites": [
+              "f_01JA0B3R5S"
+            ],
+            "text": "Few Irish no/low drinkers consider Lúnasa today."
+          },
+          {
+            "cites": [
+              "f_01JA0B7E8J"
+            ],
+            "text": "Work in the parent brand's livery clears as alcohol advertising in Ireland — and the pinned rule has since been superseded, so check the current version."
+          }
+        ]
+      },
+      "selection": {
+        "contested": [
+          {
+            "id": "ct_orchard_hill_abv",
+            "key": "brand/orchard-hill:product.abv",
+            "opened_by": "d_01JA0D05CTO",
+            "status": "open",
+            "values": [
+              {
+                "fact_id": "f_01JA0B5C6M",
+                "from": "brands_positioning/IE",
+                "sources": [
+                  "src_tr4d"
+                ],
+                "unit": "percent_abv",
+                "value": 0.0
+              },
+              {
+                "fact_id": "f_01JA0B5C7N",
+                "from": "brands_positioning/GB",
+                "sources": [
+                  "src_rt9l"
+                ],
+                "unit": "percent_abv",
+                "value": 0.5
+              }
+            ]
+          },
+          {
+            "chosen": "f_01JA0B4B3D",
+            "decided_by": "d_01JA0D06RES",
+            "id": "ct_cider_top3_share",
+            "key": "category/drinks.cider:market.volume_share_top3@IE",
+            "opened_by": "d_01JA0D05CTV",
+            "reason": "The retail panel covers on- and off-trade; the 0.68 trade-press figure is off-trade only.",
+            "status": "resolved",
+            "values": [
+              {
+                "fact_id": "f_01JA0B4B3D",
+                "from": "market_structure/IE",
+                "sources": [
+                  "src_n1el"
+                ],
+                "unit": "proportion",
+                "value": 0.71
+              },
+              {
+                "fact_id": "f_01JA0B4B9Z",
+                "from": "market_structure/IE",
+                "sources": [
+                  "src_tr4d"
+                ],
+                "unit": "proportion",
+                "value": 0.68
+              }
+            ]
+          }
+        ],
+        "coverage": {
+          "brands_positioning": "thin",
+          "category_codes": "thin",
+          "consumer_culture": "thin",
+          "effectiveness_evidence": "empty",
+          "market_structure": "filled",
+          "media_spend": "thin",
+          "regulation_clearance": "filled",
+          "rhythm_moments": "thin"
+        },
+        "coverage_by_market": {
+          "GB": {
+            "brands_positioning": "thin",
+            "category_codes": "thin",
+            "consumer_culture": "empty",
+            "market_structure": "filled",
+            "media_spend": "filled",
+            "regulation_clearance": "filled",
+            "rhythm_moments": "thin"
+          },
+          "IE": {
+            "brands_positioning": "filled",
+            "category_codes": "thin",
+            "consumer_culture": "filled",
+            "effectiveness_evidence": "empty",
+            "market_structure": "filled",
+            "media_spend": "thin",
+            "regulation_clearance": "filled",
+            "rhythm_moments": "filled"
+          }
+        },
+        "excluded": [
+          {
+            "decision": "d_01JA0D09EXC",
+            "fact_id": "f_01J7X3Q2MN",
+            "reason": "Cider share for 2023, measured before the panel redefined the category to include fruit cider. Not comparable."
+          }
+        ],
+        "gaps": [
+          {
+            "id": "g_nolo_launch_cases",
+            "key": "category/drinks.no_low_alcohol:effectiveness.launch_case",
+            "lens": "effectiveness_evidence",
+            "market": "IE",
+            "note": "Nothing for Ireland. Two GB cases exist, both beer and both pre-2022, so not pinned.",
+            "searched": "Published effectiveness cases for an alcohol-free cider or beer launch in Ireland",
+            "sources_tried": [
+              "award corpora (effectiveness)",
+              "internal judge scores",
+              "trade press archive"
+            ]
+          },
+          {
+            "id": "g_gb_spontaneous_awareness",
+            "key": "brand/lunasa:awareness.spontaneous",
+            "lens": "brands_positioning",
+            "market": "GB",
+            "note": "The client tracker does not ask the unprompted question in GB.",
+            "searched": "Spontaneous (unprompted) awareness of Lúnasa in GB",
+            "sources_tried": [
+              "client brand tracker",
+              "syndicated brand-health panel"
+            ]
+          }
+        ],
+        "lenses_run": [
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "market_structure",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:11Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "market_structure",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:13Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "brands_positioning",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:15Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "brands_positioning",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:16Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "consumer_culture",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:18Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "consumer_culture",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:20Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "category_codes",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:22Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "category_codes",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:23Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "rhythm_moments",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:25Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "rhythm_moments",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:27Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "media_spend",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:29Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "media_spend",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:30Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "regulation_clearance",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:32Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "regulation_clearance",
+            "market": "GB",
+            "ran_at": "2026-09-21T10:02:34Z"
+          },
+          {
+            "decision": "d_01JA0D04MRG",
+            "handler": "start_campaign@1.0",
+            "lens": "effectiveness_evidence",
+            "market": "IE",
+            "ran_at": "2026-09-21T10:02:36Z"
+          }
+        ],
+        "lenses_skipped": [
+          {
+            "decision": "d_01JA0D03SEL",
+            "lens": "effectiveness_evidence",
+            "market": "GB",
+            "reason": "The prompt asks for effectiveness cases for Ireland only (\"Effectiveness cases only matter for Ireland\")."
+          }
+        ]
+      }
+    }
+  }
+}

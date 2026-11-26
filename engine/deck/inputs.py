@@ -36,6 +36,7 @@ class Inputs:
     brief: dict                      # field id -> {value, kind, mark, fact_refs, reason?, rejected_attempt?}
     how_to_win: dict = field(default_factory=dict)   # stated_evaluation_criteria, unstated_needs, likely_landmines, ...
     open_questions: list = field(default_factory=list)   # [{question, why, priority}]
+    answered: list = field(default_factory=list)     # the brief's questions it answers itself: [{question, answer}] (UAT round 4: the budget's answer)
     facts: dict = field(default_factory=dict)        # f_ id -> fact row
     findings: dict = field(default_factory=dict)     # fi_ id -> finding row (status: verified|proposed|rejected)
     sources: dict = field(default_factory=dict)      # src_ id -> source row
@@ -50,6 +51,9 @@ class Inputs:
     built_from: dict = field(default_factory=dict)   # intake.tier(): {tier, documents, brief, research}
     intake: dict = field(default_factory=dict)       # the a0 gaps/questions as the runner wrote them
     verified: dict = field(default_factory=dict)     # confirm ref -> {by, at}: the person's verify decisions (intake.verified.<ref>)
+    production_visuals: dict | None = None           # a deck made from a Production project: what its finals are (from_production.finals_summary); the deck shows visuals only, no film
+    carried_text: str = ""                           # the words of routes carried from Territories: an input, so a figure in a route's own line (Platform 4) is traced
+    marks: list | None = None                        # parts a person marked Confidential: [{path, text, kind}]; None = never checked (picture generation is refused)
 
     def has_brief(self) -> bool:
         """True when a brief supplied at least one field (a field an intake stage filled does not count)."""
@@ -176,7 +180,88 @@ def empty_brief() -> dict:
                   "rejected_attempt": None, "review": None, "rival": None} for fid in BRIEF_FIELDS}
 
 
-def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
+def _at_path(data, path: str):
+    """The value at a data path such as ``objectives.commercial`` or ``mandatories[0]`` (None when absent)."""
+    cur = data
+    for part in re.findall(r"[^.\[\]]+", str(path)):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
+
+
+def _flat(v) -> str:
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return " ".join(_flat(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return " ".join(_flat(x) for x in v)
+    return "" if v is None else str(v)
+
+
+class MarksError(ValueError):
+    """A mark names a part that is not there or is empty: refused, never skipped (a skipped mark would let its text reach a prompt)."""
+
+
+def _field_value(v):
+    """A Research Tool field carries its provenance beside its value (``{value, origin, source, ...}``): the marked text is the value."""
+    return v["value"] if isinstance(v, dict) and "value" in v and "origin" in v else v
+
+
+def marks_from_data(data: dict, chain: list | None = None, doc_id: str | None = None, docs: dict | None = None) -> list:
+    """The parts a person marked Confidential, with their text: brief parts in ``confidential_fields``, parts a ``classify`` decision marked
+    ``model: false`` or ``corpus: false`` (the chain; the target is ``<document>#<path>``), and materials whose licence is
+    ``client-confidential``. ``[{path, text, kind}]``; an empty list means the checks ran and found none.
+
+    A carried chain holds marks on several documents, so a ``classify`` target is looked up only in the document it names: ``data`` when
+    it names ``doc_id``, ``docs[<document>]`` (the other documents by id, e.g. a Deck's upstream research) when it names one of those,
+    recorded as ``<document>#<path>``. With ``doc_id`` given, a target naming a document that is neither is refused (MarksError), like a
+    mark whose part is missing or empty: never skipped. With neither ``doc_id`` nor the named document known (a lone brief .clan, whose
+    own id the loader does not know), the target is looked up in ``data``, as before."""
+    data = data or {}
+    docs = docs or {}
+    out, seen = [], set()
+
+    def add(path, text, kind):
+        text = _flat(text).strip()
+        if not text:
+            raise MarksError(f"the part marked Confidential at {path!r} ({kind}) resolves to nothing or is empty: fix the path or clear the mark; nothing was skipped")
+        if (path, kind) not in seen:
+            seen.add((path, kind))
+            out.append({"path": path, "text": text, "kind": kind})
+    for path in data.get("confidential_fields") or []:
+        add(str(path), _at_path(data, path), "confidential_field")
+    for d in chain or []:
+        if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
+            continue
+        lic = d.get("licence") if isinstance(d.get("licence"), dict) else {}
+        if lic.get("model", False) and lic.get("corpus", False):
+            continue
+        for tg in d.get("targets") or []:
+            if isinstance(tg, str) and "#" in tg:
+                doc, path = tg.split("#", 1)
+                if doc_id is not None and doc == doc_id:
+                    add(path, _at_path(data, path), "classify")
+                elif doc in docs:
+                    add(f"{doc}#{path}", _field_value(_at_path(docs[doc], path)), "classify")
+                elif doc_id is not None:
+                    raise MarksError(f"the part marked Confidential at {tg!r} (classify) names a document this deck does not hold: "
+                                     "it cannot be checked; nothing was skipped")
+                else:
+                    add(path, _at_path(data, path), "classify")
+    mats = data.get("materials")
+    for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
+        if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
+            add(f"materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    return out
+
+
+def brief_from_data(data: dict, chain: list | None = None, doc_id: str | None = None,
+                    docs: dict | None = None) -> tuple[dict, dict, list, dict]:
     """The one field mapping for a Brief Maker's data (``shared/data.yaml``, or ``data.upstream.<id>``
     in a Deck document): (fields, how_to_win, open_questions, coverage) via CLAN_FIELDS."""
     data = data or {}
@@ -187,8 +272,12 @@ def brief_from_data(data: dict) -> tuple[dict, dict, list, dict]:
     for h in (data.get("capture") or {}).get("how_to_win") or []:
         htw.setdefault(h.get("kind") or "points", []).append({"point": h.get("point"), "evidence": h.get("evidence", "")})
     oq = [{"question": q if isinstance(q, str) else q.get("question"), "why": "", "priority": "normal"} for q in data.get("open_questions") or []]
+    answered = [split_answered(q["question"]) for q in oq if answered_question(q["question"])]   # kept: the deck reads them (the budget's answer)
+    oq = [q for q in oq if not answered_question(q["question"])]   # a question the brief already answers is not open
     cov = {"brief_fields": len(fields), "brief_fields_filled": sum(1 for f in fields.values() if f["value"]),
-           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan"}
+           "how_to_win_points": sum(len(v) for v in htw.values()), "open_questions": len(oq), "brief_source": "brief-maker clan",
+           "answered": [a for a in answered if a],   # popped into Inputs.answered by the loaders, as the marks are
+           "marks": marks_from_data(data, chain, doc_id, docs)}   # popped into Inputs.marks by the loaders: marked texts never stay in the coverage that reaches a report
     return fields, htw, oq, cov
 
 
@@ -196,7 +285,9 @@ def load_brief_clan(clan: Path) -> tuple[dict, dict, list, dict]:
     """Read a Brief Maker .clan (the brief tool's output) into (fields, how_to_win, open_questions,
     coverage), the same shape load_brief returns for a brief_object.json."""
     z = zipfile.ZipFile(clan)
-    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {})
+    chain = yaml.safe_load(z.read("agent/decision-chain.yaml")) if "agent/decision-chain.yaml" in z.namelist() else []
+    chain = chain.get("decisions") if isinstance(chain, dict) else chain
+    return brief_from_data(yaml.safe_load(z.read("shared/data.yaml")) or {}, chain or [])
 
 
 def _pdf_pages(path: Path) -> tuple[str, int] | None:
@@ -275,8 +366,10 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     else:
         clan = is_clan(Path(brief))
         fields, htw, oq, cov = load_brief_clan(brief) if clan else load_brief(brief)
+    marks = cov.pop("marks", None)
+    answered = cov.pop("answered", None) or []
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=prompt_text or "",
-                 answers=answers or {}, intake=intake or {}, verified=verified or {})
+                 answers=answers or {}, intake=intake or {}, verified=verified or {}, marks=marks, answered=answered)
     research = research or (brief if clan else None)
     if research:
         r = load_research(research)
@@ -296,32 +389,242 @@ def load(brief: Path | None, research: Path | None = None, doc_facts: Path | Non
     return inp
 
 
+def is_territories(d) -> bool:
+    """True when an upstream entry is a Territories document (routes, greenlit, crew). It is neither the brief nor the research: its routes are stage c
+    (deck.from_territory); the brief and research it was made from sit beside it in ``data.upstream``, hoisted by the spin-off."""
+    return isinstance(d, dict) and isinstance(d.get("territories"), list) and isinstance(d.get("greenlit"), list) and isinstance(d.get("crew"), list)
+
+
 def _is_brief_data(d: dict) -> bool:
     """True when an upstream entry is a Brief Maker's data (it holds brief fields or a capture)."""
-    return isinstance(d, dict) and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
+    return isinstance(d, dict) and d.get("app") != "production-tool" and (any(k in d for k in CLAN_FIELDS.values()) or "capture" in d)
 
 
-def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None) -> Inputs:
+def carried_brief(doc: dict) -> tuple | None:
+    """``(brief id, Brief Maker data)`` of the FULL brief a Production project carries under its own ``upstream`` (production-spinoff, owner
+    2026-11-23: a spin-off carries everything but the heavy media; the Brief node keeps only the spine). The brief the project's Brief node was
+    taken from (``briefs.<id>.source.document_id``, newest first) wins; else the first brief there. None when the project carries none."""
+    up = {k: v for k, v in ((doc or {}).get("upstream") or {}).items() if _is_brief_data(v)}
+    if not up:
+        return None
+    briefs = (doc or {}).get("briefs") or {}
+    for bid in sorted(briefs, reverse=True):   # ULIDs sort by the time they were made
+        src = str((((briefs[bid] or {}).get("source")) or {}).get("document_id") or "")
+        if src in up:
+            return src, up[src]
+    k = next(iter(up))
+    return k, up[k]
+
+
+_ANSWERED = re.compile(r"[\u2014\u2013-]\s*answers?\s*:|\banswered\s*:|\(answered\b|\bresolved\s*:", re.I)
+
+
+def split_answered(q) -> dict | None:
+    """``{question, answer}`` of a question that carries its own answer ('Is the budget inclusive of VAT? — Answer: £200k excluding VAT'), else None."""
+    m = _ANSWERED.search(str(q or ""))
+    if not m:
+        return None
+    a = str(q)[m.end():].strip().rstrip(")").strip()
+    return {"question": str(q)[:m.start()].strip(), "answer": a} if a else None
+
+
+def answered_question(q) -> bool:
+    """True when a brief's question carries its own answer ('What is the budget? — Answer: £150,000 including VAT'): it is settled, not open.
+    The questions slide lists only open ones (full-flow UAT 2026-11-23: all seven answered questions were listed, each with its answer)."""
+    return bool(_ANSWERED.search(str(q or "")))
+
+
+def production_brief(data: dict) -> tuple | None:
+    """The brief a carried Production project holds, as ``brief_from_data`` reads it: ``(brief id, fields, how_to_win, open_questions, coverage)``;
+    None when the deck carries no Production project or it holds no brief. The FULL brief it carries under its ``upstream`` is read (objectives,
+    audience, mandatories, budget, timing, all of it); only a project with none (a brief linked in, not spun off) falls back to the Brief node's
+    frozen spine (``briefs``). Used only when the deck has no brief of its own."""
+    from . import from_production   # noqa: PLC0415  (pulls Pillow in: only when a Production project is carried)
+    got = from_production.carried(data)
+    if not got:
+        return None
+    full = carried_brief(got[1])
+    if full:
+        fields, htw, oq, cov = brief_from_data(full[1], [], full[0], {})
+        cov["brief_source"] = "production"
+        return (full[0], fields, htw, oq, cov)
+    b = from_production.brief_data(got[1])
+    if not b:
+        return None
+    fields, htw, oq, cov = brief_from_data(b[2], [], b[0], {})
+    cov["brief_source"] = "production"
+    return (b[0], fields, htw, oq, cov)
+
+
+#: Presentation kits a Deck may hold (deck-look-kits). A kit tells the deck how to look: it is never the brief,
+#: never the research, and none of its words or figures is evidence (ADR 0023 as amended by ADR 0027).
+BRAND_APP, STYLE_PACK_APP = "ie.napkin.brand", "ie.napkin.style-pack"
+KIT_APPS = (BRAND_APP, STYLE_PACK_APP)
+#: The brand layer's reference on a pin (Contract 6, section 2): ``fact://brand/<slug>/<key>@v``.
+_BRAND_REF = "fact://brand/"
+
+
+def apply_research(inp: "Inputs", members: dict | None) -> bool:
+    """The research a Deck document carries (its merged ``facts``, ``findings``, ``sources`` and the whole decision ``decisions`` chain, each a
+    list or wrapped in its top-level key) becomes the deck's evidence: the engine server is sent these beside the prompt, so the evidence panel
+    and the stages know the research the person carried. A finding rejected in the chain stays rejected; a pin the brand layer owns is dropped.
+    Returns whether any research was taken. Never replaces research the Inputs already hold."""
+    members = dict(members or {})
+    if inp.has_research() or not any(members.get(k) for k in ("facts", "findings")):
+        return False
+    members, _ = _drop_kit_pins(members, set(), set())
+    chain = members.get("decisions") if "decisions" in members else members.get("chain")
+    r = parse_research(members.get("facts"), members.get("findings"), members.get("sources"), chain, chain_rejects_findings=True)
+    inp.facts, inp.findings, inp.sources = r["facts"], r["findings"], r["sources"]
+    inp.rejected_pins, inp.research_doc_id, inp.research_title = r["rejected_pins"], r["doc_id"], r["title"]
+    inp.coverage.update(_research_coverage(inp, r["chain_len"]))
+    return inp.has_research()
+
+
+def apply_upstream_brief(inp: "Inputs", doc_id: str, doc: dict, chain: list | None = None, others: dict | None = None) -> bool:
+    """A deck spun off a brief (Continue in -> Deck) takes that brief, carried whole under ``data.upstream``, through the one field mapping
+    (``brief_from_data``): its fields, how to win, open questions and Confidential marks. The engine server is sent it as ``brief_upstream``.
+    UAT round 4 L2: it was never sent, so a brief-only deck built from an empty brief (the intake abstained on every field) and called its
+    tier 'research'. Returns whether it took it. A brief of the deck's own (or one an intake stage wrote) is never replaced.
+
+    The chain's marks are looked up in the documents they name: the brief, what the brief carried under its own ``upstream`` (its research:
+    the host sends it there, read.rs ``brief_upstream``) and ``others`` (the carried Production project). 5-tool run 2026-11-26: they were
+    looked up in the brief alone, so every deck from a brief with marked research was refused. A mark naming none of them is still refused."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None) or not _is_brief_data(doc):
+        return False
+    carried = doc.get("upstream") if isinstance(doc.get("upstream"), dict) else {}
+    docs = {**{k: v for k, v in carried.items() if isinstance(v, dict) and k != doc_id},
+            **{k: v for k, v in (others or {}).items() if isinstance(v, dict) and k != doc_id}}
+    fields, htw, oq, cov = brief_from_data(doc, chain or [], doc_id, docs)
+    inp.brief, inp.how_to_win, inp.open_questions = fields, htw, oq
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.answered = cov.pop("answered", None) or []
+    inp.coverage.update(cov)
+    return True
+
+
+def apply_production_brief(inp: "Inputs", doc_id: str, doc: dict) -> bool:
+    """A deck with no brief of its own takes the brief its carried Production project holds (``briefs``, a frozen spine): the fields, and the
+    parts it marked Confidential as marks. Returns whether it did. A brief of the deck's own (or one an intake stage wrote) is never replaced."""
+    if inp.has_brief() or inp.coverage.get("brief_source", "none") not in ("none", None):
+        return False
+    pb = production_brief({"upstream": {doc_id: doc}})
+    if not pb:
+        return False
+    cov = pb[4]
+    inp.brief, inp.how_to_win, inp.open_questions = pb[1], pb[2], pb[3]
+    inp.marks = (inp.marks or []) + (cov.pop("marks", None) or [])
+    inp.answered = cov.pop("answered", None) or []
+    inp.coverage.update(cov)
+    return True
+
+
+def _is_kit(key: str, entry, apps: dict | None) -> bool:
+    """True when an upstream entry is a kit. The runner's app map (``lineage.attached[].app_id``) decides when it
+    names the entry; with no map (or an entry it does not name) the shape does: a kit holds ``kit.version``."""
+    if apps and key in apps:
+        return apps[key] in KIT_APPS
+    return isinstance(entry, dict) and isinstance(entry.get("kit"), dict) and "version" in entry["kit"]
+
+
+def _is_brand_pin(pin: dict, kit_ids: set = frozenset()) -> bool:
+    """A pin the brand layer owns: its reference (compared without regard to case), its layer (any layer starting with ``brand``), or a
+    source that is an attached kit's document."""
+    refs = [pin.get(k) for k in ("ref", "uri", "id")]
+    if any(isinstance(r, str) and r.strip().casefold().startswith(_BRAND_REF) for r in refs):
+        return True
+    if str(pin.get("layer") or "").strip().casefold().startswith("brand"):
+        return True
+    named = {pin.get("source"), pin.get("source_id"), *(pin.get("sources") or [])}
+    return bool(named & set(kit_ids))
+
+
+def _drop_kit_pins(members: dict, kit_pins: set, kit_ids: set = frozenset()) -> tuple[dict, list]:
+    """``members`` without the pins that arrived with a kit, and without the sources only those pins cite.
+    Returns (members, dropped pin ids). A Brand Clan attach merges its pins into the deck's facts; the deck's
+    facts are research, so they leave here, before anything reads them."""
+    rows = _unwrap(members.get("facts"), "facts")
+    gone = [p for p in rows if isinstance(p, dict) and (p.get("id") in kit_pins or _is_brand_pin(p, kit_ids))]
+    if not gone:
+        return members, []
+    gone_ids = {p.get("id") for p in gone}
+    kept = [p for p in rows if p.get("id") not in gone_ids]
+
+    def cited(pins):
+        out = set()
+        for p in pins:
+            for k in ("source", "source_id"):
+                if p.get(k):
+                    out.add(p[k])
+            out.update(p.get("sources") or [])
+        return out
+
+    only_brand = cited(gone) - cited(kept)
+    out = {**members, "facts": kept}
+    if members.get("sources") is not None:
+        out["sources"] = [s for s in _unwrap(members.get("sources"), "sources") if s.get("id") not in only_brand]
+    return out, sorted(i for i in gone_ids if i)
+
+
+def from_upstream(data: dict, members: dict | None = None, docs: dict | None = None, doc_facts: dict | None = None,
+                  apps: dict | None = None, kit_pins: set | list | None = None, self_id: str | None = None) -> Inputs:
     """Build the Inputs from a Deck document: ``data`` is its data (``upstream.<source document id>``
     frozen sources, ``inputs.prompt``, ``intake``); ``members`` its merged ``facts``, ``findings``,
     ``sources`` and ``decisions`` (the whole carried decision chain), each a list or wrapped in its
     top-level key. ``docs`` (doc key -> {name, text, chars}) and ``doc_facts`` are what the server
     extracted from the attached documents. The brief goes through ``brief_from_data`` (CLAN_FIELDS)
     and the research through ``parse_research``, so there is one mapping. A finding rejected in
-    the chain stays rejected. With no brief upstream the brief fields are empty."""
+    the chain stays rejected. With no brief upstream the brief fields are empty.
+
+    ``apps`` (``{source document id: app_id}``, from ``lineage.attached``) says what each entry is. A Brand Clan
+    or Style Pack is a kit: never the brief or the research, and every pin that arrived with a kit is dropped from
+    the facts (``kit_pins``: the ids the runner knows came with one; a pin marked with the brand layer's reference
+    is dropped too). Without ``apps`` a kit is recognised by its ``kit.version`` block.
+
+    ``self_id`` is the Deck document's own id (its manifest's): a ``classify`` mark in the carried chain that names the Deck itself is
+    read in the Deck's own data, beside marks on the brief and the research, never refused for naming a document it does not hold."""
     data, members = data or {}, members or {}
     up = data.get("upstream") or {}
+    kits = [k for k, v in up.items() if _is_kit(k, v, apps)]
+    prod_ids = [k for k, v in up.items() if k not in kits and (v.get("app") == "production-tool" if isinstance(v, dict) else False)]
+    terr_ids = [k for k, v in up.items() if k not in kits and is_territories(v)]
+    up = {k: v for k, v in up.items() if k not in kits and k not in prod_ids and k not in terr_ids}   # a Production project or a Territories document is neither the brief nor the research
     brief_id, brief_data = next(((k, v) for k, v in up.items() if _is_brief_data(v)), (None, None))
     research_id = next((k for k, v in up.items() if k != brief_id and isinstance(v, dict) and v), None)
+    dropped: list = []
+    kit_ids = set(kits) | {k for k, app in (apps or {}).items() if app in KIT_APPS}
+    if kits or kit_ids:
+        members, dropped = _drop_kit_pins(members, set(kit_pins or ()), kit_ids)
+    elif kit_pins:
+        members, dropped = _drop_kit_pins(members, set(kit_pins))
+    chain_list = members.get("decisions") if "decisions" in members else members.get("chain")
+    chain_list = chain_list.get("decisions") if isinstance(chain_list, dict) else chain_list
     if brief_data is not None:
-        fields, htw, oq, cov = brief_from_data(brief_data)
+        # The chain's marks are looked up in the documents they name (the brief, or the research beside it), never all in the brief.
+        others = {k: v for k, v in up.items() if k != brief_id}
+        if self_id and self_id != brief_id:
+            others[self_id] = data   # a mark on the Deck document itself is read in the Deck's own data
+        fields, htw, oq, cov = brief_from_data(brief_data, chain_list or [], brief_id, others)
     else:
         fields, htw, oq, cov = empty_brief(), {}, [], {"brief_fields": len(BRIEF_FIELDS), "brief_fields_filled": 0,
                                                        "how_to_win_points": 0, "open_questions": 0, "brief_source": "none"}
+        if prod_ids:   # no brief of its own: the one a carried Production project holds
+            pb = production_brief(data)
+            if pb:
+                fields, htw, oq, cov = pb[1], pb[2], pb[3], pb[4]
+    if kits:
+        cov["kits_ignored"] = sorted(kits)
+    if dropped:
+        cov["kit_pins_dropped"] = dropped
     prompt = ((data.get("inputs") or {}).get("prompt") or {})
     intake = data.get("intake") or {}
+    marks = cov.pop("marks", None)
+    answered = cov.pop("answered", None) or []
+    if "confidential_fields" in data:   # a Deck that carries its own marks, beside any the brief carried
+        # The chain's marks were read with the brief's when there is one (each in its own document); otherwise here, upstream ones there.
+        marks = (marks or []) + (marks_from_data(data) if brief_data is not None else marks_from_data(data, chain_list or [], docs=up))
     inp = Inputs(brief=fields, how_to_win=htw, open_questions=oq, prompt_text=str(prompt.get("text") or ""),
-                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"})
+                 answers=dict(intake.get("answers") or {}), intake={k: v for k, v in intake.items() if k != "answers"}, marks=marks, answered=answered)
     chain = members.get("decisions") if "decisions" in members else members.get("chain")
     if members.get("facts") or members.get("findings") or research_id:
         title = ((up.get(research_id) or {}).get("campaign") or {}).get("name") if research_id else None
@@ -342,3 +645,66 @@ def from_upstream(data: dict, members: dict | None = None, docs: dict | None = N
         cov["doc_figures"] = len(inp.doc_facts)
     inp.coverage = cov
     return inp
+
+
+def brand_clan_copy(did: str, data: dict, read) -> dict:
+    """The Brand Clan a deck wears, as look.brand_tokens reads it: its frozen copy, its document id, and its logo files by variant
+    (``_logo_files``). Its logo files travel with it (owner 2026-11-24, "Yes it reaches deck"): the host copies each published logo to
+    human/assets/brand/<brand document id>/<file> on attach and Update (napkin-host library::brand_logo_entry). ``read(entry)`` gives a
+    file's bytes or None: from the deck document (--deck) or from what the middleware carried (--brand-upstream, acceptance A60)."""
+    brand = {**data, "_document_id": did}
+    files = {}
+    for lg in ((brand.get("visual") or {}).get("logos") or []):
+        a = str((lg or {}).get("asset") or "")
+        # "other" is what the Brand Clan editor files an uploaded logo as (app/src/shell/nui/brandClans/model.ts); look.brand_tokens
+        # takes it when the Brand Clan names no logo for a dark ground (UAT 2026-11-26).
+        if not a or (lg or {}).get("variant") not in ("dark", "light", "mark", "other") or lg["variant"] in files:
+            continue
+        got = read(f"human/assets/brand/{did}/{a.rsplit('/', 1)[-1]}")
+        if got:
+            files[lg["variant"]] = {"name": a.rsplit("/", 1)[-1], "bytes": got}
+    if files:
+        brand["_logo_files"] = files
+    return brand
+
+
+def from_deck_document(path: Path) -> tuple[Inputs, dict]:
+    """The runner's one way into a Deck document (a ``.clan``): its Inputs through ``from_upstream`` with the app map read from
+    ``lineage.attached`` (so an attached kit is never the brief or research and a Brand Clan's pins never reach the facts), and what
+    the look needs: ``{apps, look (the document's look preferences), library (inputs.library.enabled), pack (Style Pack data and an
+    asset reader, or None), brand (the frozen Brand Clan, or None)}``. Kits count only while ``inputs.library.enabled`` is true
+    (ADR 0027); the facts filter acts always. Read on every run, so an Update (a newer frozen kit) is re-applied by construction."""
+    z = zipfile.ZipFile(path)
+    names = set(z.namelist())
+    rd = lambda n: yaml.safe_load(z.read(n)) if n in names else None  # noqa: E731
+    man, data = rd("manifest.yaml") or {}, rd("shared/data.yaml") or {}
+    attached = (man.get("lineage") or {}).get("attached") or []
+    # clan-sdk flattens Attached.carried into the entry, so each one names its document_id itself (manifest.rs, `#[serde(flatten)]`).
+    apps = {a.get("document_id"): a.get("app_id") for a in attached if isinstance(a, dict) and a.get("document_id")}
+    members = {"facts": rd("shared/facts.yaml"), "findings": rd("shared/findings.yaml"), "sources": rd("shared/sources.yaml"),
+               "decisions": rd("agent/decision-chain.yaml")}
+    inp = from_upstream(data, {k: v for k, v in members.items() if v is not None}, apps=apps,
+                        self_id=str(man.get("document_id") or man.get("id") or "") or None)
+    up = data.get("upstream") or {}
+    lib = bool(((data.get("inputs") or {}).get("library") or {}).get("enabled") is True)
+    pack = brand = None
+    for did, app in apps.items():
+        # The client's Brand Clan dresses the deck whether or not the team library is on (Brand Clan phase 2, mock e1: the library
+        # is Off and the deck still wears Tidewell's look); the library gate keeps a kit's pins and pictures out of the content.
+        if did in up and app == BRAND_APP and brand is None:
+            brand = brand_clan_copy(did, up[did], lambda entry: z.read(entry) if entry in names else None) if isinstance(up[did], dict) else up[did]
+        elif did in up and lib and app == STYLE_PACK_APP and pack is None:
+            pack = (up[did], lambda p: z.read(p) if p in names else None)
+    if lib is False and any(app in KIT_APPS for app in apps.values()):
+        inp.coverage["kits_gated_off"] = True
+    prod = next(((k, v) for k, v in up.items() if isinstance(v, dict) and v.get("app") == "production-tool"), None)   # carried whole (production-spinoff)
+    terr = next(((k, v) for k, v in up.items() if is_territories(v)), None)   # carried whole (territories-spinoff-out-deck)
+    return inp, {"apps": apps, "look": data.get("look") or {}, "library": lib, "pack": pack, "brand": brand, "production": prod, "territories": terr,
+                 "text_mode": (data.get("inputs") or {}).get("text_mode"), "review": data.get("review") or {},
+                 "deck_type": _deck_type_pick((data.get("inputs") or {}).get("deck_type"))}
+
+
+def _deck_type_pick(v) -> str | None:
+    """deck-types: the person's explicit pick on the type picker (``inputs.deck_type: {id, by, at}``; null or absent: no pick, 'Not sure')."""
+    pid = v.get("id") if isinstance(v, dict) else None
+    return pid if isinstance(pid, str) and pid else None

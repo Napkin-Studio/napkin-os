@@ -175,12 +175,49 @@ class Adapted:
             raise _error(e) from e
 
 
+# The request fields the trace line names on their own; the rest of the body goes under "other".
+_NAMED = ("model", "promptText", "ratio", "duration", "referenceImages", "references", "promptImage")
+
+
+def _safe(value):
+    """A request value with every URI cut to scheme, host and path (jobtrace.uri_of)."""
+    import jobtrace
+    if isinstance(value, dict):
+        return {k: (jobtrace.uri_of(v) if k.lower().endswith("uri") else _safe(v)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_safe(v) for v in value]
+    if isinstance(value, str) and value.startswith(("https://", "http://", "data:")):
+        return jobtrace.uri_of(value)
+    return value
+
+
+def trace_submit(*, op: str, provider: str, endpoint: str, body: dict, status: int | None = None,
+                 task_id: str | None = None, error: str | None = None) -> None:
+    """One provider_submit line (features/pt-relay-trace.clan): what the adapter sent, as sent, and what
+    came back. The jobId is the relay's job context (base.set_job_context)."""
+    import jobtrace
+    refs = [{k: v for k, v in (("tag", r.get("tag")), ("subject", r.get("subject")),
+                                ("uri", jobtrace.uri_of(r.get("uri")))) if v is not None}
+            for r in (body.get("referenceImages") or []) + (body.get("references") or []) if isinstance(r, dict)]
+    frames = [{"position": f.get("position"), "uri": jobtrace.uri_of(f.get("uri"))}
+              for f in body.get("promptImage") or [] if isinstance(f, dict)]
+    other = _safe({k: v for k, v in body.items() if k not in _NAMED})
+    jobtrace.trace("provider_submit", base.job_id(), op=op, provider=provider, model=body.get("model"),
+                   endpoint=endpoint, promptText=body.get("promptText"), ratio=body.get("ratio"),
+                   duration=body.get("duration"), refs=refs, frames=frames or None, other=other or None,
+                   status=status, taskId=task_id, error=error)
+
+
+class KeyMissing(RuntimeError):
+    """A provider's key is not set: expected locally, so the registry says so in one line."""
+
+
 def key(var: str) -> str:
     """A provider key from the environment (on Lambda, loaded from Secrets
     Manager at cold start). Missing: the adapter is not registered."""
     value = os.environ.get(var, "").strip()
     if not value:
-        raise RuntimeError(f"{var} is not set")
+        raise KeyMissing(f"{var} is not set")
     return value
 
 

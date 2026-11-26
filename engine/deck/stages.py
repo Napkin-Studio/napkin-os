@@ -29,7 +29,6 @@ Calls go through ``brief_llm`` so transport (CLI login or API), retries, the Cla
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -48,8 +47,10 @@ MODELS["a0"] = "claude-sonnet-5-5"
 MODELS["i"] = "claude-opus-5-5"
 MODELS["red_team"] = "claude-sonnet-5-5"   # a Claude model, never the writer's (ADR 0006); a non-Claude red team is not wired here
 MODELS["d_criterion"] = "claude-opus-5-5"   # one tender criterion's written answer: the writer's model, as stage d
+MODELS["g"] = "claude-sonnet-5-5"   # the picture subjects (deck-image-gen): one call per deck, on its own card
 MODELS["insight_judge"] = "claude-sonnet-5-5"   # never the writer's model (ADR 0006: Claude only; a non-Claude judge is not wired here)
-EFFORT = {"a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
+MODELS["production_pick"] = "claude-sonnet-5-5"   # deck-prod-picker: the optional tie-break on metadata rows only (Claude only, never Gemini)
+EFFORT = {"g": "low", "a0": "medium", "a": "medium", "b": "high", "c": "high", "c_judge": "low", "d": "high", "fit": "medium", "e": "low", "i": "high", "insight_judge": "low", "red_team": "medium", "d_criterion": "medium", "production_pick": "low"}   # copy tightening is mechanical: low effort (medium cost up to $1.27 a deck)
 #: Slide types whose headlines make claims the fit judge reads.
 JUDGED = ("real_question", "chart", "insight", "audience", "proposition", "measurement", "innovation",
           "problem", "why_now", "solution", "product", "market", "business_model", "traction", "competition", "gtm",
@@ -68,6 +69,8 @@ def _sysmsg(name: str, stage: str, profile: dict | None = None) -> str:
     ("Inputs are the only source"), so the rule still has the last word. With no profile, or none for the stage, the text is the file's own."""
     text = (PROMPTS / name).read_text()
     lines = profiles.guidance(profile, stage)
+    if stage == "e":   # deck-types slice 4: the lines the type's title form selects (none for claim and criterion; only with the recipes on)
+        lines = lines + [x for x in profiles.title_guidance(profile) if x not in lines]
     if not lines:
         return text
     block = "<type_guidance>\n" + HOOK + "\n" + "\n".join(f"- {x}" for x in lines) + "\n</type_guidance>\n"
@@ -95,15 +98,13 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
 
     Usage comes from a private ledger (brief_llm._stats_scope), not snapshots of the global one:
     _stats_snapshot() on a fresh process deadlocks (it takes the stats lock, then _ledger() resets
-    the empty ledger under the same lock). The effort goes through BRIEF_CLI_EFFORT, the one
-    setting a pinned-model call honours (route efforts apply to routed calls only).
+    the empty ledger under the same lock). The effort goes through brief_llm.pinned_effort, which a
+    pinned-model call honours (route efforts apply to routed calls only).
 
     A reply that is not usable JSON gets one repair call (REPAIR_SYSTEM): the bad text goes back and valid JSON only is
     asked for (investor level A failed at stage i on this). The extra call's tokens are in the usage. ``usage['usd']`` is
     the ledger's real figure when the transport gives one, else an ESTIMATE from tokens (spec.estimate_usd, ``usd_estimated``)."""
     import brief_llm as L
-    os.environ["BRIEF_CLI_EFFORT"] = EFFORT[stage]
-    L.CLI_TIMEOUT_S = max(L.CLI_TIMEOUT_S, 600.0)   # a high-effort storyline can run past the 240 s default (read at import)
     t = time.time()
     bad: list = []
 
@@ -118,7 +119,7 @@ def _call(stage: str, user: str, system: str) -> tuple[dict, dict]:
         return L._json_call(text, system=sysmsg, model=MODELS[stage], only_model=True, parse=reader, max_tokens=16000, retries=retries)
 
     repaired = False
-    with L._stats_scope() as led:
+    with L.pinned_effort(EFFORT[stage]), L._stats_scope() as led:
         obj = ask(user, system, 2)
         if obj is None and bad and str(bad[-1]).strip():
             repaired = True
@@ -274,13 +275,13 @@ def requirements(inp, profile: dict | None = None) -> tuple[dict, dict]:
             reqs += obj.get("requirements", []); scoring += obj.get("scoring", []); rules += obj.get("rules", [])
             usage.append(u)
     if not inp.docs:  # brief-only: the brief's own mandatories and objectives are the requirements
-        brief = json.dumps({k: v["value"] for k, v in inp.brief.items()}, ensure_ascii=False)
+        brief = json.dumps({k: v["value"] for k, v in inp.brief.items() if v.get("value") not in (None, "", [], {})}, ensure_ascii=False)   # an empty field is not sent: the model once wrote '(field is null)' as a requirement
         obj, u = _call("a", f"<brief>\n{brief}\n</brief>{_prompt_block(inp)}", sysmsg)
         reqs, scoring, rules = obj.get("requirements", []), obj.get("scoring", []), obj.get("rules", [])
         usage.append(u)
     seen, merged = set(), []
     for r in reqs:
-        if r.get("text") and r["text"].lower() not in seen:
+        if r.get("text") and not spec.internal_wording(r["text"]) and r["text"].lower() not in seen:
             seen.add(r["text"].lower()); merged.append(r)
     for i, r in enumerate(merged, 1):
         r.setdefault("id", f"r_{i:02d}")
@@ -359,14 +360,57 @@ def territories(inp, st, profile: dict | None = None) -> tuple[dict, dict]:
     return obj, _sum([u1, u2])
 
 
+def _visuals_block(inp) -> str:
+    """A deck made from a Production project shows its finished pictures and no film: what the finals are, and the rule, for stage d."""
+    v = getattr(inp, "production_visuals", None)
+    if not v:
+        return ""
+    have = []
+    if v.get("key_visuals"):
+        have.append("a key visual")
+    if v.get("ooh_formats"):
+        have.append("out-of-home sizes (" + ", ".join(str(f).replace("-", " ") for f in v["ooh_formats"]) + ")")
+    if v.get("packshots"):
+        have.append("a packshot")
+    if v.get("storyboard_frames"):
+        have.append(f"{v['storyboard_frames']} storyboard frames (stills)")
+    if v.get("crops"):
+        have.append("size crops")
+    return ("\n<production_finals>\nThis deck is made from finished pictures Production holds: " + (", ".join(have) or "none yet") + ". "
+            "Show visuals only. Write NO film, TV, video, cinema or social-film execution, and no film in a channel role, the timeline, the process or any budget or plan copy "
+            "(the brief's channels may be named in strategy text, but no film is proposed or costed). Name each execution after a picture Production holds, using these words "
+            "in the channel field: 'Key visual', 'Out of home', 'Packshot', 'Storyboard frames' (only those listed above). Say what the picture does, never invent one it does not have.\n</production_finals>")
+
+
 def idea(inp, st, profile: dict | None = None) -> tuple[dict, dict]:
     """Stage d: the line, the idea and 3-6 executions in the channels the brief names (after Gate 2)."""
     chosen = next((t for t in (st.get("c") or {}).get("territories", []) if t["id"] == (st.get("c") or {}).get("chosen")), None)
     user = (f"<storyline>{json.dumps(st.get('b'), ensure_ascii=False)}</storyline>\n<territory>{json.dumps(chosen, ensure_ascii=False)}</territory>\n"
-            f"<requirements>{json.dumps((st.get('a') or {}).get('requirements', []), ensure_ascii=False)}</requirements>\n<evidence>\n{_facts_block(inp)}\n</evidence>{_prompt_block(inp)}")
+            f"<requirements>{json.dumps((st.get('a') or {}).get('requirements', []), ensure_ascii=False)}</requirements>\n<evidence>\n{_facts_block(inp)}\n</evidence>{_prompt_block(inp)}{_visuals_block(inp)}")
+    fixed = carried_idea(chosen)
+    if fixed:
+        user += (f"\n<fixed_idea>The idea belongs to the Territories route the person sent, and it is not rewritten. campaign_line is exactly "
+                 f"{json.dumps(fixed['campaign_line'], ensure_ascii=False)}; idea is exactly {json.dumps(fixed['idea'], ensure_ascii=False)}. Write how_it_answers, the executions "
+                 f"and the rest around it, using the route's own words in territory.their_words for headlines and copy before any new line.</fixed_idea>")
     obj, u = _call("d", user, _sysmsg("d_idea.md", "d", profile))
     obj.update(stage="d_idea_and_executions", produced_by=f"live {MODELS['d']}")
+    if fixed:
+        obj.update(fixed)   # a route's idea is the route's: the model's framing never replaces it
+        ch = obj.get("chain")
+        if isinstance(ch, dict) and str(ch.get("idea_phrase") or "") not in fixed["idea"]:
+            ch["idea_phrase"] = " ".join(fixed["idea"].split()[:8])   # the chain quotes the idea as it now reads
+        obj["idea_from"] = {"territory": chosen["id"], "name": chosen.get("name")}
     return obj, u
+
+
+def carried_idea(chosen) -> dict | None:
+    """``{campaign_line, idea}`` of a route carried from Territories (its lead line or first headline, and its one-thought proposition), else None.
+    The deck makes no idea of its own for such a route (territories-spinoff-out-deck)."""
+    if not (isinstance(chosen, dict) and chosen.get("from_territories")):
+        return None
+    words = chosen.get("their_words") or []
+    line, thought = (words[0] if words else chosen.get("name")), chosen.get("thought")
+    return {"campaign_line": line, "idea": thought} if line and thought else None
 
 
 def criterion_answer(inp, st, criterion: dict, budget: int, profile: dict | None = None) -> tuple[dict, dict]:
@@ -395,6 +439,8 @@ def fit(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
                "evidence": [R.describe(r) for r in slide_refs(s)]}
               for s in (deck["slides"][x] for x in deck["order"]) if s["type"] in JUDGED]
     obj, u = _call("fit", f"<slides>\n{json.dumps(slides, ensure_ascii=False)}\n</slides>", _sysmsg("fit_judge.md", "fit", profile))
+    from .assemble import clean_fit
+    obj = clean_fit(obj if isinstance(obj, dict) else {})   # recorded clean: every later reader keys verdicts by title (UAT round 4 KeyError)
     obj.update(stage="fit", produced_by=f"live {MODELS['fit']}")
     return obj, u
 
@@ -448,6 +494,18 @@ def copy(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     return obj, u
 
 
+def repair_copy(deck, inp, profile: dict | None = None, requests: list | None = None) -> tuple[dict, dict]:
+    """The repair loop's one paid rung: condense the on-screen words of the slots that do not fit, on stage e's transport and model.
+    ``requests`` is ``[{slide (title), slot, role, max_chars, max_words, fields: [{id, text}]}]``, built and filtered by code
+    (repair.build_request: never a title, quote, statement, from/to, table, stats item, sourced item or placeholder). The reply may only
+    DELETE words or REUSE the slide's own (prompts/e_copy.md, the <slots> paragraph); code refuses anything else (assemble.shorten_problem).
+    Returns ``{"edits": [{slide, slot, field, text}]}`` and the usage."""
+    user = f"<slots>\n{json.dumps(requests or [], ensure_ascii=False)}\n</slots>"
+    obj, u = _call("e", user, _sysmsg("e_copy.md", "e", profile))
+    obj.update(stage="e_repair", produced_by=f"live {MODELS['e']}")
+    return obj, u
+
+
 def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     """The red team: one Sonnet call that reads the finished deck (the presented slides' titles and on-screen text, the client's
     requirements and the stated ask) as a skeptical buyer or investor and returns at most spec.RED_TEAM_MAX objections, each tied
@@ -463,6 +521,30 @@ def red_team(deck, inp, profile: dict | None = None) -> tuple[dict, dict]:
     obj["objections"] = [o for o in obj.get("objections") or [] if isinstance(o, dict)][:spec.RED_TEAM_MAX]
     obj.update(stage="red_team", produced_by=f"live {MODELS['red_team']}")
     return obj, u
+
+
+def image_subjects(req: dict) -> tuple[dict, dict]:
+    """Stage g (deck-image-gen): the subject of every empty picture slot, from the request ``imagegen.subject_request`` built (marked parts are
+    already out of it). One call; the caller records it and the ledger counts it inside the deck's cap."""
+    return _call("g", json.dumps(req, ensure_ascii=False, indent=1), g_system())
+
+
+#: deck-graphics slice 2 (design.mockups.generated_subject): under spec.GRAPHICS an execution's picture is the artwork itself, because the
+#: deck draws the frame around it. Placed before the input rule, so that rule keeps the last word. Only the system text changes, never
+#: the request: a recorded stage g stays valid.
+ARTWORK_RULE = ("For a slot whose key starts with execution: describe the artwork itself, filling the picture edge to edge, as the poster, "
+                "post or film frame would show it: never a photograph of a street, a bus shelter, a billboard, a phone, a screen or a room "
+                "with the advert in it. The deck draws the frame around it.")
+
+
+def g_system() -> str:
+    """Stage g's system prompt: the file's own text, plus ARTWORK_RULE before the input rule when spec.GRAPHICS is on."""
+    text = _sysmsg("g_image_subjects.md", "g")
+    if not spec.GRAPHICS:
+        return text
+    body = text.rstrip("\n").split("\n")
+    at = next((i for i, ln in enumerate(body) if ln.startswith("Inputs are the only source:")), len(body))
+    return "\n".join(body[:at] + [ARTWORK_RULE] + body[at:]) + "\n"
 
 
 def investor(inp, st, profile: dict | None = None) -> tuple[dict, dict]:

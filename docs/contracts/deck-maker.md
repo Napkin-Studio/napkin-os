@@ -56,12 +56,14 @@ The tier is the richest source present: `brief+research`, `brief`, `research`, `
 | `run.error` `{stage, message, retryable}` | the runner | with `state: failed`. Optional |
 | `run.done` `{summary, slides, appendix, to_supply}` | the runner | with `state: done`. Optional |
 | `run.gate.agent`, `run.gate.territories[]` `{id, n, name, thought, why}`, `first_pick`, `picked`, `run.gate.idea` `{line, basis, territory_id, territory_name?, executions[], rests_on[]}` | the runner | gates 2 and 3. Territories, the idea and its executions are proposals. Optional |
+| `run.storyline_edit` `{base, beats: [{key, title, words}], by, at}` | the app | the person's storyline at gate 1 (deck-beat-editor), saved as they edit; `null` is the agents' version. `base` is the sha256 of the `b_storyline.json` it was made against (`run.gate.base`); `key` a section key, `null` for a beat the person added; `words` `agents\|yours`. The middleware hands it to the engine beside the approvals; the engine applies it when gate 1 is approved, before stage c, with no model call. Optional |
+| `run.gate.editable`, `run.gate.base`, `run.gate.beats[].key\|words\|carries` | the runner | gate 1 from a stage b (not an investor deck's stage i): the beats can be edited; `carries` `[{id, text, to}]` the mandatories a beat cites and where each is still said once it is taken out. Optional |
 | `run.decisions[]` `{gate, kind, by, at}`, `run.gate_requests[]` `{gate, kind, at, status}` | the app | every approve, edit or retry; an edit or retry ask is recorded like `change_requests` and launches nothing. Optional |
 | `deck.appendix_ids[]`, `deck.slides.<id>.appendix` | the runner, or the app via `put` | the appendix; `appendix_count` stays the fallback. Optional |
 | `deck` | the runner | `deck.json` (+ `appendix_count`), with `meta.built_from` |
 | `validation` | the runner | `validation.json`: `errors`, `to_supply`, findings by slide |
 | `evidence.<ref>` `{kind,text}` | the runner | what each cited ref says, resolved from the inputs |
-| `report` | the runner | `report.json`: `seconds`, `tokens`, `cost_usd`. The app shows these, never an estimate |
+| `report` | the runner | `report.json`: `seconds`, `tokens`. No cost: costs are for the Napkin team only, never in the product (Sai, 19 Nov 2026); the middleware drops `cost_usd`, `engine_usd_total` and `usd_basis` |
 | `exports.web\|pptx\|anim\|pdf` | the runner | `{file, url?, bytes?}`, once written; the older shapes, `true` and the file name as a string, still read as written. Absent means "Not built yet". The app shows the file name (its last path part), never `url` or `bytes`. The animated deck reads the same way; the engine does not build it yet, so it shows Not built yet until a runner writes it |
 | `change_requests[]` | the app | an Ask-for-a-change click: `{slide, change, at, status}`. Words only; sources stay |
 
@@ -131,11 +133,14 @@ The Deck never searches the web and never launches research on its own.
 
 ## Spin-off
 
-The Deck template declares `app.spinoff { accepts: [ie.napkin.brief-maker, ie.napkin.campaign-research],
-upstream: true }`, no map and no lift, and its version is `0.2.0` (`crates/clan-sdk/examples/make_deck_maker.rs`).
-A deck spun off from a Brief Maker or Research Tool document carries that document whole, frozen, under
-`data.upstream.<source document id>`. The app shows a notice when the host reports a source changed since
-(`GET /upstream`); the deck keeps the version it has and does not take the newer one on its own. On the
+The Deck template declares `app.spinoff { accepts: [ie.napkin.brief-maker, ie.napkin.campaign-research,
+ie.napkin.production, ie.napkin.territories], upstream: true }`, no map and no lift, and its version is `0.6.0` (`crates/clan-sdk/examples/make_deck_maker.rs`,
+which asserts both; `crates/clan-sdk/tests/spinoff.rs` runs it).
+A deck spun off from a Brief Maker, Research Tool, Production or Territories document carries that document whole, frozen, under
+`data.upstream.<source document id>`. A deck is a frozen snapshot of its brief and research: on Start and on
+Review the app shows "<title> changed since this deck" when the host reports a source changed since
+(`GET /upstream`, an entry with `status: changed`); the deck keeps the version it has, does not take the
+newer one on its own, and the notice writes nothing. On the
 engine side `inputs.from_upstream(data, members, docs)` builds the same `Inputs` from `data.upstream` plus
 the merged `facts`, `findings`, `sources` and carried `decisions`. A finding rejected in the chain stays
 rejected and is never used on a slide.
@@ -155,6 +160,20 @@ Approving writes one patch under `run`: the gate's stage `done`, the next stage 
 note?}` and `decisions[]` with `{gate, kind: "approve", by, at}` added, with the decision `approve <gate>`.
 At gate 2 the pick is view state until Pick this territory writes it as `approvals.territories.picked`;
 a pick that is not one of the territories is refused. Only the open gate can be approved.
+
+At an editable gate 1 (deck-beat-editor, owner approved 2026-11-25) the person rewords a beat in place (⌘/Ctrl+Enter Done, Esc
+Cancel; an empty beat is refused), moves it (drag, or ↑ ↓), takes it out (a beat that states a mandatory warns first and says where
+the mandatory moves: the guardrails slide), or adds their own; Undo and Reset to the agents' version (asked first) are there too.
+Each change writes only `run.storyline_edit` (`edit storyline: <what>`), so the open gate is never in the patch. Approve carries
+the storyline with the approval ("Approve my storyline and continue" once it changed) and is off, with its reason, while a beat
+is being written. "Ask the agents to rewrite around my edits" (the storyline gate's Edit) queues an edit request with the
+storyline attached, and launches nothing. On approval the engine (`deck/storyline_edit.py`, `Server.apply_storyline`) rewrites
+`b_storyline.json` once, keeping the agents' file as `b_storyline.agents.json`: a reworded section keeps its claims and refs, a
+section taken out has no slide, a beat the person added is a `person_beat` slide titled with their words (one labelled
+placeholder for what supports it; the cap never moves it), and the presented beat slides take the person's order within the
+slots beat slides held, so the investment and the ask stay last. An edit made against another storyline is refused (409
+`storyline_changed`) before anything runs. A replay applies it the same way and says its territories and idea were recorded
+from the agents' storyline.
 
 Edit and Ask the Deck agent to try again, at any gate, write `{gate, kind: edit|retry, by, at}` to `run.decisions`
 and `{gate, kind, at, status: "waiting"}` to `run.gate_requests`, with the decision `edit <gate>` or
@@ -180,6 +199,17 @@ selected; with only `appendix_count` it stays a count. The Export rows come from
 and the report line from `DeckLogic.reportLine` (`validation.errors`; at 0 errors every number traced,
 since an untraced number is an error; then placeholders from the To supply count). The confirm list
 stays on Present as well as Review.
+
+## Delivering the files (deck-cloud)
+
+The engine keeps `deck.html` and `deck.pptx` on its own disk. The Export card's buttons ask for one by name through the
+middleware task `fetch_deck_file@1` (`input {name: "deck.html" | "deck.pptx"}`; short, writes nothing; the result carries
+`{name, media_type, bytes, data_b64}`; 404 `no_file` before it is built). The web deck and the PDF go to the host's export,
+`clan.exportDoc('html' | 'pdf', name, html)`: the host saves the HTML, or prints the same page to PDF with headless Chromium,
+exactly as a Brief's PDF is printed. So the PDF is ready whenever the web deck is (`DeckLogic.exportRows(exports,
+{hostPdf: true})`), and the cloud engine (`NAPKIN_DECK_RENDER=web`, no LibreOffice) never writes `deck.pdf`. The PowerPoint is
+saved by the app from the bytes. The shell's own Export (the OS bar's Save, PDF) is claimed by the app once a deck is built
+(`clan:export`) and prints the deck, not the screen.
 
 ## Rules the screens keep
 
@@ -300,18 +330,90 @@ Each live stage records `usd`: the transport's figure, else tokens at `spec.PRIC
 `report.json` `usd_total` includes recorded stages priced the same way and `usd_basis` says it is an estimate. A reply that
 is not JSON gets one repair call. Bench cost ranges are assumptions, plus or minus 30% (ADR 0032, proposed).
 
+## The gates
+
+The run stops at three gates and nowhere else. Review is the screen after the last gate, not a gate. The engine has no gates of its
+own: `run_deck --until <stage>` stops after the stage, and the server (`deck/server.py`) holds the run there until the person's approval
+is in `run.approvals` and the gate's stage output already existed. The table is tested against `run_deck.STAGE_FILES`
+(`engine/deck/tests/test_gates_contract.py`).
+
+| Gate | n | After stage | Stage file | The gate shows |
+|---|---|---|---|---|
+| storyline | 1 | b | b_storyline.json | `gate.beats` |
+| territories | 2 | c | c_territories.json | `gate.territories`, `gate.first_pick` |
+| idea | 3 | d | d_idea.json | `gate.idea` |
+
+After the idea gate the run goes on by itself: copy (e, with the fit judge and the red team), assemble, validate, the files. An investor deck
+(stage i, no b, c or d) has the storyline gate only, after stage i.
+
+## The Production picker panel (deck-prod-picker P6)
+
+When a build used a Production file (`run_deck --production FILE`, a .clan or its export zip), the engine writes `production`
+(`engine/deck/run_state.production_payload`): the card line (`Production: N picked, M not reachable`), each picked slot with
+its candidates (label, role, reach, rights, status; never a location), and the opt-in switches as the build had them (fetch,
+with `allow_list_empty`; the tie-break; the vision check). The Review aside shows a slide's Production tiles with a reach badge
+(Embedded, Linked from Production, https link or Fetched link, Export zip, Not reachable) and a rights badge (Rights to supply when the picture waits
+for its rights). A person swaps a slot to another of its candidates: the app writes `review.production.<slide>.<slot>`
+`{key, by, at}`; the engine honours it while the key is still a candidate for that slot (never over a rights or reach check)
+and records it in its stages (`production_choices.json`), as `--production-pick SLIDE.SLOT=KEY` does. Fetch and the vision check
+stay opt-in, and the panel says so; with an empty host allow-list it says nothing can be fetched yet.
+
+**A Production project spun off into the deck** (production-spinoff, owner 2026-11-22). Production's *New deck from this project* spins
+the saved project off into a Deck Maker document: its contract-3 data (assets, frames, format sets, sizes, renders, briefs and the
+`finals` map, item 26) is carried whole under `data.upstream.<project's document id>` with `source_uri production:<project id>@<etag>`
+(app id `ie.napkin.production`). The pictures are not embedded: they stay in the relay under their sha256.
+
+- *Reading.* `build_deck@1` sends the carried entry (the host's `clan.production_upstream`, the first `data.upstream` entry whose `app` is `production-tool`: `data.upstream` itself reaches the middleware as an index, middleware-api.md §1) to the engine
+  server as `production_upstream {id, data}`; the engine server writes it to the document's folder and runs with
+  `--production-upstream FILE`. A Deck document read directly (`run_deck --deck FILE.clan`) needs no flag: `inputs.from_deck_document`
+  names the entry. The entry is never the brief or the research. An explicit `--production FILE` (below) wins; an investor deck, or a
+  run with `--pictures none`, does not use it.
+- *Finals first, then the rules.* `deck.from_production.plan_offer` marks each candidate a person marked final (`final: true`), and
+  `images.bind_production` takes finals before Sai's rules (`master_pool`, `size_pool`, `_film_frames`); the rules fill what no final
+  reaches. A swap on Review or `--production-pick` still wins. The picker reports a final's pick `by: final`. See deck-visuals.md.
+- *Rights.* A stated `assets[sha].rights` (generated, own, licensed) is trusted; `unknown` waits as `Rights to supply`; with none
+  stated the origin decides, only lowering. Nothing is called forged any more (`forged_fields` is gone).
+- *Pictures by link.* Each picture a build needs is fetched by sha256 from the relay's `GET /assets/{sha256}?w=2400`, cached by hash
+  under the document's stages folder and checked as a picture; the original-size copy is checked against its sha256. Reach is `relay`
+  (the app's badge: Linked from Production). The call is the person's own, signed with `X-Napkin-Identity`
+  (production-tool-identity.md, "The assets pass"): the middleware holds no relay key and does not know who is asking, so napkin-web
+  signs one read-only pass (`aud: "assets"`, `GET /assets/{sha256}` only, the caller's agency, 30 minutes) for each `build_deck` it
+  forwards and adds `payload.production_assets {base, pass}` (any value the browser sent is dropped). The middleware hands it to the
+  engine only for a deck that carries a Production project; the engine's transport (`prod_picker.use_relay`, `relay_fetcher`) sends
+  it to the relay's host only, follows the relay's 302 to the picture (https, no credentials or port, public addresses, a few hops,
+  the byte cap) without the pass, and never writes or logs it. The relay's host is the server-set `base`, so it is not on
+  `policy/production_fetch.yaml` (that list is for the https locations a document names). With no relay configured, or an expired or
+  refused pass, every picture says it is not reachable (an empty slot with that reason, never a generated picture).
+- *The brief.* A deck with no brief of its own upstream takes the brief its Production project froze (`briefs`, the newest: insight,
+  proposition, audience, tone, feel, mandatories), mapped onto the Brief Maker fields (`inputs.production_brief`); a part the brief
+  marked Confidential stays a mark, so it never reaches a picture model (the middleware sends those marks too). A brief of the
+  deck's own is never replaced.
+- *Start.* A Production card sits beside Brief and Research, read from `data.upstream` and never stored: the project's title, "N
+  finals brought in" (images that are not mock output) and how many wait as rights to supply. No prices.
+
+**An attached Production file** (kept: the older manual path, for an export zip or a .clan that was not spun off). The person attaches
+a Production .clan or export zip with Attach files (or picks one already attached);
+Start then shows a Production pictures card, and Use for pictures reads the file from the host (`/assets/<name>`) and sends it once
+through the middleware task `attach_production@1` to the engine (`POST /production`, 64 MB at most, checked as the picker reads it,
+kept locally by its sha256). The app records `inputs.production {name, sha256, fetch, look}` with both opt-ins off; every
+`build_deck` passes `{sha256, fetch, look}` and the person's `review` on, and the engine runs with `--production FILE` (plus
+`--production-fetch` / `--production-look` only when turned on, and never for an investor deck). A file the engine no longer holds
+fails the build with `production_missing`: choose it again. The engine keeps a document's newest five Production files, 200 MB
+together at most. A file chosen anew clears `review.production`, and the engine drops a recorded swap whose key is no longer a
+candidate, or that was made against another file. The vision check says what it costs: local Ollama first, else Claude Haiku, which
+sends the pictures to Anthropic and is paid, on every build while it is on. Finals and stated rights apply to it too.
+
 ## Not built
 
-- Running the engine from the app: the Build button saves the inputs and opens the recorded run. The
-  runner (middleware tasks `build_deck`, `approve_gate`, `ask_change` in the template's
-  `app/pipeline.yaml`) needs the server feature.
+- Running the engine from the app: the middleware side exists (`build_deck@1`, middleware-api.md §12, over the
+  engine server `engine/deck/server.py`); the app's Build and Approve do not call it yet (features/deck-maker-server.clan).
+  `ask_change` has no handler.
 - Launching the Research Tool on a Strengthen yes (only the request is recorded).
 - Attaching documents from the app (the display list is written by the host).
 - Acting on a gate's edit or retry request (the app records it; the engine has no gates yet). The engine
   writes none of gates 2 and 3: the territories, `first_pick`, the idea's one-line execution summaries,
   tags and `rests_on`, `territory_name` and the Deck agent's notes come from the state fixtures only.
-- File delivery for `exports` (Open and Download name the file and say where to find it), the animated deck,
-  and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
+- The animated deck, and the engine writing `exports.*.file`, `appendix_ids`, `run.checks` at review or `run.approvals.deck`.
 - Live (paid) model stages from the app: `--live` is a command-line option, run on request only.
 - Live measures for the twelve craft fixes (ADR 0030 to 0032 are proposed), the app reading the Gate 1 payload, and the
   `schema.json` entries for the new slide types.

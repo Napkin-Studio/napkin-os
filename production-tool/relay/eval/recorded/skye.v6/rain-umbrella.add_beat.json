@@ -1,0 +1,34 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "It starts to rain on a grey street. @maya_front opens a bright yellow @umbrella_open and grins up at the sky."
+     },
+     {
+      "type": "direction",
+      "text": "Slow push in; the yellow is the only colour."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3,
+      "text": "Rain drums on the yellow canopy as passers-by hurry past in grey."
+     }
+    ],
+    "note": "I added a beat at 3 s where the rain drums on the canopy and the grey crowd hurries past.",
+    "mode": "revise"
+   }
+  ],
+  "rationale": "The shot lacked a reaction from the world around Maya; a late beat of rain on the canopy and grey passers-by strengthens the yellow-only-colour contrast without changing the existing words."
+ }
+}

@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A muddy @dog_rex bounds through the park and leaps into @maya_front's arms, knocking her hat off."
+     },
+     {
+      "type": "direction",
+      "text": "Wide, then a whip pan to the catch."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 0.5,
+      "text": "The best hellos are a little muddy."
+     }
+    ],
+    "note": "I added one short VO line over the shot and kept your words as they were."
+   }
+  ],
+  "rationale": "Kept the action and direction untouched and added a single VO beat of about six words that fits the shot's short run without naming any reference."
+ }
+}

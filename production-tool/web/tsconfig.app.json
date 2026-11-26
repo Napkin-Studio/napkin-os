@@ -17,8 +17,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": { "@napkin/app/*": ["../../app/src/*"], "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"] }
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/test"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"]
 }

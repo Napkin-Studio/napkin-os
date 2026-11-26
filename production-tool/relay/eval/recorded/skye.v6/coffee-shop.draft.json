@@ -1,0 +1,51 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. COFFEE SHOP - MORNING"
+     },
+     {
+      "type": "action",
+      "text": "Soft light fills @cafe_morning. Steam rises from the espresso machine."
+     },
+     {
+      "type": "action",
+      "text": "The barista slides a cup across the counter."
+     },
+     {
+      "type": "action",
+      "text": "@sai_front lifts it with both hands."
+     },
+     {
+      "type": "action",
+      "text": "He takes the first sip and closes his eyes."
+     },
+     {
+      "type": "action",
+      "text": "His shoulders drop. A slow smile spreads."
+     },
+     {
+      "type": "action",
+      "text": "Outside the window, the street wakes up."
+     },
+     {
+      "type": "action",
+      "text": "He opens his eyes and nods to the barista."
+     }
+    ],
+    "note": "I drafted a short, quiet scene from your line, ending on his first-sip moment.",
+    "mode": "draft"
+   }
+  ],
+  "rationale": "Kept the brief's beat (slide, sip, eyes closed) and added a short reaction and release, all visual, about 14 s by rule 10. Used only the listed refs."
+ }
+}

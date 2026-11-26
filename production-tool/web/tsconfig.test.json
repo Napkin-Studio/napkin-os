@@ -17,7 +17,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": { "@napkin/app/*": ["../../app/src/*"], "react": ["./node_modules/@types/react"], "react/*": ["./node_modules/@types/react/*"] }
   },
-  "include": ["src/**/*.test.ts", "src/test", "src/vite-env.d.ts"]
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "src/vite-env.d.ts"]
 }

@@ -1,0 +1,559 @@
+{
+ "version": 1,
+ "items_version": 4,
+ "decks": {
+  "lumen_off": {
+   "run_dir": "out",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 16,
+   "content": 15,
+   "results": {
+    "g_no_blocker": {
+     "answer": "yes"
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "yes"
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "no",
+     "slides": [
+      "s14",
+      "s15",
+      "s16"
+     ],
+     "measured": 3,
+     "limit": 2
+    },
+    "l_variety": {
+     "answer": "yes"
+    },
+    "l_in_library": {
+     "answer": "yes"
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "no",
+     "slides": [
+      "s07",
+      "s11",
+      "s14",
+      "s15"
+     ],
+     "measured": 11,
+     "limit": 15
+    },
+    "l_slots_clean": {
+     "answer": "no",
+     "slides": [
+      "s05"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "yes"
+    },
+    "w_pitch_length": {
+     "answer": "yes"
+    },
+    "w_takeaway_titles": {
+     "answer": "no",
+     "slides": [
+      "s13"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 15,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 15,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 9,
+     "n": 15
+    },
+    "t_title_one_place": {
+     "answer": "yes"
+    },
+    "t_title_range": {
+     "answer": "yes"
+    },
+    "t_cover_title": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1.22,
+     "limit": 1.4
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Calibri",
+      "Cambria"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "yes"
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.8,
+     "n": 5
+    },
+    "p_only_creative": {
+     "answer": "yes"
+    },
+    "p_all_approved": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 4,
+     "audience": "review"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "yes"
+    },
+    "p_assets_resolve": {
+     "answer": "yes"
+    },
+    "p_rights_ok": {
+     "answer": "yes"
+    },
+    "p_alt_text": {
+     "answer": "yes"
+    },
+    "p_no_stretch": {
+     "answer": "yes"
+    },
+    "p_no_lowres": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 1,
+     "limit": 0
+    },
+    "p_text_on_image": {
+     "answer": "yes"
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 6.7,
+     "stages": {
+      "inputs": 0.0,
+      "a": 0,
+      "b": 0,
+      "c": 0,
+      "d": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.05,
+      "layout_plan": 0.3,
+      "validate": 0.01,
+      "render_pptx": 0.21,
+      "render_web": 0.04,
+      "render_pdf_png": 5.48,
+      "qa_render": 0.54
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "822fd293aaaa"
+    },
+    "w_notes_kept": {
+     "answer": "yes"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 36,
+    "no": 6,
+    "na": 3,
+    "metrics": {
+     "m_share_le_30": 1.0,
+     "m_share_le_60": 1.0,
+     "m_median_words": 9,
+     "m_creative_pictured": 0.8,
+     "p_all_approved": 0.0,
+     "m_usd": 0,
+     "m_seconds": 6.7,
+     "w_words_sha": "822fd293aaaa"
+    }
+   }
+  },
+  "lumen_v3": {
+   "run_dir": "out",
+   "inputs": {
+    "deck": true,
+    "validation": true,
+    "qa": true,
+    "qa_pixels": true,
+    "layouts": true,
+    "report": true,
+    "pptx": true
+   },
+   "presented": 10,
+   "content": 9,
+   "results": {
+    "g_no_blocker": {
+     "answer": "yes"
+    },
+    "g_no_validator_error": {
+     "answer": "yes"
+    },
+    "g_no_qa_error": {
+     "answer": "yes"
+    },
+    "g_no_major": {
+     "answer": "yes"
+    },
+    "g_checks_current": {
+     "answer": "yes"
+    },
+    "q_no_overflow": {
+     "answer": "yes"
+    },
+    "q_no_overlap": {
+     "answer": "yes"
+    },
+    "q_no_off_slide": {
+     "answer": "yes"
+    },
+    "q_margins_kept": {
+     "answer": "yes"
+    },
+    "q_body_floor": {
+     "answer": "yes"
+    },
+    "q_contrast": {
+     "answer": "yes"
+    },
+    "q_no_filler": {
+     "answer": "yes"
+    },
+    "q_not_empty": {
+     "answer": "yes"
+    },
+    "q_not_cornered": {
+     "answer": "yes"
+    },
+    "l_no_fallback_flow": {
+     "answer": "yes"
+    },
+    "l_no_rule_flow": {
+     "answer": "yes"
+    },
+    "l_not_relaxed": {
+     "answer": "yes"
+    },
+    "l_repeat_max2": {
+     "answer": "yes"
+    },
+    "l_variety": {
+     "answer": "yes"
+    },
+    "l_in_library": {
+     "answer": "no",
+     "slides": [
+      "s01",
+      "s02",
+      "s03",
+      "s04",
+      "s05",
+      "s06",
+      "s08",
+      "s09"
+     ],
+     "measured": 8,
+     "limit": 0
+    },
+    "l_one_dominant": {
+     "answer": "yes"
+    },
+    "l_alternatives": {
+     "answer": "no",
+     "slides": [
+      "s03"
+     ],
+     "measured": 8,
+     "limit": 9
+    },
+    "l_slots_clean": {
+     "answer": "yes"
+    },
+    "w_type_budget": {
+     "answer": "yes"
+    },
+    "w_density_met": {
+     "answer": "no",
+     "slides": [
+      "s04",
+      "s09"
+     ],
+     "measured": 35,
+     "limit": 30
+    },
+    "w_pitch_length": {
+     "answer": "yes"
+    },
+    "w_takeaway_titles": {
+     "answer": "yes"
+    },
+    "w_line_length": {
+     "answer": "yes"
+    },
+    "m_share_le_30": {
+     "answer": "value",
+     "value": 0.778,
+     "n": 9,
+     "words": 30
+    },
+    "m_share_le_60": {
+     "answer": "value",
+     "value": 1.0,
+     "n": 9,
+     "words": 60
+    },
+    "m_median_words": {
+     "answer": "value",
+     "value": 24,
+     "n": 9
+    },
+    "t_title_one_place": {
+     "answer": "no",
+     "slides": [
+      "s02",
+      "s04",
+      "s05",
+      "s08"
+     ],
+     "measured": 5.0,
+     "limit": 0.05
+    },
+    "t_title_range": {
+     "answer": "no",
+     "slides": [
+      "s03",
+      "s05",
+      "s06",
+      "s07",
+      "s08"
+     ],
+     "measured": [
+      32.0,
+      54.0
+     ],
+     "limit": [
+      28,
+      44
+     ]
+    },
+    "t_cover_title": {
+     "answer": "no",
+     "slides": [
+      "s01"
+     ],
+     "measured": 0.92,
+     "limit": 1.4
+    },
+    "t_two_families": {
+     "answer": "yes",
+     "measured": [
+      "Archivo",
+      "Source Sans 3"
+     ]
+    },
+    "p_where_asked": {
+     "answer": "yes"
+    },
+    "m_creative_pictured": {
+     "answer": "value",
+     "value": 0.8,
+     "n": 5
+    },
+    "p_only_creative": {
+     "answer": "yes"
+    },
+    "p_all_approved": {
+     "answer": "value",
+     "value": 0.0,
+     "n": 4,
+     "audience": "review"
+    },
+    "p_client_approved": {
+     "answer": "n/a",
+     "reason": "the build is not for the client (deck.meta.audience): p_all_approved shows the share instead"
+    },
+    "p_one_style": {
+     "answer": "yes"
+    },
+    "p_assets_resolve": {
+     "answer": "yes"
+    },
+    "p_rights_ok": {
+     "answer": "yes"
+    },
+    "p_alt_text": {
+     "answer": "yes"
+    },
+    "p_no_stretch": {
+     "answer": "yes"
+    },
+    "p_no_lowres": {
+     "answer": "no",
+     "slides": [
+      "s01",
+      "s05",
+      "s07"
+     ],
+     "measured": 3,
+     "limit": 0
+    },
+    "p_text_on_image": {
+     "answer": "yes"
+    },
+    "m_usd": {
+     "answer": "value",
+     "value": 0
+    },
+    "m_seconds": {
+     "answer": "value",
+     "value": 15.0,
+     "stages": {
+      "inputs": 0.0,
+      "a": 0,
+      "b": 0,
+      "c": 0,
+      "d": 0,
+      "fit": null,
+      "e": null,
+      "red_team": null,
+      "assemble": 0.05,
+      "layout_plan": 1.211,
+      "validate": 0.01,
+      "render_pptx": 0.25,
+      "render_web": 0.06,
+      "render_pdf_png": 7.02,
+      "qa_render": 6.17
+     }
+    },
+    "w_words_sha": {
+     "answer": "value",
+     "value": "53330a0298a4"
+    },
+    "w_notes_kept": {
+     "answer": "yes"
+    },
+    "k_palette_only": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme is absent (the runner writes it)"
+    },
+    "k_logo_cover": {
+     "answer": "n/a",
+     "reason": "deck.meta.theme.logo is absent, has no asset or placement none"
+    }
+   },
+   "summary": {
+    "yes": 35,
+    "no": 7,
+    "na": 3,
+    "metrics": {
+     "m_share_le_30": 0.778,
+     "m_share_le_60": 1.0,
+     "m_median_words": 24,
+     "m_creative_pictured": 0.8,
+     "p_all_approved": 0.0,
+     "m_usd": 0,
+     "m_seconds": 15.0,
+     "w_words_sha": "53330a0298a4"
+    }
+   }
+  }
+ }
+}

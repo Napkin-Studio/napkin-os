@@ -245,7 +245,11 @@ pub fn served_archive(doc: &Document) -> HostResult<Cow<'_, [u8]>> {
     }
 
     for path in tpl.entry_paths()? {
-        if !path.starts_with(ASSETS) || clan.has_entry(&path) {
+        let linked = clan
+            .manifest()
+            .file_by_path(&path)
+            .is_some_and(|f| f.linked);
+        if !path.starts_with(ASSETS) || clan.has_entry(&path) || linked {
             continue;
         }
         entries.push((path.clone(), tpl.read_entry(&path)?));

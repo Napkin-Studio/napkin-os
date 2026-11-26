@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": {\"kind\": \"ambiguity\", \"text\": \"Bigger how?\", \"why\": \"Bigger could mean the camera moves in or the bottle itself is drawn larger.\", \"options\": [{\"id\": \"camera\", \"label\": \"Move the camera in\", \"value\": \"camera\"}, {\"id\": \"local\", \"label\": \"Make the bottle bigger\", \"value\": \"local\"}, {\"id\": \"both\", \"label\": \"Both\", \"value\": \"both\"}], \"allow_text\": true}, \"rationale\": \"\\\"Make the bottle bigger\\\" could mean a closer camera or a larger bottle in the same shot, so I'm asking.\", \"confidence\": 0.5}"
+}

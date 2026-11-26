@@ -222,7 +222,19 @@ impl Session {
         op: impl FnOnce(&Ctx, &Document) -> HostResult<Outcome>,
     ) -> HostResult<Applied> {
         let mut view = self.view.lock().unwrap();
-        let doc = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
+        let open = view.open.as_ref().ok_or_else(HostError::no_file_open)?;
+        // A document made before its app widened its schema is written under the app's newer
+        // schema when that only widens ([`crate::ops::upgrade`], owner decision 2026-11-25):
+        // the op runs on the upgraded archive at the stored version, so the upgrade and the
+        // write land as one change. Best effort: a failed upgrade leaves the copy as it was.
+        let upgraded = match crate::ops::upgrade::upgraded(open) {
+            Ok(d) => d,
+            Err(e) => {
+                crate::log::log(&format!("schema upgrade not made: {}", e.message));
+                None
+            }
+        };
+        let doc = upgraded.as_ref().unwrap_or(open);
         let outcome = op(ctx, doc)?;
         let events = outcome.events();
         let noop = outcome.is_noop();
@@ -289,6 +301,25 @@ impl Session {
     /// ([`view::served_archive`]). The stored document is not touched; see
     /// [`Self::stored_bytes`] for it exactly as stored.
     pub fn raw_bytes(&self) -> HostResult<Vec<u8>> {
+        let store = self.store.clone();
+        self.read(|d| {
+            let served = view::served_archive(d)?;
+            // What leaves the workspace carries its files: a link is turned
+            // back into bytes so the download opens on its own.
+            if !d.clan().manifest().files.iter().any(|f| f.linked) {
+                return Ok(served.into_owned());
+            }
+            let clan = clan_sdk::ClanFile::from_bytes(served.into_owned())?;
+            crate::blobs::materialise(&clan, store.blobs())
+        })
+    }
+
+    /// The packed archive as it is kept, links and all: what a store or the
+    /// workspace it came from holds (a browser saving its working copy, or
+    /// sending it back). Unlike [`Self::raw_bytes`] nothing is materialised,
+    /// so a host with no file store can still keep a document whose files
+    /// are links (UAT round 4 A15: every save of a spun-off project failed).
+    pub fn kept_bytes(&self) -> HostResult<Vec<u8>> {
         self.read(|d| Ok(view::served_archive(d)?.into_owned()))
     }
 
@@ -373,7 +404,8 @@ impl Session {
     /// `GET /assets/<rel>` — serve a binary asset from inside the artifact ZIP.
     pub fn serve_asset(&self, rel: &str) -> HostResult<(String, Vec<u8>)> {
         read::check_asset_path(rel)?;
-        self.read(|d| read::serve_asset(d, rel))
+        let store = self.store.clone();
+        self.read(|d| read::serve_asset(d, rel, store.blobs()))
     }
 
     /// `GET /chain` — the decision chain as JSON (lazy fetch for the view).
@@ -384,14 +416,24 @@ impl Session {
     /// Compose a standalone document from the open `.clan`. Returns
     /// `(html, filename_stem)`.
     pub fn compose_export(&self, provenance: bool, no_brand: bool) -> HostResult<(String, String)> {
-        self.read(|d| read::compose_export(d, provenance, no_brand))
+        let store = self.store.clone();
+        self.read(|d| {
+            if !d.clan().manifest().files.iter().any(|f| f.linked) {
+                return read::compose_export(d, provenance, no_brand);
+            }
+            // The export inlines pictures from the archive: give it one
+            // that holds them.
+            let whole = crate::blobs::materialise(d.clan(), store.blobs())?;
+            let d = Document::from_bytes(d.id().clone(), whole)?;
+            read::compose_export(&d, provenance, no_brand)
+        })
     }
 
     /// Splice each attachment's cached extracted text into `payload`. A no-op
     /// with nothing open.
     pub fn attach_extracted_text(&self, payload: &mut Value) {
         if let Some(d) = self.view.lock().unwrap().open.as_ref() {
-            read::attach_extracted_text(d, payload);
+            read::attach_extracted_text(d, self.store.blobs(), payload);
         }
     }
 
@@ -542,7 +584,10 @@ impl Session {
         body: Vec<u8>,
     ) -> HostResult<Applied> {
         let name = edit::parse_asset_name(name)?;
-        self.perform(ctx, |c, d| edit::upload_asset(c, d, &name, agent, body))
+        let store = self.store.clone();
+        self.perform(ctx, |c, d| {
+            edit::upload_asset(c, d, store.blobs(), &name, agent, body)
+        })
     }
 
     /// Update the open document's title (e.g. to the AI-set brief name).
@@ -567,7 +612,8 @@ impl Session {
     /// Apply the `change` a `napkin.middleware/1` reply carries to the open
     /// document, as `process:middleware` (see [`middleware::apply`]).
     pub fn apply_middleware_as(&self, ctx: &Ctx, reply: &Value) -> HostResult<Applied> {
-        self.perform(ctx, |c, d| middleware::apply(c, d, reply))
+        let store = self.store.clone();
+        self.perform(ctx, |c, d| middleware::apply(c, d, reply, store.blobs()))
     }
 
     /// Settle what the proxy brought back for `request_kind: "middleware"`:
@@ -882,6 +928,115 @@ mod tests {
         assert_eq!(scope.brand.as_deref(), Some("b1"));
         assert!(newest.claimed_agent.is_none());
         assert_eq!(newest.rationale, "");
+    }
+
+    // Contract 3 (features/contract-v3.clan): /patch-data records the
+    // decision's targets and cites, so a decision tree can tell versions apart
+    // without parsing the action's words.
+    #[test]
+    fn patch_data_records_targets_and_cites() {
+        let (_dir, session, id) = open_temp_clan();
+        let doc_id = ClanFile::open(id.as_str())
+            .unwrap()
+            .document_id()
+            .to_string();
+        let body = serde_json::json!({
+            "patch": {"shots": {"shot_A": {"rank": "a1"}}},
+            "agent": "dex",
+            "action": "plan shot 1",
+            "targets": [format!("{doc_id}#shots[shot_A]"), format!("{doc_id}#shots[shot_A].rank")],
+            "cites": [format!("{doc_id}#jobs[job_B]"), "other_doc#findings[f_1]", "d_01K7ABCDEF0123456789"],
+        });
+        session.patch_data(&body.to_string()).unwrap();
+        let chain = ClanFile::open(id.as_str())
+            .unwrap()
+            .read_entry("agent/decision-chain.yaml")
+            .unwrap();
+        let newest = &clan_sdk::DecisionChain::from_yaml(&chain)
+            .unwrap()
+            .decisions[0];
+        assert_eq!(
+            newest.targets,
+            vec![
+                format!("{doc_id}#shots[shot_A]"),
+                format!("{doc_id}#shots[shot_A].rank")
+            ]
+        );
+        assert_eq!(newest.cites.len(), 3);
+        assert_eq!(
+            newest.kind.as_deref(),
+            Some("edit"),
+            "the kind stays edit; the verb is the contract"
+        );
+    }
+
+    // A body without targets and cites records the same decision it always
+    // did: no targets or cites keys appear in the chain.
+    #[test]
+    fn patch_data_without_targets_writes_the_decision_as_before() {
+        let (_dir, session, id) = open_temp_clan();
+        session
+            .patch_data(
+                r#"{"patch":{"tone":"warm"},"agent":"human","action":"set tone","rationale":"r"}"#,
+            )
+            .unwrap();
+        let chain = ClanFile::open(id.as_str())
+            .unwrap()
+            .read_entry_string("agent/decision-chain.yaml")
+            .unwrap();
+        assert!(!chain.contains("targets"), "{chain}");
+        assert!(!chain.contains("cites"), "{chain}");
+        let parsed = clan_sdk::DecisionChain::from_yaml(chain.as_bytes()).unwrap();
+        let newest = &parsed.decisions[0];
+        let mut expected = newest.clone();
+        expected.targets = Vec::new();
+        expected.cites = Vec::new();
+        assert_eq!(
+            serde_yaml::to_string(newest).unwrap(),
+            serde_yaml::to_string(&expected).unwrap()
+        );
+    }
+
+    #[test]
+    fn patch_data_refuses_bad_targets_and_cites() {
+        let (_dir, session, id) = open_temp_clan();
+        let doc_id = ClanFile::open(id.as_str())
+            .unwrap()
+            .document_id()
+            .to_string();
+        let bad = |extra: serde_json::Value| {
+            let mut body =
+                serde_json::json!({"patch": {"tone": "x"}, "agent": "dex", "action": "set"});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            session.patch_data(&body.to_string()).unwrap_err().status
+        };
+        assert_eq!(bad(serde_json::json!({"targets": "not-a-list"})), 400);
+        assert_eq!(bad(serde_json::json!({"targets": [7]})), 400);
+        assert_eq!(bad(serde_json::json!({"targets": ["no-hash"]})), 400);
+        assert_eq!(
+            bad(serde_json::json!({"targets": [format!("{doc_id}#shots[0]")]})),
+            400,
+            "positional"
+        );
+        assert_eq!(
+            bad(serde_json::json!({"targets": [format!("{doc_id}#shots[a.b]")]})),
+            400
+        );
+        assert_eq!(
+            bad(serde_json::json!({"targets": ["another_doc#shots[shot_A]"]})),
+            400,
+            "not this document"
+        );
+        assert_eq!(bad(serde_json::json!({"cites": ["x_123"]})), 400);
+        // Targets with no agent have no decision to sit on.
+        let body =
+            serde_json::json!({"patch": {"tone": "y"}, "targets": [format!("{doc_id}#tone")]});
+        assert_eq!(
+            session.patch_data(&body.to_string()).unwrap_err().status,
+            400
+        );
     }
 
     #[test]

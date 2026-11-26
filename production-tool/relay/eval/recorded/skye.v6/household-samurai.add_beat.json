@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@samurai is the samurai who does all the cleaning work for you. He sweeps the hall in one clean arc and folds the laundry into sharp squares."
+     },
+     {
+      "type": "direction",
+      "text": "Quick cuts, each task one strike."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 4,
+      "text": "@samurai slices a sponge through a stack of dishes, and every plate gleams."
+     }
+    ],
+    "note": "I added one beat where @samurai finishes the dishes in a single stroke."
+   }
+  ],
+  "rationale": "The shot covers sweeping and laundry but not dishes, so I added one timed moment that fits the one-strike-per-task direction and keeps the existing words unchanged."
+ }
+}

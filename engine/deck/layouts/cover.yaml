@@ -1,0 +1,38 @@
+id: cover
+version: 1
+group: functional
+purpose: title
+description: 'Dark cover: the title at display size, the lead and a caption under it.'
+slot_summary: title (display), lead, sub
+for_types:
+- title
+# 98, under cover_image (99 in the v3 library): a ready picture that cannot go full bleed (a portrait key visual) still takes the
+# cover's picture column, never the plain cover (UAT round 4 F27). Without a picture cover_image does not match, so this is the cover.
+priority: 98
+alternatives:
+- cover_image
+density: lean
+pick: rule
+family: cover
+renderer: cover
+slots:
+  title:
+    kind: text
+    role: display
+    required: true
+    min_chars: 3
+    max_lines: 4
+    dominant: true
+  lead:
+    kind: text
+    role: lead
+    from_blocks:
+    - text
+    - statement
+    max_chars: 163
+  sub:
+    kind: text
+    role: small
+    from_blocks:
+    - small
+    max_chars: 163

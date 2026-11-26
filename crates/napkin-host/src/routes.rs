@@ -591,12 +591,22 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
                 session,
                 ctx,
                 |c, d| {
+                    // Owner 2026-11-26, "Update refreshes the parent": a tool's Update on the document it was made
+                    // from (Continue in) takes the parent's newer version, as `/upstream/update` does, not `409 not linked`.
+                    if mode == crate::library::AttachMode::Update
+                        && crate::library::made_from_only(d, &id)
+                    {
+                        return crate::library::update_from_upstream_of(&*store, c, d, Some(&id));
+                    }
                     let (change, reply) = crate::library::attach_change(&*store, c, d, &id, mode)?;
                     Ok(crate::ops::Outcome::changed(reply, change))
                 },
                 |reply| {
-                    let source = id.clone();
-                    with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    // A parent's update is no link: only an attach or a linked update writes a `linked` backref.
+                    if reply.get("verb").is_some() {
+                        let source = id.clone();
+                        with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    }
                 },
             )
         }
@@ -787,7 +797,13 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             // genuinely code (e.g. brief-maker's report builder).
             let v = req.body_json();
             let kind = v.get("kind").and_then(|x| x.as_str()).unwrap_or("html");
-            let kind = if kind == "pdf" { "pdf" } else { "html" };
+            // `json` is a data file the app made (Territories' JSON): saved as it is, never printed.
+            let kind = match kind {
+                "pdf" => "pdf",
+                "pptx" => "pptx",
+                "json" => "json",
+                _ => "html",
+            };
             let filename = v
                 .get("filename")
                 .and_then(|x| x.as_str())
@@ -796,10 +812,41 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
             if html.trim().is_empty() {
                 return HostResponse::error(400, "missing html");
             }
+            // A file the app holds as bytes (a deck's PowerPoint): `html` carries
+            // them in base64. The app frame may not download by itself (its
+            // sandbox has no allow-downloads), so the file goes the way the PDF
+            // goes: stashed here, claimed by the shell, saved by the page.
+            if kind == "pptx" {
+                #[cfg(feature = "native")]
+                {
+                    return match crate::export::write_temp_bytes_b64(html, ".pptx") {
+                        Ok(tmp) => HostResponse::ok_json().with_event(HostEvent::ExportRequest {
+                            kind: kind.to_string(),
+                            filename: filename.to_string(),
+                            tmp_html: tmp,
+                        }),
+                        Err(e) => HostResponse::error(400, &e.message),
+                    };
+                }
+                #[cfg(not(feature = "native"))]
+                {
+                    return HostResponse::json(
+                        200,
+                        &serde_json::json!({
+                            "ok": true, "kind": kind, "filename": filename, "data_b64": html,
+                        }),
+                    );
+                }
+            }
             // Native: stash it and let the shell pick a destination.
             #[cfg(feature = "native")]
             {
-                match write_temp_html(html) {
+                let written = if kind == "json" {
+                    crate::export::write_temp_raw(html, ".json")
+                } else {
+                    write_temp_html(html)
+                };
+                match written {
                     Ok(tmp) => HostResponse::ok_json().with_event(HostEvent::ExportRequest {
                         kind: kind.to_string(),
                         filename: filename.to_string(),

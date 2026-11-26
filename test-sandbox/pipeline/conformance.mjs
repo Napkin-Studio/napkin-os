@@ -10,7 +10,9 @@
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { readdirSync } from 'node:fs'
 
 const args = process.argv.slice(2)
 function argOf(flag, dflt) { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : dflt }
@@ -231,6 +233,54 @@ r = clan(['create', '--title', 'AgentOnly', '--brief', 'b', '--no-render', '--ou
   const keys = Object.keys(e.json || {})
   const need = ['task', 'shared_data', 'decision_history_toon', 'output_schema'].filter(k => !keys.some(x => x.includes(k.split('_')[0])))
   record('T22', 'export-static keys complete', e.json && need.length === 0, e.err || `missing=${need} have=${keys}`)
+}
+
+// ---------- T25 Territories example packs and validates against its schema (territories-contract) ----------
+// The host validates a document against app/templates/territories/schema.json; so does the SDK on patch-data. The finished
+// Linea run and every gate state must be accepted, and tampered shapes (17 lines, an unknown id) refused.
+{
+  const tdir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'app', 'templates', 'territories')
+  const files = [join(tdir, 'example', 'data.json'), ...readdirSync(join(tdir, 'example', 'states')).map(f => join(tdir, 'example', 'states', f))]
+  clan(['create', '--title', 'Territories', '--brief', 'b', '--schema', join(tdir, 'schema.json'), '--output', 'terr.clan'])
+  const bad = []
+  for (const f of files) {
+    const p = clan(['patch-data', 'terr.clan', f, ...ATTR])
+    const v = clan(['validate', 'terr.clan'])
+    if (p.code !== 0 || v.code !== 0) bad.push(`${f.split('/').pop()}: ${p.out.slice(0, 80)}`)
+  }
+  record('T25a', 'Territories example and every gate state validate against schema.json', bad.length === 0, bad.join(' | '))
+  const base = JSON.parse(readFileSync(files[0], 'utf8'))
+  const longList = structuredClone(base); longList.territories[0].world.lines = Array.from({ length: 17 }, (_, i) => `Line ${i}`)
+  const badId = structuredClone(base); badId.territories[1].id = 'T-2'
+  const refused = [longList, badId].map(d => clan(['patch-data', 'terr.clan', tmpJson(d), ...ATTR]).code !== 0)
+  record('T25b', 'Territories: an over-long list and an unknown id are refused', refused.every(Boolean), `refused=${refused}`)
+}
+// ---------- T23 linked file entries (features/spinoff-asset-links) ----------
+{
+  // A link: a file entry with linked: true and a sha256, no archive entry.
+  const py = `
+import sys, zipfile
+src, dst, sha = sys.argv[1], sys.argv[2], sys.argv[3]
+zin = zipfile.ZipFile(src)
+with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
+    for i in zin.infolist():
+        data = zin.read(i.filename)
+        if i.filename == 'manifest.yaml':
+            entry = '- id: human-asset-brief-pdf\\n  path: human/assets/brief.pdf\\n  role: human-asset\\n  type: application/pdf\\n'
+            if sha != '-':
+                entry += '  sha256: ' + sha + '\\n'
+            entry += '  linked: true\\n'
+            data = data.decode().replace('\\nfiles:\\n', '\\nfiles:\\n' + entry, 1).encode()
+        zout.writestr(i.filename, data)
+`
+  const mk = (dst, sha) => spawnSync('python3', ['-I', '-c', py, join(work, 'doc.clan'), join(work, dst), sha], { encoding: 'utf8' })
+  const good = 'sha256:' + 'ab'.repeat(32)
+  const a = mk('linked.clan', good)
+  r = clan(['validate', 'linked.clan'])
+  record('T23a', 'validate accepts a linked file with a sha256 and no entry', a.status === 0 && r.code === 0, a.stderr || r.out)
+  const b = mk('badlink.clan', '-')
+  r = clan(['validate', 'badlink.clan'])
+  record('T23b', 'validate refuses a linked file with no sha256', b.status === 0 && r.code !== 0 && /linked file/.test(r.out), b.stderr || r.out)
 }
 
 // ---------- write results ----------

@@ -13,6 +13,7 @@ from conftest import Harness, base_config, job_request
 from contracts_dir import contracts_dir
 from director import new_id
 from providers.base import CapabilityMissing, Moderated, ProviderError, Status
+from runtime import with_defaults
 
 PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
 FRONT_PRICE = 0.15
@@ -44,7 +45,8 @@ def h():
 
 # ── the chain ───────────────────────────────────────────────────────────────
 def test_the_live_config_routes_every_step_to_runway_alone():
-    cfg = json.loads((contracts_dir() / "examples" / "config.live.json").read_text())
+    # The live config names no routing: the schema's default does (features/config-defaults.clan).
+    cfg = with_defaults(json.loads((contracts_dir() / "examples" / "config.live.json").read_text()))
     assert all(cfg["routing"][op] == ["runway"] for op in PROVIDER_OPS)
 
 

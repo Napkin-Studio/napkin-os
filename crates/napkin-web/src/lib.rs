@@ -10,26 +10,36 @@
 //!     session, one workspace per tenant, events over SSE.
 //!   * `/s/{token}/…` — the app sandbox: the `clan://` table verbatim, reached
 //!     with a capability token instead of a custom URI scheme.
+//!   * `/production/…` — the Production Tool and its relay proxy, when one is
+//!     configured ([`production`]).
 //!
 //! Everything else is the built React app.
 
 pub mod admin;
 pub mod api;
 pub mod auth;
+pub mod blobs;
+pub mod brand_clan;
 pub mod dogfood;
 pub mod error;
 pub mod etag;
 pub mod events;
 pub mod exports;
+pub mod media;
 pub mod meter;
 pub mod people;
+pub mod production;
+pub mod relay_client;
 pub mod sandbox;
+pub mod save;
+pub mod snapshots;
 pub mod state;
 pub mod store;
 pub mod svg_sanitise;
 pub mod tenant;
 pub mod timing;
 pub mod tokens;
+pub mod trash;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -125,30 +135,51 @@ pub fn router_with(
     static_dir: Option<&Path>,
     identity: Arc<tenant::Identity>,
 ) -> Router {
-    Router::new()
+    router_full(ctx, static_dir, identity, None)
+}
+
+/// The service with the Production Tool at `/production` when `production` is
+/// given. It is mounted only with accounts: anonymous mode never reaches a
+/// relay that spends money (`main.rs` refuses that configuration outright).
+pub fn router_full(
+    ctx: Arc<AppCtx>,
+    static_dir: Option<&Path>,
+    identity: Arc<tenant::Identity>,
+    production: Option<Arc<production::Relay>>,
+) -> Router {
+    let production = production.filter(|_| matches!(identity.mode, tenant::Mode::Accounts { .. }));
+    let mut api = api::router()
+        // inside the tenant layer, so it knows the signed-in account
+        .layer(axum::middleware::from_fn_with_state(
+            ctx.clone(),
+            dogfood::capture_api,
+        ))
+        .layer(DefaultBodyLimit::max(UPLOAD_MAX))
+        .layer(axum::middleware::from_fn_with_state(
+            identity.clone(),
+            tenant::layer,
+        ))
+        .layer(axum::Extension(identity.clone()));
+    if let Some(relay) = &production {
+        api = api
+            .layer(axum::Extension(production::Enabled))
+            .layer(axum::Extension(relay.clone()));
+    }
+    // The sandbox signs a read-only assets pass for a deck build (sandbox.rs).
+    let mut sandbox = sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX));
+    if let Some(relay) = &production {
+        sandbox = sandbox.layer(axum::Extension(relay.clone()));
+    }
+    let mut app = Router::new()
         // The shell API is the only part that runs on a cookie session.
-        .nest(
-            "/api",
-            api::router()
-                // inside the tenant layer, so it knows the signed-in account
-                .layer(axum::middleware::from_fn_with_state(
-                    ctx.clone(),
-                    dogfood::capture_api,
-                ))
-                .layer(DefaultBodyLimit::max(UPLOAD_MAX))
-                .layer(axum::middleware::from_fn_with_state(
-                    identity.clone(),
-                    tenant::layer,
-                ))
-                .layer(axum::Extension(identity)),
-        )
+        .nest("/api", api)
         // The sandbox authenticates with its token and nothing else, so the
         // session layer deliberately does not apply to it.
-        .nest(
-            "/s",
-            sandbox::router().layer(DefaultBodyLimit::max(UPLOAD_MAX)),
-        )
-        .merge(shell_service(static_dir))
+        .nest("/s", sandbox);
+    if let Some(relay) = production {
+        app = app.merge(production::router(relay));
+    }
+    app.merge(shell_service(static_dir))
         // one timing line per routed request, by route template (timing.rs)
         .route_layer(axum::middleware::from_fn(timing::layer))
         .layer(compression())

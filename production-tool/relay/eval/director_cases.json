@@ -1,9 +1,18 @@
 {
-  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words.",
+  "about": "The director comparison set (features/director-v5.clan): real requests from our own test projects (handyman, marky; 2026-10-09), each with the checks a good answer passes. must: every group needs one of its phrases in the prompt. forbid: none may appear (card text the words never asked for, a style the user moved away from). roles: the role each named ref must have. only_refs: the refs the job may send. budget: characters the director may add beyond the user's words. frame_edit cases (features/frame-change-edit.clan, since director.v7): image names a still in `frames` (eval/fixtures/frames/, drawn by make_frames.py), sent to Dex as one picture. expect: reading (camera, local, both, or ask), camera (each leaf one of the values listed), changed (leaves that must change), runAs and maskUnused when they matter. clip_patch cases (features/clip-moment-edit.clan, since director.v7): frame names the still at the note's moment that Dex sees; video V1 is the take; expect.route is fix (a job) or ask (the fix/remake nudge). expect_refs (since director.v9, features/runway-video-models.clan): exactly the pictures besides `current` the job sends; frame: whether it sends a firstFrame. Redraw cases (features/frame-edit-or-redraw.clan, since director.v14): input.mode redraw on a shot with no people (no character picture, no cast frame); expect.objects are the main objects, each a group of words, and the redraw scores places (each object named in a sentence with the validator's PLACE_WORDS), who (frameEdit.who names each object and where), no_people (no person in the prompt or who) instead of words_first.",
   "assets": {
     "A2": "sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b",
     "A6": "sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228",
-    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5"
+    "A9": "sha256:9b2d2bce496c66e50bf9668a632c23d64f9fd07c9cae7e2fbd40d2c706c1c0d5",
+    "V1": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "S1": "sha256:d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5",
+    "S2": "sha256:d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6",
+    "S3": "sha256:d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8",
+    "S4": "sha256:d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9",
+    "S5": "sha256:d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+    "B1": "sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
+    "B2": "sha256:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "H1": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
   },
   "cards": {
     "handyman_front": "Full-body figure in dark lacquered Japanese samurai armour with a gold-crested helmet and face mask, standing front-on with feet together. Wears a short-sleeved royal-blue polo shirt with a small round white emblem on the chest. Carries a grey mop and bucket. Photoreal, plain light background.",
@@ -57,10 +66,12 @@
         "image": "A6",
         "shot": {
           "id": "shot_01K6XA6Z0000000000000001",
-          "order": 1,
+          "kind": "shot",
           "duration_s": 2,
-          "composition": "wide",
-          "camera_move": "push_in",
+          "camera": {
+            "size": "wide",
+            "movement": "push_in"
+          },
           "action": "Wide view of a busy family house, @handyman walks in carrying his toolbox, ready for a long day of odd jobs.",
           "refs": [
             "handyman"
@@ -95,6 +106,1658 @@
         "lacquered"
       ],
       "budget": 500
+    },
+    {
+      "id": "fe_overhead_aerial",
+      "why": "Review item 5: the camera must change, not come back as it was",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make this an overhead aerial shot",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "overhead",
+            "aerial"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_low_angle",
+      "why": "An angle change in plain words",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "shoot her from a low angle, looking up at her",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "low_angle"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_close_hands",
+      "why": "A size change named by what it frames",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "go in close on her hands",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "size": [
+            "close",
+            "extreme_close",
+            "insert",
+            "medium_close"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_dutch",
+      "why": "Dutch tilt is an angle, not a tilt move",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "give it a dutch tilt",
+        "image": "F3",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "dutch"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_wide_establishing",
+      "why": "A wider size from establishing words",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make it a wide establishing shot of the beach",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "size": [
+            "wide",
+            "extreme_wide"
+          ]
+        },
+        "runAs": "frame"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_scarf_red",
+      "why": "A colour change is local: the camera stays",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make her scarf red",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_remove_bottle",
+      "why": "Removing an object is local",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "remove the bottle from the table",
+        "image": "F2",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV02",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle of Lumen water on the kitchen table, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_add_rain",
+      "why": "Weather added to the frame is local",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "add rain",
+        "image": "F3",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "local",
+        "runAs": "frame"
+      },
+      "budget": 250
+    },
+    {
+      "id": "fe_bigger",
+      "why": "Bigger could be the camera or the bottle: ask, recommend nothing",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make the bottle bigger",
+        "image": "F2",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV02",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle of Lumen water on the kitchen table, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "ask"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_push_in",
+      "why": "A camera move only: nothing to draw",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "push in slowly",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "movement": [
+            "push_in"
+          ],
+          "movement_speed": [
+            "slow"
+          ]
+        },
+        "runAs": "none"
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_overhead_masked",
+      "why": "Laurence's step 4: a camera change with a marked area redraws the whole frame",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v7",
+      "input": {
+        "text": "make this an overhead aerial shot",
+        "image": "F1",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV01",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ],
+        "region": {
+          "x": 0.38,
+          "y": 0.3,
+          "w": 0.24,
+          "h": 0.4
+        },
+        "mask": "A6"
+      },
+      "expect": {
+        "reading": "camera",
+        "camera": {
+          "angle": [
+            "overhead",
+            "aerial"
+          ]
+        },
+        "runAs": "frame",
+        "maskUnused": true
+      },
+      "budget": 500
+    },
+    {
+      "id": "fe_redraw_product_insert",
+      "why": "features/frame-edit-or-redraw.clan (owner 2026-11-18, director.v14): a redraw of a shot with no people, a product insert, was refused for want of a person to place. With no character picture and no cast frame, Dex places each main object in the shot's framing, says what is where in frameEdit.who and brings no people in.",
+      "op": "frame_edit",
+      "provider": "runway",
+      "since": "director.v14",
+      "input": {
+        "text": "make the bottle a tall frosted-glass Lumen bottle and add a bowl of lemons",
+        "image": "F2",
+        "mode": "redraw",
+        "aspect": {
+          "w": 1344,
+          "h": 756
+        },
+        "shot": {
+          "id": "shot_01K7F00000000000000000EV03",
+          "kind": "shot",
+          "duration_s": 2,
+          "camera": {
+            "size": "insert",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "Insert: a green bottle of Lumen water on the kitchen table beside a white plate, morning light.",
+          "refs": []
+        },
+        "refs": []
+      },
+      "expect": {
+        "reading": "redraw",
+        "runAs": "frame",
+        "objects": [
+          [
+            "bottle"
+          ],
+          [
+            "lemon"
+          ]
+        ]
+      },
+      "budget": 750
+    },
+    {
+      "id": "cp_scarf_blows",
+      "why": "One thing in the moment changes: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F1",
+      "input": {
+        "text": "her scarf should blow away here",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP01",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_bottle_tips",
+      "why": "An object's action at the moment: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F2",
+      "input": {
+        "text": "the bottle tips over at this point",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP02",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "A green bottle stands on the kitchen table beside a plate.",
+          "refs": []
+        }
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_windows_light",
+      "why": "A detail in the moment changes: fix",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "the windows should light up just here",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_wide_shot",
+      "why": "The camera for the whole clip: ask",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F1",
+      "input": {
+        "text": "this whole shot should be a wide shot",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP01",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "medium",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front stands on the beach at sunset, her blue scarf lifting in the wind.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "ask"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_night",
+      "why": "The look of the whole clip: ask",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "redo the whole clip at night",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ]
+      },
+      "expect": {
+        "route": "ask"
+      },
+      "budget": 250
+    },
+    {
+      "id": "cp_night_fix",
+      "why": "Answered fix: make the job, never ask again",
+      "op": "clip_patch",
+      "provider": "runway",
+      "since": "director.v7",
+      "frame": "F3",
+      "input": {
+        "text": "redo the whole clip at night",
+        "video": "V1",
+        "window": {
+          "from_s": 1,
+          "to_s": 3
+        },
+        "atS": 2,
+        "shot": {
+          "id": "shot_01K7F00000000000000000CP03",
+          "kind": "shot",
+          "duration_s": 4,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "static"
+          },
+          "action": "@maya_front walks home along a city street at dusk.",
+          "refs": [
+            "maya_front"
+          ]
+        },
+        "refs": [
+          {
+            "id": "ref_01K6XA6Z0000000000000000A2",
+            "name": "maya_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "A2"
+          }
+        ],
+        "answer": {
+          "contractVersion": "3",
+          "questionId": "q_00000000000000000000000000",
+          "optionId": "fix"
+        }
+      },
+      "expect": {
+        "route": "fix"
+      },
+      "budget": 250
+    },
+    {
+      "id": "frame_samurai_keeps_refs",
+      "why": "The owner's case (2026-10-15): the shot's words say @samurai, a key with four views, so all four go (front first); the hall picture is in scope but not named, so it may go only with a reason in `added`. Never a view in place of @samurai, never one left out.",
+      "since": "director.v8",
+      "op": "frame",
+      "provider": "runway",
+      "input": {
+        "shot": {
+          "id": "shot_01M4YN0JD6N52M064C63XEW1Z4",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "wide",
+            "angle": "eye_level",
+            "movement": "track",
+            "movement_speed": "normal"
+          },
+          "action": "@samurai sweeps the hall in one clean arc. Dust lifts and vanishes out the door.",
+          "refs": [
+            "samurai"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M4YC0JWN000000000000001V",
+            "name": "samurai_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S1"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000002V",
+            "name": "samurai_three-quarter",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S2"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000003V",
+            "name": "samurai_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S3"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000004V",
+            "name": "samurai_back",
+            "role": "character",
+            "kind": "generated",
+            "asset": "S4"
+          },
+          {
+            "id": "ref_01M4YC0JWN000000000000005V",
+            "name": "hall_wide",
+            "role": "location",
+            "kind": "generated",
+            "asset": "S5",
+            "optional": true
+          }
+        ]
+      },
+      "must": [
+        [
+          "sweep"
+        ]
+      ],
+      "forbid": [
+        "armour",
+        "katana"
+      ],
+      "required": [
+        "samurai_front",
+        "samura_three_qua",
+        "samurai_side",
+        "samurai_back"
+      ],
+      "budget": 500
+    },
+    {
+      "id": "clip_hailuo_refs_no_frame",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "hailuo3",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). A clip straight from the script on Hailuo 3 sends the baby's pictures as references and names her by tag; no frame.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal"
+        ],
+        [
+          "kitchen"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": false,
+      "budget": 500
+    },
+    {
+      "id": "clip_omni_refs_no_frame",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "gemini_omni_flash_1.1",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). The same on Omni Flash 1.1 (up to 5 references).",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": false,
+      "budget": 500
+    },
+    {
+      "id": "clip_kling_o3_frame_refs",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "model": "klingO3_standard",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Kling O3 takes the storyboard frame and the character's pictures together: the frame for composition, the refs for identity.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "image": "A6",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "cereal",
+          "grab"
+        ]
+      ],
+      "forbid": [
+        "pyjamas",
+        "pajamas",
+        "floral"
+      ],
+      "required": [
+        "baby_front",
+        "baby_side"
+      ],
+      "expect_refs": [
+        "baby_front",
+        "baby_side"
+      ],
+      "frame": true,
+      "budget": 500
+    },
+    {
+      "id": "clip_veo_no_frame_words",
+      "since": "director.v9",
+      "op": "clip",
+      "provider": "runway",
+      "why": "features/runway-video-models.clan; the owner's @on ad came out a generic person, 2026-11. Veo cannot carry a character without a first frame, and naming it in words alone loses it: the director blocks (a storyboard frame is made first) rather than send a character-less clip, and the passthrough refuses.",
+      "input": {
+        "shot": {
+          "id": "shot_01M5BABY000000000000000001",
+          "kind": "shot",
+          "duration_s": 5,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "In a sunlit kitchen, @baby sits in a high chair and grabs a handful of cereal from the tray, then smiles.",
+          "refs": [
+            "baby"
+          ]
+        },
+        "ratio": "16:9",
+        "refs": [
+          {
+            "id": "ref_01M5BABY0000000000000001VW",
+            "name": "baby_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M5BABY0000000000000002VW",
+            "name": "baby_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "expect_refuse": true,
+      "budget": 500
+    },
+    {
+      "id": "clip_edit_kling_adds_hat",
+      "since": "director.v9",
+      "op": "clip_edit",
+      "provider": "runway",
+      "model": "klingO3_standard",
+      "why": "features/runway-video-models.clan (owner 2026-10-15: the baby never reached the video). Editing something into a clip from a picture: Kling O3 takes the clip and the hat's picture.",
+      "input": {
+        "video": "V1",
+        "text": "put the hat from @hat_front on the baby's head",
+        "refs": [
+          {
+            "id": "ref_01M5HAT00000000000000001VW",
+            "name": "hat_front",
+            "role": "prop",
+            "kind": "generated",
+            "asset": "H1"
+          }
+        ]
+      },
+      "must": [
+        [
+          "hat"
+        ]
+      ],
+      "forbid": [],
+      "expect_refs": [
+        "hat_front"
+      ],
+      "budget": 250
+    },
+    {
+      "id": "shot_list_free_prose",
+      "since": "director.v9",
+      "op": "shot_list",
+      "why": "features/script-freeform.clan (owner 2026-11-16): a script is written freely, as prose and bullets with no scene heading or screenplay element, and Plan shots reads the words as they are. Dex plans shots from the prose in its order, keeps the words, invents no scene heading and asks nothing.",
+      "input": {
+        "script": "A woman in a red raincoat finds a lost puppy in the rain. 30 seconds, one street, dusk. No dialogue, one line at the end.\nShe steps off a green tram into heavy rain and opens a small yellow umbrella.\n- walks past a bakery window, warm light, glances in at the bread\n- a whimper under the bridge railing: a soaked puppy, shivering\n- she kneels and holds the umbrella over it, not over herself\nShe carries the puppy across the old stone bridge as the rain stops and the sky turns gold.\nEnd line: Someone's always looking out for you.",
+        "targetS": 30
+      },
+      "expect": {
+        "shots": [
+          4,
+          12
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "bakery"
+        ],
+        [
+          "whimper",
+          "soaked"
+        ],
+        [
+          "kneels"
+        ],
+        [
+          "gold"
+        ],
+        [
+          "looking out for you"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ]
+    },
+    {
+      "id": "take_refs_frames_follow_images",
+      "since": "director.v11",
+      "op": "clip",
+      "provider": "runway",
+      "model": "wan3",
+      "why": "features/join-or-cut-shots.clan (owner 2026-11-16): a joined run is one generation with no frame pinned; every shot's storyboard frame goes as a guide, in shot order, beside the character's pictures (paid test P1 followed every frame). Each shot's line says which image it follows.",
+      "input": {
+        "mode": "take_refs",
+        "ratio": "16:9",
+        "shot": {
+          "id": "shot_01M7JC00000000000000000001",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "@mira steps off a green tram into the rain.",
+          "refs": [
+            "mira"
+          ]
+        },
+        "shots": [
+          {
+            "id": "shot_01M7JC00000000000000000001",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira steps off a green tram into the rain.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000002",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira opens a small yellow umbrella and smiles up at the sky.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000003",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira walks past a glowing bakery window, glancing in at the bread.",
+            "refs": [
+              "mira"
+            ]
+          }
+        ],
+        "cuts": [
+          {
+            "atS": 0,
+            "text": "@mira steps off a green tram into the rain."
+          },
+          {
+            "atS": 3,
+            "text": "@mira opens a small yellow umbrella and smiles up at the sky."
+          },
+          {
+            "atS": 6,
+            "text": "@mira walks past a glowing bakery window, glancing in at the bread."
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_01M7JC00000000000000000MF1",
+            "name": "mira_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M7JC00000000000000000MS2",
+            "name": "mira_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000001",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 1 frame",
+            "asset": "A2"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000002",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 2 frame",
+            "asset": "A6"
+          },
+          {
+            "id": "frame_01M7JC00000000000000000003",
+            "role": "composition",
+            "kind": "generated",
+            "label": "Shot 3 frame",
+            "asset": "A9"
+          }
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "umbrella"
+        ],
+        [
+          "bakery"
+        ]
+      ],
+      "forbid": [
+        "swatch",
+        "colour chart"
+      ],
+      "expect_refs": [
+        "mira_front",
+        "mira_side",
+        "in_1",
+        "in_2",
+        "in_3"
+      ],
+      "frame": false,
+      "ties": true,
+      "budget": 700
+    },
+    {
+      "id": "take_refs_words_follow_no_image",
+      "since": "director.v11",
+      "op": "clip",
+      "provider": "runway",
+      "model": "wan3",
+      "why": "features/join-or-cut-shots.clan: text-only shots planned straight from a script, joined: one generation from the words and the character's pictures; with no frames, no line says it follows an image.",
+      "input": {
+        "mode": "take_refs",
+        "ratio": "16:9",
+        "shot": {
+          "id": "shot_01M7JC00000000000000000001",
+          "kind": "shot",
+          "duration_s": 3,
+          "camera": {
+            "size": "medium",
+            "movement": "static"
+          },
+          "action": "@mira steps off a green tram into the rain.",
+          "refs": [
+            "mira"
+          ]
+        },
+        "shots": [
+          {
+            "id": "shot_01M7JC00000000000000000001",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira steps off a green tram into the rain.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000002",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira opens a small yellow umbrella and smiles up at the sky.",
+            "refs": [
+              "mira"
+            ]
+          },
+          {
+            "id": "shot_01M7JC00000000000000000003",
+            "kind": "shot",
+            "duration_s": 3,
+            "camera": {
+              "size": "medium",
+              "movement": "static"
+            },
+            "action": "@mira walks past a glowing bakery window, glancing in at the bread.",
+            "refs": [
+              "mira"
+            ]
+          }
+        ],
+        "cuts": [
+          {
+            "atS": 0,
+            "text": "@mira steps off a green tram into the rain."
+          },
+          {
+            "atS": 3,
+            "text": "@mira opens a small yellow umbrella and smiles up at the sky."
+          },
+          {
+            "atS": 6,
+            "text": "@mira walks past a glowing bakery window, glancing in at the bread."
+          }
+        ],
+        "refs": [
+          {
+            "id": "ref_01M7JC00000000000000000MF1",
+            "name": "mira_front",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B1"
+          },
+          {
+            "id": "ref_01M7JC00000000000000000MS2",
+            "name": "mira_side",
+            "role": "character",
+            "kind": "generated",
+            "asset": "B2"
+          }
+        ]
+      },
+      "must": [
+        [
+          "tram"
+        ],
+        [
+          "umbrella"
+        ],
+        [
+          "bakery"
+        ]
+      ],
+      "forbid": [
+        "follows image"
+      ],
+      "expect_refs": [
+        "mira_front",
+        "mira_side"
+      ],
+      "frame": false,
+      "ties": true,
+      "budget": 500
+    },
+    {
+      "id": "brief_quiet_morning",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen: a quiet start",
+          "spine": {
+            "proposition": "Lumen is what the day starts with.",
+            "audience": "Adults 55 to 70 who like a slow, settled morning at home.",
+            "tone": "Quiet, warm, unhurried; soft morning light",
+            "feel": "Calm and settled",
+            "mandatories": [
+              "Lumen name first"
+            ],
+            "donts": [
+              "Don't use fast cuts or loud music"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "max_shots": 4,
+        "min_avg_s": 3.5,
+        "speed": [
+          "slow"
+        ],
+        "no_speed": [
+          "fast"
+        ],
+        "words": [
+          [
+            "calm",
+            "soft",
+            "slow",
+            "quiet",
+            "gentle",
+            "warm"
+          ]
+        ],
+        "forbid": [
+          "fast cut",
+          "loud"
+        ]
+      }
+    },
+    {
+      "id": "brief_brisk_gen_z",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen: hit the ground running",
+          "spine": {
+            "proposition": "Lumen is what the day starts with.",
+            "audience": "Students 18 to 24 rushing out of a shared flat.",
+            "tone": "Brisk, playful, high energy; quick cuts",
+            "feel": "Awake and ready to go",
+            "mandatories": [
+              "Lumen name first"
+            ],
+            "donts": [
+              "Never show the bottle being wasted or spilled"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "min_shots": 5,
+        "max_avg_s": 3.0,
+        "speed": [
+          "fast",
+          "normal"
+        ],
+        "no_speed": [],
+        "words": [
+          [
+            "quick",
+            "rush",
+            "grab",
+            "dash",
+            "energ",
+            "hurr",
+            "fast"
+          ]
+        ],
+        "forbid": [
+          "spills the bottle",
+          "bottle spills",
+          "water spills",
+          "spilled water",
+          "wasted",
+          "pours it away",
+          "pours away"
+        ]
+      }
+    },
+    {
+      "id": "brief_premium_ritual",
+      "since": "director.v13",
+      "op": "shot_list",
+      "why": "features/brief-node.clan (owner 2026-11-17): the same one-line script planned under three linked briefs. The plan follows each brief's tone and audience where the script leaves them open (the pace, the shot sizes, the camera), keeps its mandatories, breaks no don't, never puts the brief's words on screen and flags nothing it does not break.",
+      "input": {
+        "script": "A woman opens her fridge in the morning and takes out a bottle of Lumen water.",
+        "targetS": 15,
+        "brief": {
+          "title": "Lumen Reserve: the morning ritual",
+          "spine": {
+            "proposition": "Lumen Reserve makes the first glass a ritual.",
+            "audience": "Design-minded professionals 30 to 45.",
+            "tone": "Premium, minimal, precise; clean lines and cool light",
+            "feel": "Refined",
+            "mandatories": [
+              "Lumen name first",
+              "A close-up of the glass bottle"
+            ],
+            "donts": [
+              "No price, discount or offer on screen"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "shots": [
+          2,
+          8
+        ]
+      },
+      "must": [
+        [
+          "fridge"
+        ],
+        [
+          "lumen"
+        ]
+      ],
+      "forbid": [
+        "int.",
+        "ext."
+      ],
+      "expect_brief": {
+        "insert": true,
+        "speed": [
+          "slow",
+          "normal"
+        ],
+        "no_speed": [
+          "fast"
+        ],
+        "words": [
+          [
+            "close",
+            "detail",
+            "glass",
+            "macro"
+          ]
+        ],
+        "forbid": [
+          "price",
+          "discount",
+          "offer",
+          "%"
+        ]
+      }
     }
-  ]
+  ],
+  "frames": {
+    "F1": "beach_medium.png",
+    "F2": "kitchen_bottle.png",
+    "F3": "street_wide.png"
+  }
 }

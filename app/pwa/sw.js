@@ -5,11 +5,11 @@
 // The service worker: the shell, the WebAssembly host and the published
 // templates, kept so the app opens with no network.
 //
-// The build fills in the two placeholders (vite.config.ts). Four rules:
+// The build fills in the three placeholders (vite.config.ts). Four rules:
 //
-//  * The server's routes are never touched. `/api/*` is client work, and the
-//    server is authoritative for it (N3); `/s/*` is an app frame's capability
-//    URL. Neither is answered from, or written to, a cache.
+//  * The server's routes are never touched: `/api/*`, `/s/*` and the
+//    Production Tool's `/production/*` (pwa/routes.js). None is answered from,
+//    or written to, a cache.
 //  * The shell is precached whole and served from the cache. A new build is a
 //    new cache, installed beside the old one and swapped in when the page says
 //    so — never half of one build's files and half of another's.
@@ -28,24 +28,13 @@ const FONTS = 'napkin-fonts'
 const SCOPE = new URL('./', self.location.href)
 const INDEX = new URL('index.html', SCOPE).href
 
-/** Paths the server owns, whatever base the shell is served under. */
-function serverOwned(url) {
-  if (url.origin !== SCOPE.origin) return false
-  const p = url.pathname
-  return ['api/', 's/'].some(r => p.startsWith(`/${r}`) || p.startsWith(SCOPE.pathname + r))
-}
+// serverOwned(url, scope) and shellRoute(url, scope): pwa/routes.js, inlined by the build.
+__NAPKIN_ROUTES__
 
 /** Published separately from the shell: apps.json and apps/*.clan. */
 function published(url) {
   return url.origin === SCOPE.origin && url.pathname.startsWith(SCOPE.pathname)
     && /^(apps\.json|apps\/[^/]+\.clan)$/.test(url.pathname.slice(SCOPE.pathname.length))
-}
-
-/** A navigation the shell answers: a route, not a file. */
-function shellRoute(url) {
-  if (url.origin !== SCOPE.origin || !url.pathname.startsWith(SCOPE.pathname)) return false
-  const last = url.pathname.split('/').pop() ?? ''
-  return !last.includes('.') || last === 'index.html'
 }
 
 self.addEventListener('install', event => {
@@ -117,7 +106,7 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') return
   const url = new URL(request.url)
 
-  if (serverOwned(url)) return
+  if (serverOwned(url, SCOPE)) return
 
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     event.respondWith(staleWhileRevalidate(request))
@@ -125,7 +114,7 @@ self.addEventListener('fetch', event => {
   }
   if (url.origin !== SCOPE.origin) return
 
-  if (request.mode === 'navigate' && shellRoute(url)) {
+  if (request.mode === 'navigate' && shellRoute(url, SCOPE)) {
     event.respondWith(caches.open(SHELL).then(c => c.match(INDEX)).then(r => r ?? fetch(request)))
     return
   }

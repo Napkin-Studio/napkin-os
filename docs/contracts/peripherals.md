@@ -480,7 +480,7 @@ accepted and trimmed (as `ResearchPort` does today).
 |---|---|
 | `query` | required, 1–500 characters after whitespace is collapsed. A research **question**: brand, comparator and category names, the lens's question. Never material text — the middleware does not send the client's words to a web search |
 | `lens` | required, one of the eight lenses (`campaign-clan.md` §7) |
-| `market` | required, ISO 3166-1 alpha-2; uppercased by the service; `UK` is refused (the UK is `GB`) |
+| `market` | required, ISO 3166-1 alpha-2; uppercased by the service; `UK` is refused (the UK is `GB`). Required, but `""` is accepted for an open look-up that names no market (a Territories look-up on a brief that has none): the service then searches on the question alone |
 | `entity` | optional, `^(brand\|org\|category)/[a-z0-9][a-z0-9._-]*$` — steers the search only |
 | `category` | optional, a leaf code `<vertical>.<leaf>` — steers the search only |
 | `max_sources` | optional, 1–20; the service default is 8. **The middleware always sends it** (today 6), so no behaviour depends on a default |
@@ -963,7 +963,7 @@ One process fakes every peripheral. It replaced `mock-llm/` and
 - Binds `MOCK_BACKEND_HOST` (default `127.0.0.1`) : `MOCK_BACKEND_PORT`
   (default **8797**). Ports in use elsewhere, never to be taken: 8080, 8090,
   8787 (engine agent server / mock-agent), 8788, 8790 (mock-middleware),
-  8791, 8792, 8795 (the middleware), 8796.
+  8791, 8792, 8793 (the deck engine server), 8795 (the middleware), 8796.
 - Needs `claude` on `PATH`, signed in; it refuses to start without the binary
   when any Claude-backed peripheral is enabled.
 - `MOCK_FAKES` (default `model,research,retrieval,layers`) chooses the families
@@ -975,7 +975,9 @@ One process fakes every peripheral. It replaced `mock-llm/` and
 
 | Family | Route | Answered by |
 |---|---|---|
-| model | `POST /v1/messages` | `claude -p`, Anthropic shape (§1.3) |
+| model | `POST /v1/messages` | `claude -p`, Anthropic shape (§1.3); `stream: true` answers SSE (§5.3); `?beta=true` is the same route |
+| model | `POST /anthropic/v1/messages` | the same, at Bedrock mantle's path (§1.3a) |
+| model | `POST /model/{modelId}/invoke` | `claude -p`, Bedrock InvokeModel with an Anthropic body (§1.3a, §5.3) |
 | model | `POST /v1/chat/completions` | `claude -p`, OpenAI shape (§1.4) |
 | model | `GET /v1/models` | the id map; Anthropic list shape when the request has `anthropic-version`, OpenAI list shape otherwise |
 | research | `POST /v1/research` | `claude -p` + WebSearch, WebFetch (§2; the retired `mock-research`'s behaviour) |
@@ -993,24 +995,43 @@ One process fakes every peripheral. It replaced `mock-llm/` and
   WebFetch --allowedTools WebSearch WebFetch --permission-mode dontAsk`).
 - The prompt goes on **stdin**, the system prompt through a pipe fd
   (`--system-prompt-file /dev/fd/N`) — neither on argv, neither on disk.
-  `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` are removed from the child's
-  environment so the CLI never calls back into the mock.
+  `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_BEDROCK_BASE_URL`, `ANTHROPIC_BEDROCK_MANTLE_BASE_URL` and
+  `AWS_ENDPOINT_URL_BEDROCK_RUNTIME` are removed from the child's environment, so the CLI never
+  calls back into the mock and never bills the dummy key a shell pointed at it carries (§5.7).
 - **Model family translation** (both shapes): system → the system fd; one user
   turn verbatim; a multi-turn history (the port's retry turn) as a
   `<user>…</user>` / `<assistant>…</assistant>` transcript; structured output
-  via `--json-schema`, the envelope's `structured_output` serialised as the
-  reply text; usage from the CLI envelope, never estimated (as `mock-llm`
+  via `--json-schema` (without `$schema`/`$id`; a schema that is not a plain object at the top
+  goes wrapped as `{"answer": …}` and is unwrapped), the envelope's `structured_output`
+  serialised as the reply text; usage from the CLI envelope, never estimated (as `mock-llm`
   did); `stop_reason: end_turn` / `finish_reason: stop`. Images: sent to
   the CLI as image content blocks through `--input-format stream-json`. If the
   installed CLI cannot take them, the mock answers `400` "image input is not
   supported by this stand-in" in the wire's shape rather than dropping the
   image — verifying this is the mock builder's first task (§9, O6).
+- **Model ids**: the §1.5 map, and on every wire a Bedrock id resolves to its Anthropic id's
+  alias (an optional `eu.`/`us.`/`global.`/`apac.`… profile prefix, `anthropic.`, the id with or
+  without its date, an optional `-v1`/`-v1:0`). Anything else is a `404` in the wire's shape.
+- **Streaming** (Anthropic wire, `stream: true`): the Messages API's SSE sequence
+  (`message_start`, `content_block_start`, `ping`, `content_block_delta` `text_delta`,
+  `content_block_stop`, `message_delta` with `stop_reason` and `usage`, `message_stop`). The CLI
+  answers whole, so the text is one delta once the run is done; a refusal or CLI failure is a
+  JSON error before any event. The OpenAI wire still refuses `stream: true`.
+- **Bedrock InvokeModel** (`POST /model/{modelId}/invoke`): the Messages body without `model`
+  or `stream`, `anthropic_version: bedrock-2023-05-31` required, `anthropic_beta` ignored; the
+  answer is the Anthropic message body. Any SigV4 signature or bearer token passes unchecked
+  (with `MOCK_TOKEN`, the bearer must be it). Errors in Bedrock's shape: `{"message"}` and
+  `x-amzn-ErrorType` (400 `ValidationException`, 403 `AccessDeniedException`, 404
+  `ResourceNotFoundException`, 408 `ModelTimeoutException`, 429 `ThrottlingException`, 503
+  `ServiceUnavailableException`, 500 `InternalServerException`).
+  `invoke-with-response-stream` is a `400`; Converse is a `404`.
 - **Accepted and ignored** (no CLI flag exists): Anthropic `temperature top_p
-  top_k stop_sequences metadata thinking service_tier cache_control`; OpenAI
-  `temperature top_p seed user chat_template_kwargs nvext`.
+  top_k stop_sequences metadata thinking service_tier cache_control betas fallbacks`; Bedrock
+  `anthropic_beta`; OpenAI `temperature top_p seed user chat_template_kwargs nvext`.
 - **Refused with the real API's error shape**, because dropping them silently
   would pass in development and fail in production: `tools`, `tool_choice`,
-  `functions`, tool-use/tool-result blocks, `mcp_servers`; `stream: true`;
+  `functions`, tool-use/tool-result blocks, `mcp_servers`; `stream: true` on the OpenAI wire;
   an assistant-last prefill; `document`, `audio` or other non-text, non-image
   content; OpenAI `n > 1`, `logprobs`, `response_format` types other than
   `json_schema`; unknown top-level fields (Anthropic shape). All `400`
@@ -1067,8 +1088,36 @@ A family not served is absent from `fakes`.
 - Carries logic that belongs to the middleware: no tiering, confidence, merge,
   reasoning, judging, quote checks beyond its own honesty checks (research
   URLs, retrieval quotes verbatim in the pack file).
-- Pretends: no fake streaming, no fake tool use, no estimated usage, no
-  default model, no empty 200 on a failure.
+- Pretends: no fake tool use, no estimated usage, no default model, no empty
+  200 on a failure. Streaming is the API's framing around a whole answer (§5.3), never a
+  stream that hides a failure: errors come before the first event.
+
+### 5.7 One local model backend for every service
+
+The model family is the one way every service runs Claude locally, on the developer's own
+Claude Code login (features/model-mock.clan, 2026-10-15). Each service reaches it by URL through
+the client code it already runs in production; none keeps a `claude -p` wrapper for plain
+prompts (the relay's `claude-cli` wire, the engine's `BRIEF_CLAUDE_TRANSPORT=cli|auto` and
+mock-agent's plain-draft call were removed).
+
+- `scripts/model-local` starts this process on `127.0.0.1:8797` unless it is up
+  (`MODEL_LOCAL_PORT` for another port), checks `claude` is on `PATH`, and prints or applies the
+  environment: `scripts/model-local run <cmd>`, `source scripts/model-local-env.sh` (bash/zsh)
+  or `scripts/model-local-env.fish`, `scripts/model-local env [--fish|--json] [--bedrock]`.
+- The environment: `NAPKIN_MODEL_API=anthropic`, `NAPKIN_MODEL_BASE_URL`,
+  `NAPKIN_MODEL_API_KEY=local` (middleware and relay); `ANTHROPIC_BASE_URL`,
+  `ANTHROPIC_API_KEY=local` (the Anthropic SDK: engine, mock-agent); `ANTHROPIC_BEDROCK_BASE_URL`
+  and `AWS_ENDPOINT_URL_BEDROCK_RUNTIME` (Bedrock clients). `--bedrock` switches
+  `NAPKIN_MODEL_API=bedrock` and adds `NAPKIN_MODEL_REGION`; the key is then a bearer token, or,
+  with it unset and any `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, SigV4 is exercised.
+- The model port (§1) refuses a loopback base URL when `AWS_LAMBDA_FUNCTION_NAME` or
+  `ECS_CONTAINER_METADATA_URI(_V4)` is set, so the setting cannot reach a deployment.
+- Runs that use tools stay Claude Code runs and never go through this port: the engine's
+  WebSearch research (`RESEARCH_WEB=claude`), mock-agent's agentic retrieval, and this
+  process's research and retrieval families.
+- `server/tests/test_model_local.py` drives the production clients (build_wire's anthropic and
+  Bedrock wires, the SDK's streaming client, mock-agent's draft call) against this process with
+  a fake `claude`.
 
 ---
 

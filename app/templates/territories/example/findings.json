@@ -1,0 +1,62 @@
+{
+ "findings": [
+  {
+   "id": "fi_NOTALK003",
+   "statement": "Families describe the drive as the part where nobody talks. The default driver quietly resents the role.",
+   "cites": [
+    "f_DRIVER0431",
+    "f_TIRED0418"
+   ],
+   "method": "synthesis",
+   "status": "proposed",
+   "derived_by": "synthesis@1",
+   "confidence": "medium",
+   "derived_at": "2026-11-12T12:00:00Z",
+   "decision": "d_FIND0001"
+  },
+  {
+   "id": "fi_RIVALS005",
+   "statement": "Rivals' ads show the destination, never the journey.",
+   "cites": [
+    "f_ROUTE0412"
+   ],
+   "method": "synthesis",
+   "status": "verified",
+   "derived_by": "synthesis@1",
+   "confidence": "medium",
+   "derived_at": "2026-11-12T12:00:00Z",
+   "decision": "d_FIND0002",
+   "verification": {
+    "decision": "d_VERIFY001",
+    "by": "human:Shrey",
+    "at": "2026-11-12T15:00:00Z"
+   }
+  },
+  {
+   "id": "fi_FARE00007",
+   "statement": "People overestimate the rail fare by about 40%.",
+   "cites": [
+    "f_FARE00440"
+   ],
+   "method": "synthesis",
+   "status": "proposed",
+   "derived_by": "synthesis@1",
+   "confidence": "medium",
+   "derived_at": "2026-11-12T12:00:00Z",
+   "decision": "d_FIND0003"
+  },
+  {
+   "id": "fi_SPONT0009",
+   "statement": "Spontaneous trips are the ones people remember best.",
+   "cites": [
+    "f_BOOK00447"
+   ],
+   "method": "synthesis",
+   "status": "proposed",
+   "derived_by": "synthesis@1",
+   "confidence": "medium",
+   "derived_at": "2026-11-12T12:00:00Z",
+   "decision": "d_FIND0004"
+  }
+ ]
+}

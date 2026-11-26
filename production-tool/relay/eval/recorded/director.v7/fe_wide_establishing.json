@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"frame_edit\", \"question\": null, \"frameEdit\": {\"reading\": \"camera\", \"runAs\": \"frame\", \"camera\": {\"size\": \"wide\"}}, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_image3_pro\", \"prompt\": \"make it a wide establishing shot of the beach. Wide shot, the people, place and light of @current, not its framing. @maya_front stands on the beach at sunset, her blue scarf lifting in the wind.\", \"refs\": [{\"sha256\": \"sha256:138064aac89f3ef36a12a386bf253919c9df1678e0468283a4c72c284bbf1487\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:249c6e5813f1cbc9ad30daaf20be4ceeecdc8fc3656cd8e8bcfb7adb9308db4b\", \"name\": \"maya_front\", \"role\": \"character\"}], \"ratio\": \"1344:768\", \"outputs\": 1}, \"rationale\": \"The words change the shot size from medium to wide, so the camera changes and the whole frame is redrawn from @current with Maya as the character ref.\", \"confidence\": 0.93}"
+}

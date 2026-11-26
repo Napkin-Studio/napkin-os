@@ -1,0 +1,187 @@
+"""Brand Clan phase 2, lane C3 (docs/contracts/brand-clan.md section 8; mocks e1, e2): a deck reads the client's Brand Clan through
+look.brand_tokens, the client's Brand Clan wins over the agency look, and its look is not held behind the team-library switch."""
+import json
+from pathlib import Path
+
+from deck import look
+
+ROOT = Path(__file__).resolve().parents[3]
+ZERO = json.loads((ROOT / "docs/contracts/examples/brand-clan/data.zero-v2.json").read_text())
+AGENCY = {"id": "agency", "rev": 3, "accent": "#E0452A"}
+
+
+def test_brand_tokens_read_the_brand_clan_by_role_and_id():
+    t = look.brand_tokens(ZERO, "doc-ie-napkin-brand-zero")
+    assert t["name"] == "Zero"
+    assert t["colours"] == {"accent": "7FD6BD", "ink": "1C2630", "paper": "F4F6F7"}
+    assert t["colour_ids"]["silver"] == "9AA7B1" and t["colour_ids"]["mint"] == "7FD6BD"
+    assert t["fonts"] == {"head": "Tidewell Serif", "body": "Tidewell Sans"}
+    assert t["type_ids"] == {"serif": "Tidewell Serif", "sans": "Tidewell Sans"}
+    assert t["imagery_bans"] == ["people drinking in cars"]
+    assert t["kit"] == {"document_id": "doc-ie-napkin-brand-zero", "version": 2}
+    assert "1C2630" not in t["chart"] and "7FD6BD" in t["chart"]
+
+
+def test_a_logo_whose_file_did_not_reach_the_deck_is_held_and_said():
+    t = look.brand_tokens(ZERO)
+    assert t["logos"] == {}
+    assert t["held"] and "did not reach this deck" in t["held"][0]
+    got = look.resolve(brand=t, wears="client", agency=AGENCY)
+    assert any("did not reach this deck" in h for h in got.held)
+
+
+SVG = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10'><rect width='40' height='10' fill='#F4F6F7'/></svg>"
+
+
+def test_the_logo_file_reaches_the_deck_and_is_placed_for_the_client():
+    # owner 2026-11-24, "Yes it reaches deck": the file travels with the Brand Clan (inputs reads it into _logo_files)
+    fb = {**ZERO, "_document_id": "doc-zero", "_logo_files": {"dark": {"name": "logo-zero-dark.svg", "bytes": SVG}}}
+    t = look.brand_tokens(fb)
+    assert t["logos"]["dark"].startswith("<svg") and t["held"] == [] and t["for_client"] is True
+    # the Brand Clan is named for a look ("Zero"), not the client: it is still placed for the deck's client
+    got = look.resolve(brand=t, wears="client", agency=AGENCY, client="Tidewell")
+    assert got.logo and got.logo["placement"] == "cover_only" and got.logo["data"].startswith("<svg")
+    assert not any("logo" in h for h in got.held)
+
+
+def test_a_png_or_jpeg_logo_is_placed_as_a_png():
+    from io import BytesIO
+
+    from PIL import Image
+    buf = BytesIO()
+    Image.new("RGB", (40, 10), (28, 38, 48)).save(buf, "JPEG")
+    t = look.brand_tokens({**ZERO, "_logo_files": {"dark": {"name": "logo.jpg", "bytes": buf.getvalue()}}})
+    assert t["logos"]["dark"].startswith(b"\x89PNG")
+    bad = look.brand_tokens({**ZERO, "_logo_files": {"dark": {"name": "logo.jpg", "bytes": b"not a picture"}}})
+    assert bad["logos"] == {} and any("could not be read" in h for h in bad["held"])
+
+
+def test_the_client_brand_clan_wins_over_the_agency_look():
+    got = look.resolve(brand=look.brand_tokens(ZERO), wears="client", agency=AGENCY)
+    assert got.theme["from"]["accent"] == "brand_clan" and got.brand["colors"]["accent"] == "7FD6BD"
+    assert got.theme["from"]["head"] == "brand_clan" and got.brand["head"] == "Tidewell Serif"
+    # with no Brand Clan the agency's accent stands, as before
+    assert look.resolve(brand=look.brand_tokens(None), wears="client", agency=AGENCY).theme["from"]["accent"] == "agency_look"
+
+
+def test_the_deck_wears_the_client_when_a_brand_clan_is_attached_and_nobody_chose(tmp_path, monkeypatch):
+    from deck import run_deck
+    src = (ROOT / "engine/deck/run_deck.py").read_text()
+    # the rule is in the one place that decides wears: a Brand Clan present, no look.brand.wears, no --wears other than the default
+    assert 'wears = "client"' in src and 'look._present(look.brand_tokens(ctx.get("brand")))' in src
+    assert run_deck is not None
+
+
+def test_inputs_carry_the_brand_clan_with_the_library_off(tmp_path):
+    import io
+    import zipfile
+
+    import yaml
+
+    from deck import inputs
+    did = "doc-ie-napkin-brand-zero"
+    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "document_id": did, "version": 2}]}}
+    data = {"upstream": {did: ZERO}, "inputs": {"library": {"enabled": False}}}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("manifest.yaml", yaml.safe_dump(man))
+        z.writestr("shared/data.yaml", yaml.safe_dump(data))
+    p = tmp_path / "deck.clan"
+    p.write_bytes(buf.getvalue())
+    _inp, ctx = inputs.from_deck_document(p)
+    assert ctx["library"] is False
+    assert "_logo_files" not in ctx["brand"], "no logo file was carried into this deck"
+    assert ctx["brand"]["name"] == "Zero" and ctx["brand"]["_document_id"] == did
+    assert look.brand_tokens(ctx["brand"])["kit"] == {"document_id": did, "version": 2}
+
+
+def test_inputs_read_the_logo_files_the_host_carried(tmp_path):
+    import io
+    import zipfile
+
+    import yaml
+
+    from deck import inputs
+    did = "doc-ie-napkin-brand-zero"
+    man = {"document_id": "doc-deck-1", "lineage": {"attached": [{"app_id": "ie.napkin.brand", "document_id": did, "version": 2}]}}
+    data = {"upstream": {did: ZERO}}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("manifest.yaml", yaml.safe_dump(man))
+        z.writestr("shared/data.yaml", yaml.safe_dump(data))
+        z.writestr(f"human/assets/brand/{did}/logo-zero-dark.svg", SVG)
+    p = tmp_path / "deck.clan"
+    p.write_bytes(buf.getvalue())
+    _inp, ctx = inputs.from_deck_document(p)
+    assert ctx["brand"]["_logo_files"] == {"dark": {"name": "logo-zero-dark.svg", "bytes": SVG}}
+    assert look.brand_tokens(ctx["brand"])["logos"]["dark"].startswith("<svg")
+
+
+def test_a_logo_the_brand_clan_editor_uploaded_reaches_the_deck():
+    # UAT 2026-11-26: the Brand Clan editor files every uploaded logo as variant "other" (app/src/shell/nui/brandClans/model.ts),
+    # and the deck took only dark/light/mark, so a Brand Clan made in the OS never put its logo on the deck. "other" stands in
+    # when the Brand Clan names no logo for a dark ground, as Production's end card already does (brandClan/model.ts LOGO_ORDER).
+    from deck import inputs
+    did = "doc-ie-napkin-brand-solas"
+    clan = {**ZERO, "visual": {**ZERO["visual"], "logos": [{"id": "solas-logo", "label": "solas-logo", "variant": "other",
+                                                             "asset": "human/assets/230864de45-solas-logo.svg"}]}}
+    files = {f"human/assets/brand/{did}/230864de45-solas-logo.svg": SVG}
+    brand = inputs.brand_clan_copy(did, clan, files.get)
+    assert brand["_logo_files"] == {"other": {"name": "230864de45-solas-logo.svg", "bytes": SVG}}
+    t = look.brand_tokens(brand)
+    assert t["logos"]["dark"].startswith("<svg") and t["held"] == []
+    got = look.resolve(brand=t, wears="client", agency=AGENCY, client="Sólás Lights")
+    assert got.logo and got.logo["data"].startswith("<svg")
+
+
+def test_a_logo_for_a_dark_ground_still_wins_over_an_other():
+    from deck import inputs
+    did = "doc-b"
+    clan = {**ZERO, "visual": {**ZERO["visual"], "logos": [
+        {"id": "a", "label": "a", "variant": "other", "asset": "human/assets/a.svg"},
+        {"id": "b", "label": "b", "variant": "dark", "asset": "human/assets/b.svg"}]}}
+    dark = SVG.replace(b"F4F6F7", b"000000")
+    files = {f"human/assets/brand/{did}/a.svg": SVG, f"human/assets/brand/{did}/b.svg": dark}
+    t = look.brand_tokens(inputs.brand_clan_copy(did, clan, files.get))
+    assert "000000" in t["logos"]["dark"]
+
+
+# UAT 2026-11-26 (owner "Both"): a Brand Clan made by hand in the client window files every colour and face as role "other", so the deck
+# wore the default look. With no role given, the order is the role (docs/contracts/brand-clan.md 2.1, "By order"): the first colour is the
+# primary (the deck's ink when it is dark enough to carry text and dark slides, else its accent), the second the accent, the third the
+# background (the deck's paper, when ink still reads on it); the first face is the headline face, the second the body face.
+HANDMADE = {"name": "Original", "kit": {"version": 2}, "visual": {
+    "colours": [{"id": "navy", "name": "Night navy", "hex": "#14233F", "role": "other"}, {"id": "brass", "name": "Brass", "hex": "#E0B040", "role": "other"}],
+    "typography": [{"id": "georgia", "family": "Georgia", "role": "other"}],
+    "logos": [{"id": "solas-logo", "label": "Logo", "variant": "other", "asset": "human/assets/230864de45-solas-logo.png"}]}}
+
+
+def test_a_hand_made_brand_clan_dresses_the_deck_by_order():
+    t = look.brand_tokens(HANDMADE)
+    assert t["colours"] == {"ink": "14233F", "accent": "E0B040"}
+    assert t["fonts"] == {"head": "Georgia"}
+    assert t["by_order"] == ["ink", "accent", "head"]
+    got = look.resolve(brand=t, wears="client", agency=AGENCY)
+    assert got.brand["colors"]["accent"] == "E0B040" and got.brand["colors"]["ink"] == "14233F" and got.brand["head"] == "Georgia"
+    assert got.theme["from"]["accent"] == "brand_clan"
+
+
+def test_by_order_fills_the_background_and_keeps_contrast():
+    three = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": HANDMADE["visual"]["colours"] + [{"id": "chalk", "hex": "#F7F3EA", "role": "other"}],
+                                     "typography": [{"id": "g", "family": "Georgia"}, {"id": "i", "family": "Inter", "role": "other"}]}}
+    t = look.brand_tokens(three)
+    assert t["colours"] == {"ink": "14233F", "accent": "E0B040", "paper": "F7F3EA"} and t["fonts"] == {"head": "Georgia", "body": "Inter"}
+    # a light primary cannot carry text: it becomes the accent, and the second colour fills ink only if it is dark
+    light_first = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": [{"id": "b", "hex": "#E0B040"}, {"id": "n", "hex": "#14233F"}]}}
+    assert look.brand_tokens(light_first)["colours"] == {"accent": "E0B040", "ink": "14233F"}
+    # a dark third colour is not taken as the background (ink would not read on it)
+    dark_bg = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": HANDMADE["visual"]["colours"] + [{"id": "x", "hex": "#101010"}]}}
+    assert "paper" not in look.brand_tokens(dark_bg)["colours"]
+
+
+def test_roles_given_win_and_the_order_never_mixes_in():
+    t = look.brand_tokens(ZERO)
+    assert t["colours"] == {"accent": "7FD6BD", "ink": "1C2630", "paper": "F4F6F7"} and t["by_order"] == []
+    # one roled colour is enough: the rest are not placed by order (a person who set roles chose them)
+    part = {**HANDMADE, "visual": {**HANDMADE["visual"], "colours": [{"id": "n", "hex": "#14233F", "role": "other"}, {"id": "b", "hex": "#E0B040", "role": "accent"}]}}
+    assert look.brand_tokens(part)["colours"] == {"accent": "E0B040"}

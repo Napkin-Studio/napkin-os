@@ -67,15 +67,10 @@ def env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() not in ("", "0", "false", "no", "off")
 
 
-_SCRATCH = Path("/tmp/claude-1000/-home-batunii-Documents-Code-napkin-os/"
-                "8548b27c-f3fd-4056-9479-bb6b716c6517/scratchpad")
-
-
 def _default_data() -> Path:
-    # The documented default is the session scratchpad; elsewhere (CI, another
-    # machine) fall back to the system temp directory.
-    if _SCRATCH.is_dir():
-        return _SCRATCH / "mock-backend"
+    # MOCK_DATA wins; otherwise the system temp directory. (It used to prefer one
+    # laptop's session scratchpad by its absolute path, which on another machine
+    # can belong to a different user and make the server crash on start.)
     return Path(tempfile.gettempdir()) / "napkin-mock-backend"
 
 
@@ -171,6 +166,7 @@ class Response:
     headers: dict = field(default_factory=dict)
     close: bool = False
     note: str = ""                 # metadata for the log line (never content)
+    events: list | None = None     # [(event, data)]: sent as text/event-stream instead of `body`
 
 
 def json_response(status: int, body: dict, **headers) -> Response:
@@ -278,11 +274,16 @@ class ClaudeCall:
     trace_tools: bool = False                    # stream the CLI's events so tool uses can be counted
 
 
+# What scripts/model-local.env points the services at. The CLI must reach the real backend on the
+# developer's own login, never route back into this mock, and never bill (or fail on) the dummy key.
+CHILD_ENV_DROPPED = ("ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_BEDROCK_BASE_URL",
+                     "ANTHROPIC_BEDROCK_MANTLE_BASE_URL", "AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
+
+
 def child_env() -> dict:
     env = dict(os.environ)
-    # The CLI must reach the real backend, never route back into this mock.
-    env.pop("ANTHROPIC_BASE_URL", None)
-    env.pop("OPENAI_BASE_URL", None)
+    for k in CHILD_ENV_DROPPED:
+        env.pop(k, None)
     return env
 
 
@@ -454,6 +455,36 @@ def _tool_uses(out: str) -> dict:
     return counts
 
 
+_URL_IN_TEXT = re.compile(r"https?://[^\s\"'<>\)\]\\,]+")
+
+
+def _seen_urls(out: str) -> list[str]:
+    """Every URL the CLI's tools touched in a stream-json run: a WebFetch's input and the text of each tool
+    result (a WebSearch lists its hits there). A source the model cites that is in none of these was not found
+    on the web, whatever the model says."""
+    seen: list[str] = []
+    for line in out.splitlines():
+        if not line.startswith("{") or ("tool_use" not in line and "tool_result" not in line):
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content = ((ev.get("message") or {}).get("content")) if isinstance(ev, dict) else None
+        for b in content if isinstance(content, list) else []:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use":
+                text = json.dumps(b.get("input") or {})
+            elif b.get("type") == "tool_result":
+                c = b.get("content")
+                text = c if isinstance(c, str) else json.dumps(c)
+            else:
+                continue
+            seen += _URL_IN_TEXT.findall(text.replace("\\/", "/").replace("\\u0026", "&"))
+    return seen
+
+
 def _by_model(usage) -> dict | None:
     """{model id: {in, out, cache_read, cache_write, cost}} from the CLI's `modelUsage`. The CLI runs a
     second, smaller model behind WebSearch and WebFetch; its spend is in `total_cost_usd` but not in the
@@ -575,6 +606,7 @@ def _run_claude(cfg: Config, call: ClaudeCall, timeout: float, cwd_root: Path | 
     envelope.setdefault("_exit", proc.returncode)
     if call.trace_tools:
         envelope["_tools"] = _tool_uses(out)
+        envelope["_seen_urls"] = _seen_urls(out)
     if stream:
         envelope["_schema_errors"] = _schema_errors(out)
         envelope["_turn_trace"] = _turn_trace(out)

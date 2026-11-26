@@ -1,0 +1,17 @@
+{
+ "schema_version": 1,
+ "title": "Territories",
+ "focus": {
+  "sources": [],
+  "insights": []
+ },
+ "crew": [],
+ "expeditions": [],
+ "territories": [],
+ "greenlit": [],
+ "run": {
+  "state": "draft",
+  "approvals": {},
+  "decisions": []
+ }
+}

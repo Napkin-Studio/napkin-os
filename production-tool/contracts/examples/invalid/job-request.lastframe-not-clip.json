@@ -1,0 +1,26 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7G00000000000000000FR01",
+  "op": "frame",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_frames0001",
+  "purpose": "shot 2, landing on shot 3's frame",
+  "node": {
+    "kind": "video",
+    "id": "video_01K7B00000000000000000VD01"
+  },
+  "parentIds": [],
+  "input": {
+    "image": {
+      "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "url": "https://cdn.napkin.test/out/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mime": "image/png"
+    },
+    "lastFrame": {
+      "sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "url": "https://cdn.napkin.test/out/sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mime": "image/png"
+    },
+    "ratio": "16:9"
+  }
+}

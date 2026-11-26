@@ -1,10 +1,14 @@
 """DynamoStore and S3Blobs against moto (no network), and the Lambda handler end to end."""
 
 import base64
+import hashlib
 import json
+import time
 
 import boto3
 import pytest
+
+from conftest import envelope
 from moto import mock_aws
 
 from blobs import S3Blobs
@@ -28,6 +32,9 @@ def make_tables(ddb):
     ddb.create_table(TableName="blocked", BillingMode="PAY_PER_REQUEST",
                      AttributeDefinitions=[{"AttributeName": "handle", "AttributeType": "S"}],
                      KeySchema=[{"AttributeName": "handle", "KeyType": "HASH"}])
+    ddb.create_table(TableName="tenants", BillingMode="PAY_PER_REQUEST",
+                     AttributeDefinitions=[{"AttributeName": "tenantId", "AttributeType": "S"}],
+                     KeySchema=[{"AttributeName": "tenantId", "KeyType": "HASH"}])
 
 
 @pytest.fixture
@@ -92,11 +99,68 @@ def test_dynamo_counters_are_atomic_with_a_limit(aws):
     assert st.counters("nothing") == {}
 
 
+@pytest.mark.parametrize("make", ["memory", "dynamo"])
+def test_a_claim_has_one_owner_until_it_is_released_or_expires(aws, make):
+    """Fix this moment's one patch per take (features/clip-moment-edit.clan), on both stores."""
+    from store import MemoryStore
+    st = MemoryStore() if make == "memory" else DynamoStore("jobs", "quotas", "blocked", client=aws[0])
+    assert st.claim("patch#t", "job_a", until=100, now=0)
+    assert st.claim("patch#t", "job_a", until=120, now=10)  # its owner may claim it again (an answered ask)
+    assert not st.claim("patch#t", "job_b", until=130, now=20) and st.claimed_by("patch#t", 20) == "job_a"
+    st.release("patch#t", "job_b")  # not theirs: nothing happens
+    assert st.claimed_by("patch#t", 20) == "job_a"
+    st.release("patch#t", "job_a")
+    assert st.claimed_by("patch#t", 20) is None and st.claim("patch#t", "job_b", until=200, now=21)
+    assert st.claimed_by("patch#t", 200) is None  # a missed release frees itself at its time
+    assert st.claim("patch#t", "job_c", until=400, now=200)
+    st.release("patch#t", "job_b")  # the expired owner's late release leaves the new claim alone
+    assert st.claimed_by("patch#t", 202) == "job_c"
+
+
 def test_dynamo_blocked(aws):
     ddb, _ = aws
     ddb.put_item(TableName="blocked", Item={"handle": {"S": "mallory"}})
     st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
     assert st.is_blocked("Mallory") and not st.is_blocked("alice")
+
+
+def test_dynamo_tenants(aws):
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb, tenants_table="tenants")
+    assert st.tenant("t-1") is None
+    st.put_tenant({"tenantId": "t-1", "agency": "napkin", "enabled": True, "by": "shrey"})
+    assert st.tenant("t-1") == {"tenantId": "t-1", "agency": "napkin", "enabled": True, "by": "shrey"}
+    assert [t["agency"] for t in st.all_tenants()] == ["napkin"]
+    # No TENANTS_TABLE: nobody is on (fail closed).
+    assert DynamoStore("jobs", "quotas", "blocked", client=ddb).tenant("t-1") is None
+
+
+def test_dynamo_job_items_carry_the_audit_attributes(aws):
+    """tenantId, op, usd and month are top-level (features/tenant-limits.clan), for tenant-ops' index."""
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
+    j = {**job("j1"), "_tenant": "t-1", "op": "clip", "_month": "2026-10", "cost": {"reserved": 1.2}}
+    assert st.create_job(j)
+    item = ddb.get_item(TableName="jobs", Key={"jobId": {"S": "j1"}})["Item"]
+    assert (item["tenantId"]["S"], item["op"]["S"], item["usd"]["N"], item["month"]["S"]) == ("t-1", "clip", "1.2", "2026-10")
+    j["cost"] = {"reserved": 1.2, "confirmed": 1.55}
+    assert st.save_job(j)
+    assert ddb.get_item(TableName="jobs", Key={"jobId": {"S": "j1"}})["Item"]["usd"]["N"] == "1.55"
+
+
+def test_dynamo_holds_and_the_ledger(aws):
+    from ledger import Ledger, LimitReached
+
+    ddb, _ = aws
+    st = DynamoStore("jobs", "quotas", "blocked", client=ddb)
+    assert not st.holds("t-1", "sha256:" + "a" * 64)
+    st.hold("t-1", "sha256:" + "a" * 64)
+    assert st.holds("t-1", "sha256:" + "a" * 64) and not st.holds("t-2", "sha256:" + "a" * 64)
+    led = Ledger(st, lambda: 1_791_360_000.0)
+    assert led.reserve("t-1", 0.6, cap_month=1.0, cap_global=10) == "2026-10"
+    with pytest.raises(LimitReached):
+        led.reserve("t-1", 0.6, cap_month=1.0, cap_global=10)
+    assert led.month_used("t-1") == pytest.approx(0.6) and led.total() == pytest.approx(0.6)
 
 
 def test_s3_blobs(aws):
@@ -105,8 +169,11 @@ def test_s3_blobs(aws):
     assert not b.exists("in/x")
     b.put("in/x", b"data", "image/png")
     assert b.exists("in/x") and b.fetch("https://cdn.test/in/x") == b"data"
-    url = b.presign_put("in/y", "image/png")
+    url = b.presign_put("in/y", "image/png", "sha256:" + "ab" * 32)
     assert url.startswith("https://napkin-test.s3.eu-west-1.amazonaws.com/in/y?") and "X-Amz-Signature" in url
+    # Bound to the bytes' hash (features/tenant-limits.clan): S3 refuses a PUT whose body hashes otherwise.
+    assert "x-amz-checksum-sha256" in url.split("X-Amz-SignedHeaders=", 1)[1].split("&", 1)[0]
+    assert b.mime("in/x") == "image/png"  # GET /assets/{sha}?w= reads it (features/prod-assets-route.clan)
     assert b.get_json("ads/none.json") is None
     b.put("ads/j.json", b'{"ok": true}', "application/json")
     assert b.get_json("ads/j.json") == {"ok": True}
@@ -119,8 +186,11 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
     cfg = json.loads((contracts_dir() / "examples" / "config.testing.json").read_text())
     s3.put_object(Bucket="napkin-test", Key="config.json", Body=json.dumps(cfg).encode())
     for k, v in {"BUCKET": "napkin-test", "PUBLIC_BASE_URL_PARAM": "/napkin-test/public-base-url", "JOBS_TABLE": "jobs",
-                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked"}.items():
+                 "QUOTAS_TABLE": "quotas", "BLOCKED_TABLE": "blocked", "TENANTS_TABLE": "tenants"}.items():
         monkeypatch.setenv(k, v)
+    monkeypatch.delenv("TOKEN_SECRET", raising=False)
+    monkeypatch.delenv("SERVICE_KEY", raising=False)
+    monkeypatch.delenv("SECRET_ARNS", raising=False)
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     boto3.client("ssm", region_name="eu-west-1").put_parameter(
         Name="/napkin-test/public-base-url", Value="https://cdn.test", Type="String")
@@ -129,46 +199,71 @@ def test_lambda_handler_end_to_end(aws, monkeypatch):
 
     monkeypatch.setattr(handler, "_relay", None)
 
-    def http(method, path, body=None):
-        event = {"rawPath": path, "requestContext": {"http": {"method": method}},
-                 "headers": {"authorization": "Bearer anything"},
-                 "body": json.dumps(body) if body is not None else None, "isBase64Encoded": False}
+    key = "k" * 40
+    monkeypatch.setattr(identity, "_refresh", None)
+
+    def credential(method, path, query, raw, agency="blue"):
+        """napkin-web's service credential: the bearer and the signed user claim."""
+        now = int(time.time())
+        claims = {"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "iat": now, "exp": now + 60}
+        return {"authorization": f"Bearer {key}",
+                "x-napkin-user": identity.sign_user(claims, key, method, path + (f"?{query}" if query else ""), raw)}
+
+    def assertion(method, path, query, raw, agency="blue"):
+        """The Deck's read-only assets pass."""
+        now = int(time.time())
+        return identity.sign({"u": f"alice@{agency}", "a": agency, "t": identity.tenant_id(agency), "aud": "assets",
+                              "iat": now, "exp": now + 1800, "m": "GET", "p": "/api/assets/*",
+                              "bh": hashlib.sha256(b"").hexdigest()}, key)
+
+    def http(method, path, body=None, query="", sign=True):
+        raw = json.dumps(body).encode() if body is not None else b""
+        headers = {"authorization": "Bearer anything"}
+        if sign:
+            headers = credential(method, path, query, raw)
+        event = {"rawPath": path, "rawQueryString": query, "requestContext": {"http": {"method": method}},
+                 "headers": headers, "body": raw.decode() if body is not None else None, "isBase64Encoded": False}
         r = handler.handler(event, None)
         return r["statusCode"], json.loads(r["body"]) if "body" in r else None
 
-    # No identity source on Lambda yet: every route but health and config is a 401 (fails closed).
-    for method, path in (("GET", "/api/me"), ("POST", "/api/jobs"), ("GET", "/api/projects")):
+    # No SERVICE_KEY on the Lambda: every route but health and config is a 401 (fails closed), signed or not.
+    for method, path in (("GET", "/api/me"), ("POST", "/api/jobs")):
         status, out = http(method, path, {} if method == "POST" else None)
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert http("GET", "/api/health")[0] == 200
+    assert http("GET", "/api/config")[0] == 200
 
-    # The rest of the Lambda's wiring, as a person the seam names.
-    monkeypatch.setattr(identity, "_local", identity.person("alice", "blue"))
+    # With the key: no credential, or a wrong bearer, is still a 401; a signed person whose agency is not on is a 403.
+    monkeypatch.setenv("SERVICE_KEY", key)
+    monkeypatch.setenv("TOKEN_SECRET", key)  # the Deck's assets pass key
+    assert http("GET", "/api/me", sign=False)[0] == 401
+    assert http("GET", "/api/me", sign=False)[1]["error"]["code"] == "unauthorised"
+    status, out = http("GET", "/api/me", query="a=1")
+    assert status == 403 and out["error"]["code"] == "flag_off" and "not on for your agency" in out["error"]["message"]
+
+    # Turn the agency on (scripts/tenants.py's write), with a fresh relay (the tenant cache is 30 s).
+    DynamoStore("jobs", "quotas", "blocked", tenants_table="tenants").put_tenant(
+        {"tenantId": identity.tenant_id("blue"), "agency": "blue", "enabled": True})
+    monkeypatch.setattr(handler, "_relay", None)
+    status, me = http("GET", "/api/me", query="a=1")
+    assert status == 200 and me["tenant"] == {"id": identity.tenant_id("blue"), "agency": "blue"}
+    assert me["workspace"] == identity.tenant_id("blue")
     status, up = http("POST", "/api/uploads", {"sha256": "sha256:" + "d" * 64, "mime": "image/png", "bytes": 5})
     assert status == 200 and up["exists"] is False and up["url"].startswith("https://cdn.test/in/")
+    # GET /assets/{sha} (features/prod-assets-route.clan): the agency that uploaded it is sent to its
+    # CloudFront URL; the 302 has no body and keeps no-store.
+    s3.put_object(Bucket="napkin-test", Key="in/sha256:" + "d" * 64, Body=b"bytes", ContentType="image/png")
+    path = "/api/assets/sha256:" + "d" * 64
+    r = handler.handler({"rawPath": path, "requestContext": {"http": {"method": "GET"}},
+                         "headers": {"x-napkin-identity": assertion("GET", path, "", b"")}}, None)
+    assert r["statusCode"] == 302 and r["headers"]["Location"] == "https://cdn.test/in/sha256:" + "d" * 64
+    assert r["headers"]["Cache-Control"] == "no-store" and base64.b64decode(r["body"]) == b""
     # no adapters exist yet in this lane: routing finds no provider
-    req = {"contractVersion": "2", "jobId": "job_01K6XA7Q3M9V2D4R8T0B5C1E6F", "op": "generate", "parentIds": [],
-           "input": {"text": "x"}}
+    req = {**envelope("generate", "job_01K6XA7Q3M9V2D4R8T0B5C1E6F"), "input": {"text": "x"}}
     status, out = http("POST", "/api/jobs", req)
     assert status == 422 and out["error"]["code"] == "capability_missing"
     assert handler.handler({"source": "aws.events"}, None) == {"advanced": 0}
 
-    # A saved project comes back as its bytes (base64, as a Function URL wants them) with its ETag.
-    project, data = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", b"PK\x03\x04" + bytes(range(256))
-    headers = {"x-project-id": project}
-    r = handler.handler({"rawPath": "/api/clan", "requestContext": {"http": {"method": "POST"}}, "headers": headers,
-                         "body": base64.b64encode(data).decode(), "isBase64Encoded": True}, None)
-    assert r["statusCode"] == 200
-    etag = json.loads(r["body"])["project"]["etag"]
-    status, listed = http("GET", "/api/projects")
-    assert status == 200 and [p["id"] for p in listed["projects"]] == [project]
-    r = handler.handler({"rawPath": f"/api/clan/{project}", "requestContext": {"http": {"method": "GET"}},
-                         "headers": headers}, None)
-    assert r["statusCode"] == 200 and r["isBase64Encoded"] is True
-    assert base64.b64decode(r["body"]) == data
-    assert r["headers"]["Content-Type"] == "application/vnd.clan+zip" and r["headers"]["ETag"] == f'"{etag}"'
-    status, me = http("GET", "/api/me")
-    assert status == 200 and me["projects"] == 1
 
 
 def test_s3_blobs_get_list_and_delete(aws):

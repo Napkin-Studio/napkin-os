@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip\", \"question\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"klingO3_standard\", \"prompt\": \"In a sunlit kitchen, @baby_front sits in a high chair and grabs a handful of cereal from the tray, then smiles. The camera holds still. Keep @baby_front and @baby_side exactly as in the reference pictures. No text, captions, subtitles or speech bubbles.\", \"refs\": [{\"sha256\": \"sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1\", \"name\": \"baby_front\", \"role\": \"character\"}, {\"sha256\": \"sha256:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2\", \"name\": \"baby_side\", \"role\": \"character\"}], \"firstFrame\": \"sha256:ffad83eaa2e7f2be81b6186a3fa744605f917aaccc82b989164ecba9f52a2228\", \"durationS\": 5, \"ratio\": \"1280:720\", \"audio\": false}, \"rationale\": \"Kling O3 holds a character with the frame, so I sent the frame plus both required character refs. The camera is static and the clip runs 5 s at 1280:720.\", \"confidence\": 0.9}"
+}

@@ -1,0 +1,34 @@
+# Territories pipeline contract. Travels with the document, so any middleware continuing a Territories .clan knows the pipeline it must speak.
+# A DECLARATION (decision M2): each task names a handler, name@major, which the middleware resolves against its registry; an unknown handler,
+# task or version is a hard error, never a fall-through (M4). Contract: docs/contracts/middleware-api.md §13, docs/contracts/territories.md.
+#
+# Territories runs INSIDE the middleware (owner, 2026-11-23): no engine URL, no sidecar. One task carries every step, as the app calls it
+# (TASKS in app/templates/territories/index.html): run_territories with a `step`.
+pipeline: napkin-territories
+version: 1
+request_kind: middleware
+contract: middleware-api/1#13
+
+tasks:
+  run_territories:
+    handler: run_territories@1
+    job: long
+    stages: [run]
+    reads:
+      - step (run, steer, more, push, rerank_routes: long, call the model; undo, place_pictures, set_lead, star_line, keep_feel, set_final, set_rights (a person's choices about a world and its pictures: held inside a running step so both writes survive), greenlight_route, remove_route, answer_ask, record_review, approve, send_routes: answered at once)
+      - the document's upstream brief and research, the carried pins, findings and sources, and the Confidential marks (the deck's reading of them)
+      - the pictures an arriving document names (assets): all put on the workspace store before a run, or the run is refused in words
+      - run.approvals, which the person wrote (a gate goes on only when its approval was given for the choices as they stand)
+    never:
+      - writes run.approvals, run.decisions or run.gate_requests from a model step (the person's); only approve, answer_ask and record_review, and a send that went, write the person's own move
+      - runs a stage after a gate that is not approved, or makes a model call while a gate is held
+      - writes a price into the document (prices are decisions in the history and lines in the run log)
+      - shows a failed step as a success: the run is written failed, with its words in run.error
+      - says a hand-off went when its destination is not built (the send is written not_built)
+  fetch_territories_file:
+    handler: fetch_territories_file@1
+    job: short
+    reads:
+      - input.name, a finished file of this document that an export registered (a board PDF, a one-pager)
+    never:
+      - writes to the document

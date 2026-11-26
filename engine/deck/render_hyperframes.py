@@ -16,7 +16,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .render_web import CSS_LAYOUT, _e, slide_views, theme_css
+from . import spec
+from . import theme as themes
+from .render_web import CSS_LAYOUT, LOOK_CSS, PIC_CSS, _e, graphics_css, size_css, slide_views, theme_css
 
 INTRO = 0.35     # s before the first reveal of a slide
 SETTLE = 1.3     # s for the last reveal of a step to finish (bars and counters are the longest)
@@ -61,22 +63,22 @@ window.__timelines.deck=tl;
 """
 
 
-def build(deck, inp, findings: list | None = None, builds: bool = False):
+def build(deck, inp, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None, assets_dir=None):
     """(scenes markup, island, total seconds): scene times, notes and fragment hold-points."""
-    views = slide_views(deck, inp, findings)
+    views = slide_views(deck, inp, findings, assets_dir, pictures, src=lambda aid, path: f"assets/{Path(path).name}", placed=placed)   # a picture is a file in assets/, not inline
     cs = lambda sec: round(sec * 100)   # times in hundredths of a second
     t, scenes, slides = 0, [], []
     for v in views:
         stops = [t + cs(INTRO + SETTLE) + round(ms / 10) for ms in v["last"]]
         frags = stops if builds else stops[-1:]
         dur = frags[-1] - t + cs(HOLD)
-        cls = f'slide t-{v["type"]}{" dark" if v["dark"] else ""}'
+        cls = f'slide t-{v["type"]}{" dark" if v["dark"] else ""}{" " + v["cls"] if v["cls"] else ""}{" l-" + v["layout"] if (spec.LOOK_V2 and v["layout"]) else ""}'
         st, du = f"{t / 100:g}", f"{dur / 100:g}"
         scenes.append(
             f'<div class="scene" id="scene-{v["id"]}" data-composition-id="{v["id"]}" data-start="{st}" data-duration="{du}" '
             f'data-label="{v["n"]}. {_e(v["title"][:60])}" data-width="1920" data-height="1080">'
             f'<section class="clip" id="clip-{v["id"]}" data-start="0" data-duration="{du}" data-track-index="1">'   # relative to its scene
-            f'<div class="{cls}" data-steps="{v["steps"]}">{v["html"]}</div></section></div>')
+            f'<div class="{cls}" data-steps="{v["steps"]}"{v["tpt"]}>{v["html"]}</div></section></div>')
         slides.append({"sceneId": v["id"], "notes": v["notes"], "fragments": [f / 100 for f in frags]})
         t += dur + 1   # a hundredth of a second between slides: float sums never touch
     cut = next((i for i, v in enumerate(views) if v["type"] == "appendix"), len(views))
@@ -87,14 +89,28 @@ def build(deck, inp, findings: list | None = None, builds: bool = False):
     return "\n".join(scenes), island, (t - 1) / 100
 
 
-def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False) -> Path:
-    """Write the HyperFrames slideshow project to the directory ``out``; returns ``out``."""
+def render(deck, inp, out: Path, findings: list | None = None, builds: bool = False, pictures: dict | None = None, placed: set | None = None, look: bool = True) -> Path:
+    """Write the HyperFrames slideshow project to the directory ``out``; returns ``out``. ``pictures`` (asset id -> derived JPEG, only the
+    ones this audience draws) are copied into ``assets/``; nothing else is."""
     out.mkdir(parents=True, exist_ok=True)
-    scenes, island, total = build(deck, inp, findings, builds)
+    scenes, island, total = build(deck, inp, findings, builds, pictures, placed, Path(out).parent)
+    if pictures:
+        import shutil
+        (out / "assets").mkdir(exist_ok=True)
+        for aid, path in pictures.items():   # only the files the markup points at
+            if f"assets/{Path(path).name}" in scenes:
+                shutil.copyfile(path, out / "assets" / Path(path).name)
     m = deck["meta"]
-    css = theme_css(CSS_LAYOUT + HF_CSS, head="serif", body="system-ui, sans-serif")
+    cv = themes.canvas_of(deck)   # deck-slide-size: the composition at the deck's size (16:9: 1920 x 1080, unchanged)
+    W, H = cv.px
+    hf = HF_CSS if cv.identity else HF_CSS.replace("width:1920px;height:1080px", f"width:{W}px;height:{H}px")
+    css = theme_css(CSS_LAYOUT + (LOOK_CSS if (spec.LOOK_V2 and look) else "") + hf + (PIC_CSS if pictures else "") + graphics_css(scenes),
+                    head="serif", body="system-ui, sans-serif")   # deck-graphics: frames, icons, charts and diagrams carry their own styles here too
+    if not cv.identity:
+        css += size_css(cv)
+        scenes = scenes.replace('data-width="1920" data-height="1080"', f'data-width="{W}" data-height="{H}"')
     (out / "index.html").write_text(f"""<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=1920, height=1080">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width={W}, height={H}">
 <title>{_e(m["client"])}: {_e(m["project"])}</title>
 <script src="{GSAP}"></script>
 <script src="{RUNTIME}"></script>
@@ -103,7 +119,7 @@ def render(deck, inp, out: Path, findings: list | None = None, builds: bool = Fa
 <script type="application/hyperframes-slideshow+json">
 {json.dumps(island, indent=1, ensure_ascii=False).replace("</", "<\\/")}
 </script>
-<div id="deck" data-composition-id="deck" data-start="0" data-duration="{total:g}" data-width="1920" data-height="1080">
+<div id="deck" data-composition-id="deck" data-start="0" data-duration="{total:g}" data-width="{W}" data-height="{H}">
 {scenes}
 </div>
 <script>{TIMELINES.replace("INTRO", str(INTRO))}</script>

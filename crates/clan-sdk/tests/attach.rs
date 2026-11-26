@@ -102,6 +102,7 @@ fn written(clan: &ClanFile, data: &str, decisions: &[(&str, &str)], facts: &[&st
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
     let mut b = ClanBuilder::new(manifest);
@@ -423,4 +424,283 @@ fn a_spinoff_target_carries_one_source_app_by_its_own_rule() {
 
     let deck = instance(&template(app("Deck", "ie.napkin.deck", "deck")), "Deck");
     assert!(spinoff(&film_tpl, &deck, SpinoffOptions::default()).is_err());
+}
+
+// ── The Deck Maker holds a Style Pack and a Brand Clan (deck-look-kits) ──────
+
+const STYLE_PACK_APP: &str = "ie.napkin.style-pack";
+const DECK_APP: &str = "ie.napkin.deck-maker";
+
+/// The Deck Maker's attach contract, as `examples/make_deck_maker.rs` declares it.
+fn deck_app() -> AppInfo {
+    let mut a = app("Deck Maker", DECK_APP, "deck");
+    a.version = "0.5.0".into();
+    a.attach = Some(AttachSpec {
+        accepts: vec![
+            BRIEF_APP.into(),
+            RESEARCH_APP.into(),
+            BRAND_APP.into(),
+            STYLE_PACK_APP.into(),
+        ],
+        many: vec![RESEARCH_APP.into()],
+        ..Default::default()
+    });
+    a
+}
+
+/// `clan` with one more entry (an image the pack holds), one revision on.
+fn with_entry(clan: &ClanFile, path: &str, bytes: &[u8]) -> ClanFile {
+    let mut manifest = clan.manifest().clone();
+    manifest.next_revision();
+    let mut b = ClanBuilder::new(manifest);
+    for (p, v) in clan.read_all_entries().unwrap() {
+        if p != MANIFEST_PATH {
+            b.add_entry(p, v);
+        }
+    }
+    b.add_entry(path, bytes.to_vec());
+    open(b.build().unwrap())
+}
+
+fn pack(title: &str, version: u32, asset: Option<(&str, &[u8])>) -> ClanFile {
+    let tpl = template(app("Style Pack", STYLE_PACK_APP, "style pack"));
+    let p = written(
+        &instance(&tpl, title),
+        &format!("pack:\n  name: {title}\nkit:\n  version: {version}\n  stewards: [human:demo]\nlook: [natural light]\n"),
+        &[("d_pack", "edit")],
+        &[],
+    );
+    match asset {
+        Some((path, bytes)) => with_entry(&p, path, bytes),
+        None => p,
+    }
+}
+
+#[test]
+fn a_deck_takes_a_style_pack_with_its_version_and_a_second_replaces_the_first() {
+    let deck = instance(&template(deck_app()), "Lumen pitch");
+    let p1 = pack("Demo pack", 3, None);
+    let p2 = pack("Other pack", 1, None);
+
+    let out = attach(&deck, &p1).unwrap();
+    assert_eq!(out.verb, AttachVerb::Attached);
+    let linked = open(out.bytes);
+    let rec = &linked.manifest().attached()[0];
+    assert_eq!(rec.app_id, STYLE_PACK_APP);
+    assert_eq!(
+        rec.version,
+        Some(3),
+        "lineage.attached.version is the pack's kit.version"
+    );
+    let pid = p1.manifest().document_id().to_string();
+    assert_eq!(
+        data(&linked)["upstream"][pid.as_str()]["kit"]["stewards"][0],
+        "human:demo"
+    );
+
+    let swapped = attach(&linked, &p2).unwrap();
+    assert_eq!(
+        swapped.verb,
+        AttachVerb::Replaced,
+        "a deck holds one Style Pack at a time"
+    );
+    let swapped = open(swapped.bytes);
+    assert_eq!(swapped.manifest().attached().len(), 1);
+    assert_eq!(
+        swapped.manifest().attached()[0].carried.document_id,
+        p2.manifest().document_id()
+    );
+    assert!(
+        data(&swapped)["upstream"].get(pid.as_str()).is_none(),
+        "the old frozen copy goes"
+    );
+    assert_eq!(chain(&swapped).decisions[0].action, "replace");
+
+    // A newer version of the same pack is an update, named for its noun.
+    let newer = written(
+        &p1,
+        "kit:\n  version: 4\n  stewards: [human:demo]\n",
+        &[("d_pack", "edit")],
+        &[],
+    );
+    let upd = attach(&linked, &newer).unwrap();
+    assert_eq!(upd.verb, AttachVerb::Updated);
+    assert_eq!(open(upd.bytes).manifest().attached()[0].version, Some(4));
+}
+
+#[test]
+fn a_style_pack_is_one_at_a_time_beside_research_and_a_brand_and_a_brief() {
+    let deck = instance(&template(deck_app()), "Lumen pitch");
+    let research_tpl = template(app("Research Tool", RESEARCH_APP, "research"));
+    let brand_tpl = template(app("Brand Clan", BRAND_APP, "brand"));
+    let r1 = written(&instance(&research_tpl, "Market"), "a: 1\n", &[], &[]);
+    let r2 = written(&instance(&research_tpl, "Audience"), "b: 2\n", &[], &[]);
+    let brand = written(
+        &instance(&brand_tpl, "Lumen"),
+        "kit:\n  version: 5\n",
+        &[],
+        &[],
+    );
+    let mut d = open(attach(&deck, &r1).unwrap().bytes);
+    for src in [&r2, &brand, &pack("Demo pack", 1, None)] {
+        let out = attach(&d, src).unwrap();
+        assert_eq!(out.verb, AttachVerb::Attached);
+        d = open(out.bytes);
+    }
+    let apps: Vec<&str> = d
+        .manifest()
+        .attached()
+        .iter()
+        .map(|a| a.app_id.as_str())
+        .collect();
+    assert_eq!(
+        apps,
+        vec![RESEARCH_APP, RESEARCH_APP, BRAND_APP, STYLE_PACK_APP]
+    );
+    let again = attach(&d, &pack("Second pack", 2, None)).unwrap();
+    assert_eq!(again.verb, AttachVerb::Replaced, "each replace is recorded");
+    assert_eq!(
+        open(again.bytes).manifest().attached().len(),
+        4,
+        "research and the brand are untouched"
+    );
+}
+
+#[test]
+fn a_pack_reference_image_lands_at_its_content_addressed_path_and_never_collides_with_a_deck_asset()
+{
+    let img = b"\x89PNG demo swatch one";
+    let sha = clan_sdk_sha(img);
+    let path = format!("human/assets/style/{sha}.png");
+    let deck = with_entry(
+        &instance(&template(deck_app()), "Lumen pitch"),
+        "human/assets/style/own-file.png",
+        b"the deck's own file",
+    );
+    let linked = open(
+        attach(&deck, &pack("Demo pack", 1, Some((&path, img))))
+            .unwrap()
+            .bytes,
+    );
+    assert_eq!(linked.read_entry(&path).unwrap(), img);
+    assert_eq!(
+        linked
+            .read_entry("human/assets/style/own-file.png")
+            .unwrap(),
+        b"the deck's own file",
+        "the deck's own asset is untouched"
+    );
+    // The same name with different bytes is a different path, so it cannot collide.
+    let other = b"\x89PNG demo swatch two";
+    let other_path = format!("human/assets/style/{}.png", clan_sdk_sha(other));
+    assert_ne!(path, other_path);
+    let both = open(
+        attach(&linked, &pack("Next pack", 2, Some((&other_path, other))))
+            .unwrap()
+            .bytes,
+    );
+    assert_eq!(
+        both.read_entry(&path).unwrap(),
+        img,
+        "a replaced pack's merged images stay"
+    );
+    assert_eq!(both.read_entry(&other_path).unwrap(), other);
+}
+
+fn clan_sdk_sha(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+#[test]
+fn a_deck_refuses_an_app_it_does_not_accept_and_a_style_pack_attaches_nothing() {
+    let deck = instance(&template(deck_app()), "Lumen pitch");
+    let film = written(
+        &instance(&template(app("Film", FILM_APP, "film")), "Reel"),
+        "a: 1\n",
+        &[],
+        &[],
+    );
+    assert!(attach(&deck, &film).is_err());
+    let p = pack("Demo pack", 1, None);
+    assert!(
+        attach(&p, &deck).is_err(),
+        "a Style Pack's app.attach is empty"
+    );
+}
+
+/// Runs the real packers (`make_style_pack`, `make_deck_maker`, through `cargo run`) and attaches the packed example
+/// pack into an instance of the packed Deck: the template, its example and the Deck's contract agree.
+#[test]
+fn the_packed_style_pack_attaches_into_the_packed_deck() {
+    let out = std::env::temp_dir().join(format!("style-pack-pack-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let pack_all = |example: &str, files: [&str; 2]| {
+        let run = std::process::Command::new(&cargo)
+            .args([
+                "run",
+                "-q",
+                "--locked",
+                "-p",
+                "clan-sdk",
+                "--example",
+                example,
+                "--",
+            ])
+            .arg(out.join(files[0]))
+            .arg(out.join(files[1]))
+            .output()
+            .unwrap();
+        assert!(
+            run.status.success(),
+            "{example} failed: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    };
+    pack_all("make_style_pack", ["style.app.clan", "style.example.clan"]);
+    pack_all("make_deck_maker", ["deck.app.clan", "deck.example.clan"]);
+    let style_tpl = open(std::fs::read(out.join("style.app.clan")).unwrap());
+    let style_example = open(std::fs::read(out.join("style.example.clan")).unwrap());
+    let deck_tpl = open(std::fs::read(out.join("deck.app.clan")).unwrap());
+    let _ = std::fs::remove_dir_all(&out);
+
+    let app_block = style_tpl.manifest().app.as_ref().unwrap();
+    assert_eq!(
+        (app_block.app_id.as_str(), app_block.version.as_str()),
+        (STYLE_PACK_APP, "0.1.0")
+    );
+    assert!(app_block.spinoff.is_none() && app_block.attach.is_none());
+    let deck_app_block = deck_tpl.manifest().app.as_ref().unwrap();
+    assert_eq!(deck_app_block.version, "0.6.0");
+    assert!(deck_app_block
+        .attach
+        .as_ref()
+        .unwrap()
+        .accepts
+        .iter()
+        .any(|a| a == STYLE_PACK_APP));
+
+    let deck = instance(&deck_tpl, "Demo deck");
+    let linked = open(attach(&deck, &style_example).unwrap().bytes);
+    let rec = &linked.manifest().attached()[0];
+    assert_eq!(
+        (rec.app_id.as_str(), rec.version),
+        (STYLE_PACK_APP, Some(1))
+    );
+    let images: Vec<String> = linked
+        .read_all_entries()
+        .unwrap()
+        .into_iter()
+        .map(|(p, _)| p)
+        .filter(|p| p.starts_with("human/assets/style/"))
+        .collect();
+    assert_eq!(
+        images.len(),
+        3,
+        "the pack's three invented swatches travel into the deck: {images:?}"
+    );
 }

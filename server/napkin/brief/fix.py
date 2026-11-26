@@ -85,11 +85,31 @@ class FixPartsJob(PlannedBriefJob):
         return "\n".join(str(i.get("quote") or i.get("value") or "") for i in items.values()
                          if isinstance(i, dict))[:12000]
 
+    def changed(self, k) -> bool:
+        """Whether the fix wrote different words for the part than the brief held when the job began (data0: by the
+        time the summary is written, the working copy already holds the new words)."""
+        e = self.whole.get(k)
+        return isinstance(e, dict) and e.get("value") != get(self.data0, k)
+
     def _regen_summary(self, fields):
-        st = [fields.get(k, {}).get("state") for k in self.parts]
+        """What the fix did, as it is: a part counts as fixed when its words changed and no note of the Review agent
+        still stands on it; one it rewrote that still has a note says so (acceptance run A10: "Fixed 1 of 1" while the
+        words at fault stayed)."""
         n = len(self.parts)
-        return (f"Fixed {st.count('done')} of {n} part(s), {st.count('proposed')} proposed"
-                f"{', ' + str(len(self.new_pins)) + ' new fact(s) found' if self.new_pins else ''}.")
+        noted = getattr(self, "still_noted", set())
+        done = [k for k in self.parts if fields.get(k, {}).get("state") == "done"]
+        fixed = [k for k in done if self.changed(k) and k not in noted]
+        still = [k for k in done if self.changed(k) and k in noted]
+        same = [k for k in done if not self.changed(k)]
+        proposed = [k for k in self.parts if fields.get(k, {}).get("state") == "proposed"]
+        words = lambda ks: ", ".join(LABELS.get(k, k) for k in ks)  # noqa: E731
+        line = f"Fixed {len(fixed)} of {n} part(s)"
+        if still:
+            line += f"; {len(still)} rewritten but still {'needs' if len(still) == 1 else 'need'} you ({words(still)})"
+        if same:
+            line += f"; {len(same)} left as {'it was' if len(same) == 1 else 'they were'} ({words(same)})"
+        line += f", {len(proposed)} proposed"
+        return line + (f", {len(self.new_pins)} new fact(s) found" if self.new_pins else "") + "."
 
     def _brief(self):
         return {k: get(self.W, k) for k in KEYS if filled(get(self.W, k))}
@@ -197,8 +217,16 @@ class FixPartsJob(PlannedBriefJob):
         return not res.get("rewritten") or read is None or read["chain"] < FLAG_AT
 
     def _place(self, rv, ev):
-        # The Review agent's notes on parts the fix did not touch are not this job's to place
-        rv = {**rv, "notes": [n for n in rv.get("notes") or [] if set(n.get("parts") or []) & set(self.parts)]}
+        # The Review agent's notes are placed on the parts this fix wrote, and only those: a note's other parts are
+        # not this job's (acceptance run A10: a note naming the proposition, which the person had kept with a reason,
+        # re-opened it, and Needs you went from 1 to 4). A note left with none of them is not placed.
+        notes = []
+        for n in rv.get("notes") or []:
+            mine = [p for p in n.get("parts") or [] if p in self.parts]
+            if mine:
+                notes.append({**n, "parts": mine})
+        self.still_noted = {p for n in notes if n.get("severity") == "fix" for p in n["parts"]}
+        rv = {**rv, "notes": notes}
         super()._place(rv, ev)
 
     def _passed(self, decisions):
@@ -256,8 +284,30 @@ def standing_problem(doc: str, chain: list, verdict_id: str) -> tuple[list, list
 
     def open_parts(i, d):
         later = chain[:i]  # newer than d
-        return [k for k in keys_of(d) if not any(e.get("kind") in ("edit", "resolve") and e.get("action") != "propose"
-                                                 and wrote(e, doc, k) for e in later)]
+
+        # The page's own rule (brief-maker verdictState): a bad verdict is answered by a person who wrote the part,
+        # or by a later good verdict that gives a reason (the Review agent passing a redraft). An agent's rewrite
+        # alone does not answer it: the note still stands on the sheet, so the fix must still run.
+        def answered(k):
+            for e in later:
+                if e.get("kind") in ("edit", "resolve") and e.get("action") != "propose" and not e.get("superseded_by") \
+                        and _is_human(e) and wrote(e, doc, k):
+                    return True
+                # A good verdict with a reason answers it, but not one judging the very write the note judged: that is
+                # the same draft read twice, not a later pass (acceptance
+                # run A10: a good word on another point of the reason to believe, written in the same second as the note,
+                # took the part out of the fix, and the words at fault stayed).
+                if e.get("kind") == "verdict" and e.get("polarity") == "good" \
+                        and (e.get("reasoning") or str(e.get("rationale") or "").strip()) and wrote(e, doc, k) \
+                        and (_is_human(e) or not _same_read(e, d)):
+                    return True
+            return False
+        return [k for k in keys_of(d) if not answered(k)]
+
+    def _same_read(e, n):
+        """Whether verdict e judged the same write of the part as note n did: the same draft read twice."""
+        writes = {c for c in n.get("cites") or [] if isinstance(c, str)}
+        return bool(writes & {c for c in e.get("cites") or [] if isinstance(c, str)})
 
     parts = open_parts(idx, v)
     if not parts:

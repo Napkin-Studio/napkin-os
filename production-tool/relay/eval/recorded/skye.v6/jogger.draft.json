@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "EXT. PARK - MORNING"
+     },
+     {
+      "type": "action",
+      "text": "@maya_front sits on a park bench, pulling her laces tight."
+     },
+     {
+      "type": "action",
+      "text": "A jogger runs past, far behind her, small against the trees."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front glances up and watches the runner shrink down the path."
+     },
+     {
+      "type": "action",
+      "text": "She double-knots the laces and stands."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front bounces on her toes, eyes on the path."
+     },
+     {
+      "type": "action",
+      "text": "She breathes out and sets off, quick and light."
+     },
+     {
+      "type": "action",
+      "text": "The bench sits empty as she runs toward the distant jogger."
+     }
+    ],
+    "note": "I drafted a short park scene from your line, keeping @maya_front and leaving out the jogger tag, which has no reference."
+   }
+  ],
+  "rationale": "Drafted a one-location 15 s scene of seven short action lines (about 14 s) with no dialogue. Dropped @jogger because it isn't in context.refs, so the jogger is plain text."
+ }
+}

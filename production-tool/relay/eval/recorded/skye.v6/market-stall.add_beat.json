@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "At a busy street market, @sai_front holds up a ripe mango, sniffs it, and hands coins to the stallholder."
+     },
+     {
+      "type": "direction",
+      "text": "Colourful, crowded background."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2.5,
+      "text": "A warm smile spreads across @sai_front's face as the mango's scent hits."
+     }
+    ],
+    "note": "I added a beat at 2.5 s where @sai_front smiles at the mango's scent."
+   }
+  ],
+  "rationale": "The shot lacked a reaction moment, so I added one timed beat after the sniff and kept the existing words unchanged."
+ }
+}

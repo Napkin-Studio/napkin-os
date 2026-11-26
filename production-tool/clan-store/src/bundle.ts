@@ -1,7 +1,8 @@
-// The export: `<handle>.clan` plus `assets/<sha256 hex>.<ext>` in one zip.
+// The export: `<project title>.clan` plus `assets/<sha256 hex>.<ext>` in one zip.
 // The document holds only hashes and locations; the caller resolves the bytes
 // (IndexedDB first, then S3/https), and each one is checked against its hash.
 import { zipSync, type Zippable } from 'fflate'
+import { hexOfBytes, sha256Digest } from './sha256'
 import type { Doc, DocAsset } from './types'
 
 const EXT: Record<string, string> = {
@@ -13,6 +14,15 @@ const EXT: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/webm': 'webm',
   'video/quicktime': 'mov',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'font/woff2': 'woff2',
+  'font/ttf': 'ttf',
+  'font/otf': 'otf',
+  'text/plain': 'txt',
+  'application/zip': 'zip',
 }
 
 export function assetExt(mime: string): string {
@@ -27,8 +37,7 @@ export function assetPath(a: Pick<DocAsset, 'sha256' | 'mime'>): string {
 export type AssetResolver = (asset: DocAsset) => Promise<Uint8Array | null>
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource)
-  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+  return hexOfBytes(await sha256Digest(bytes))
 }
 
 export interface ExportZip {
@@ -39,22 +48,22 @@ export interface ExportZip {
   mismatched: string[]
 }
 
-/** File-safe handle for the .clan's name. */
-export function clanFileName(handle: string): string {
-  const safe = handle.trim().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
+/** File-safe name for the .clan (the project's title). */
+export function clanFileName(title: string): string {
+  const safe = title.trim().replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '')
   return `${safe || 'document'}.clan`
 }
 
 export async function buildExportZip(args: {
   clan: Uint8Array
-  doc: Pick<Doc, 'participant' | 'assets'>
+  doc: Pick<Doc, 'project' | 'assets'>
   resolve: AssetResolver
 }): Promise<ExportZip> {
-  const files: Zippable = { [clanFileName(args.doc.participant.handle)]: args.clan }
+  const files: Zippable = { [clanFileName(args.doc.project.title)]: args.clan }
   const missing: string[] = []
   const mismatched: string[] = []
   const seen = new Set<string>()
-  for (const a of args.doc.assets ?? []) {
+  for (const a of Object.values(args.doc.assets ?? {})) {
     if (seen.has(a.sha256)) continue
     seen.add(a.sha256)
     let bytes: Uint8Array | null = null
@@ -71,7 +80,7 @@ export async function buildExportZip(args: {
       mismatched.push(a.sha256)
       continue
     }
-    // Images and video are already compressed: store them as they are.
+    // Images, video, PDFs and fonts are mostly compressed already: store them as they are.
     files[assetPath(a)] = [bytes, { level: 0 }]
   }
   return { zip: zipSync(files), missing, mismatched }

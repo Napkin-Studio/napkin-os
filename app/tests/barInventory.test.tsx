@@ -23,6 +23,7 @@ import { accountItems, continueItems, deskItems, docMenuItems, linkList, linkedC
 import { __test as dogfood } from '../src/dogfood/recorder.ts'
 import { betaNoticeOpen, betaNoticeOpener, closeBetaNotice } from '../src/dogfood/notice.ts'
 import { barFrom } from '../src/shell/appBar.ts'
+import { PRODUCTION_APP_ID, productionDocUrl } from '../src/shell/landing/tools.ts'
 
 const noop = () => {}
 const doc = (over: Partial<DocBar> = {}): DocBar => ({
@@ -163,6 +164,13 @@ test('a document: its tool icon and name with saved · valid under it, Continue 
   assert.match(cont.spin[0].hint ?? '', /A board deck from this/)
   assert.deepEqual(cont.link, [], 'nothing to link: the group says so')
   assert.deepEqual(cont.update, [], 'made from nothing: nothing to update from')
+  // Continue in, Territories (territories-spinoff-in): from a brief and from research, in the tool's own words.
+  const terr = { app_id: 'ie.napkin.territories', name: 'Territories', version: '0.1.0' }
+  const fromBrief = continueItems(doc({ targets: [terr], tool: { name: 'Brief Maker' } as DocBar['tool'] }))
+  assert.deepEqual(labels(fromBrief.spin), ['Territories'])
+  assert.equal(fromBrief.spin[0].hint, 'Routes for a campaign, from this brief')
+  const fromResearch = continueItems(doc({ targets: [terr], tool: { name: 'Research Tool' } as DocBar['tool'] }))
+  assert.equal(fromResearch.spin[0].hint, 'Routes for a campaign, from these findings')
 })
 
 test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made from with Update when the parent changed', () => {
@@ -181,6 +189,35 @@ test('Continue in ▾ groups: Turn it into, Link to an existing one, and Made fr
   for (const want of ['>Turn it into<', '>Link to an existing one<', '>Made from<', '>Start fresh<', 'Up to date with', 'A locked version keeps what it was made from']) {
     assert.ok(src.includes(want), `Toolbar has ${want}`)
   }
+})
+
+test('Continue in on a brief: Production is a target like the others, and picking it spins the brief off (features/production-spinoff.clan)', () => {
+  const picked: string[] = []
+  const targets = [
+    { app_id: 'ie.napkin.deck-maker', name: 'Deck Maker', version: '1' },
+    { app_id: PRODUCTION_APP_ID, name: 'Production', version: '1.0.0' },
+  ]
+  const cont = continueItems(doc({ targets, onSpinoff: (id: string) => { picked.push(id) } }))
+  assert.deepEqual(labels(cont.spin), ['Deck', 'Production'])
+  assert.match(cont.spin[1].hint ?? '', /Films and stills from this brief/)
+  cont.spin[1].run()
+  assert.deepEqual(picked, ['ie.napkin.production'])
+  // the old ?brief= hop is gone: no separate "Production Tool" item, no query to the tool
+  assert.deepEqual(labels(continueItems(doc()).spin), ['Deck'])
+  const app = readFileSync('src/App.tsx', 'utf8')
+  assert.doesNotMatch(app, /\?brief=|filmFromBriefHref|onStartFilm/)
+  // Production's pick is the plain spin-off; the project it makes opens in the tool by its id (no bridge route).
+  assert.doesNotMatch(app, /spinoffToProduction/)
+  assert.match(app, /open\.manifest\.app\?\.app_id === PRODUCTION_APP_ID/)
+  assert.match(app, /window\.location\.assign\(productionDocUrl\(open\.path\)\)/)
+  assert.equal(productionDocUrl('doc-1a2b'), '/production/d/doc-1a2b')
+  assert.match(app, /filter\(a => a\.app_id !== PRODUCTION_APP_ID\)/)
+  // Production is offered only where the server serves the tool, never on the device (no relay there)
+  assert.match(app, /productionTarget=\{production && !device\}/)
+  const host = readFileSync('src/shell/AppHost.tsx', 'utf8')
+  assert.match(host, /productionTarget \? offered : offered\.filter\(t => t\.app_id !== PRODUCTION_APP_ID\)/)
+  for (const f of ['src/host/wasm.ts', 'src/host/tauri.ts', 'src/host/http.ts', 'src/host/types.ts'])
+    assert.doesNotMatch(readFileSync(f, 'utf8'), /spinoffToProduction/, `${f} has no bridge call`)
 })
 
 test('the old More menu\'s every action still has a home in the new bar (inventory)', () => {
@@ -500,6 +537,19 @@ test('linksOf reads /related into the lineage chips, both ways, and what was mad
   assert.match(html, /data-testid="lineage-linked"[^>]*>↔ <b>2 linked<\/b><i class="ch-line-dot"/, 'both ways under one chip')
   assert.deepEqual(linkedRows({ linked }).into.map(r => r.sub), ['Linked · v3 taken · changed since'])
   assert.deepEqual(linkedRows({ linked }).out.map(r => [r.doc.title, r.sub]), [['Spring film', 'Production · holds this one']])
+})
+
+test('UAT 5-tool run: a linked Brand Clan says the version it holds (v2), not how many times it was taken', () => {
+  const view = {
+    document_id: 'deck1',
+    upstream: [
+      { document_id: 'bc1', title: 'Brúach Kombucha · Original', path: 'store/bc1', how: 'linked' as const, status: 'current' as const, taken: 1, kit_version: 2, noun: 'brand clan' },
+      { document_id: 'r1', title: 'Oat milk', path: 'store/r1', how: 'linked' as const, status: 'current' as const, taken: 3 },
+    ],
+    downstream: [],
+  }
+  const { linked } = linksOf(view)
+  assert.deepEqual(linkedRows({ linked }).into.map(r => r.sub), ['Brand clan · v2', 'Linked · v3 taken'])
 })
 
 test('the bar: who and where, then the document left-aligned (phase 36), then the tools after the spacer', () => {

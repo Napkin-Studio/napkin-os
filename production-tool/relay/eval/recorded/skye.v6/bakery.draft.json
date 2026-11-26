@@ -1,0 +1,50 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "scene",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "INT. BAKERY - DAWN"
+     },
+     {
+      "type": "action",
+      "text": "Flour rises in a beam of light."
+     },
+     {
+      "type": "action",
+      "text": "@maya_front pulls a golden loaf from the oven."
+     },
+     {
+      "type": "action",
+      "text": "She taps its base. It sounds hollow."
+     },
+     {
+      "type": "action",
+      "text": "Steam curls off the crackling crust."
+     },
+     {
+      "type": "action",
+      "text": "She breaks the loaf open. The crumb is soft and airy."
+     },
+     {
+      "type": "action",
+      "text": "She lifts it to her face and breathes in."
+     },
+     {
+      "type": "action",
+      "text": "A smile spreads as she sets it down to cool."
+     }
+    ],
+    "note": "I drafted a short bakery scene from your line, keeping the flour, the loaf and the tap."
+   }
+  ],
+  "rationale": "Expanded the single action line into a one-location 14 s visual scene, keeping @maya_front as written and avoiding any invented name or dialogue."
+ }
+}

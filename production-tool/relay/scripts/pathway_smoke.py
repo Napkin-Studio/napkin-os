@@ -35,12 +35,13 @@ HERE = Path(__file__).resolve().parent
 RELAY = HERE.parent
 sys.path.insert(0, str(RELAY))
 
-from contracts_dir import contracts_dir  # noqa: E402
+from contracts_dir import contracts_dir, pricing  # noqa: E402
+from runtime import with_defaults  # noqa: E402
 from providers.types import effective_sheet  # noqa: E402
 
 PATHWAYS = ("runway",)
 KEYS = {"runway": "RUNWAY_API_KEY"}
-IMAGE_STEPS = ("generate", "view", "frame", "region_edit")
+IMAGE_STEPS = ("generate", "view", "frame", "region_edit", "frame_edit")
 VIDEO_STEPS = ("clip", "clip_edit")
 TERMINAL = ("completed", "failed", "cancelled", "uncertain")
 JOB_TIMEOUT_S = 900
@@ -52,9 +53,8 @@ def _sheets() -> dict[str, dict]:
 
 
 def _config(name: str) -> dict:
-    cfg = json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text())
-    cfg["flags"] = {**cfg["flags"], "regionEditCanvas": True, "regionEditFrames": True, "videoRegionEdit": True,
-                    "feelEdit": True}
+    cfg = with_defaults(json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text()))
+    cfg["flags"] = {**cfg["flags"], "videoRegionEdit": True, "feelEdit": True}
     cfg["quotas"] = {"image": 1000, "video": 1000, "render": 1000}
     cfg["inFlightPerParticipant"] = 6
     return cfg
@@ -73,9 +73,8 @@ def inputs(args) -> dict[str, dict | None]:
     """The input for each step, or None when an argument it needs is missing."""
     image = _asset(args.image_url or "https://example.invalid/character.png", "image/png")
     front = {"id": _id("ref"), "name": "hero_front", "role": "character", "kind": "picture", "asset": image}
-    shot = {"id": _id("shot"), "order": 1, "duration_s": 5, "composition": "medium",
-            "action": "@hero_front waves at the camera in a sunny park", "camera_move": "static",
-            "refs": ["hero_front"]}
+    shot = {"id": _id("shot"), "kind": "shot", "duration_s": 5, "camera": {"size": "medium", "movement": "static"},
+            "action": "@hero_front waves at the camera in a sunny park", "refs": ["hero_front"]}
     return {
         "generate": {"text": "@hero_front standing, full body, plain background", "refs": [front], "ratio": "4:5"},
         "view": {"view": "side", "image": image, "ratio": "4:5"},
@@ -83,6 +82,10 @@ def inputs(args) -> dict[str, dict | None]:
         "region_edit": ({"image": image, "region": {"x": 0.3, "y": 0.1, "w": 0.4, "h": 0.25},
                          "mask": _asset(args.mask_url, "image/png"), "text": "a red hat", "ratio": "4:5"}
                         if args.mask_url else None),
+        # Change this frame (features/frame-change-edit.clan): the picture as the shot's current frame, redrawn
+        # from above. Check by eye that the camera changed and the old framing did not come back.
+        "frame_edit": {"text": "make this an overhead aerial shot", "image": image, "shot": shot, "refs": [front],
+                       "aspect": {"w": 1344, "h": 756}},
         "clip": {"shot": shot, "image": image, "refs": [front], "ratio": "16:9"},
         "clip_edit": ({"video": _asset(args.video_url, "video/mp4"), "feel": {"strength": "flex"},
                        "text": "warmer, golden-hour light"} if args.video_url else None),
@@ -104,7 +107,7 @@ def plan(args, env: dict) -> list[dict]:
             why = ("" if KEYS[provider] in env else f"no {KEYS[provider]}") or ("" if inp[op] else
                    f"needs --{'mask' if op == 'region_edit' else 'video'}-url")
             rows.append({"pathway": name, "op": op, "provider": provider, "model": spec["model"],
-                         "estimateUsd": spec.get("estimateUsd"), "skip": why})
+                         "usd": pricing().op_usd(sheets[provider], op), "skip": why})
     return rows
 
 
@@ -145,13 +148,17 @@ def run_live(args, env: dict, rows: list[dict]) -> list[dict]:
                 if row["skip"]:
                     results.append({**row, "state": "skipped"})
                     continue
-                cost = row["estimateUsd"] or 1.0  # an unpublished price counts as $1 against the cap
+                cost = row["usd"] if row["usd"] is not None else 1.0  # an unpublished price counts as $1 against the cap
                 if spent + cost > args.max_usd:
                     results.append({**row, "state": "skipped", "skip": f"over the ${args.max_usd} cap"})
                     continue
                 spent += cost
                 t0 = time.time()
-                req = {"contractVersion": "2", "jobId": _id("job"), "op": row["op"], "parentIds": [], "input": inp[row["op"]]}
+                job_id = _id("job")
+                kind = {"frame": "storyboard", "frame_edit": "shot", "clip": "video", "clip_edit": "video"}.get(row["op"], "sketch")
+                req = {"contractVersion": "3", "jobId": job_id, "op": row["op"], "projectId": _id("proj"),
+                       "nonce": "n_" + job_id[-12:], "node": {"kind": kind, "id": _id(kind)}, "parentIds": [],
+                       "input": inp[row["op"]]}
                 status, job = _call(relay, "POST", "/jobs", req)
                 while status == 200 and job["state"] not in TERMINAL and time.time() - t0 < JOB_TIMEOUT_S:
                     time.sleep(max(2, job.get("nextPollS") or 2))
@@ -184,10 +191,10 @@ def main(argv=None, env=None) -> int:
     for provider, var in KEYS.items():
         print(f"{var}: {'set' if var in env else 'missing'}")
     rows = plan(args, env)
-    total = sum(r["estimateUsd"] or 0 for r in rows if not r["skip"])
+    total = sum(r["usd"] or 0 for r in rows if not r["skip"])
     for r in rows:
         print(f"  {r['pathway']:7} {r['op']:11} {r['provider']:7} {r['model']:38} "
-              f"{'unpublished' if r['estimateUsd'] is None else '$%.3f' % r['estimateUsd']:>11}  {r['skip']}")
+              f"{'unpublished' if r['usd'] is None else '$%.3f' % r['usd']:>11}  {r['skip']}")
     print(f"estimated ${total:.2f} for {sum(not r['skip'] for r in rows)} job(s); cap ${args.max_usd:.2f}")
     if not args.live:
         print("dry run: nothing sent (pass --live to spend)")

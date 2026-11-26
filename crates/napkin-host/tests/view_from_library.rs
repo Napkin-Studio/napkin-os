@@ -141,6 +141,7 @@ fn template_with(
             content_type: "image/svg+xml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
     let with_view = ClanFile::from_bytes(b.build().unwrap()).unwrap();

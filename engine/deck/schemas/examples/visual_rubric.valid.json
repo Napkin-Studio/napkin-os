@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "per_slide": [
+    {
+      "id": "v_one_focus",
+      "question": "Is there one clear first thing to look at?",
+      "pass_is": "yes",
+      "severity_if_fail": "major",
+      "fix": "switch_layout",
+      "confirm_with": "mostly_empty"
+    },
+    {
+      "id": "v_crowded",
+      "question": "Does the slide look crowded?",
+      "pass_is": "no",
+      "applies_to": {
+        "groups": [
+          "content"
+        ]
+      },
+      "severity_if_fail": "minor",
+      "fix": "switch_layout"
+    },
+    {
+      "id": "v_image_text",
+      "question": "Is there any readable text or logo in the picture?",
+      "pass_is": "no",
+      "applies_to": {
+        "has_image": true
+      },
+      "severity_if_fail": "major",
+      "fix": "regen_image"
+    }
+  ],
+  "per_deck": [
+    {
+      "id": "v_one_look",
+      "question": "Do all the pictures share one visual style?",
+      "pass_is": "yes",
+      "severity_if_fail": "major",
+      "fix": "none"
+    }
+  ]
+}

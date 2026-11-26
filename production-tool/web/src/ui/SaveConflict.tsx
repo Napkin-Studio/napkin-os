@@ -5,13 +5,15 @@
 import { useState, useSyncExternalStore } from 'react'
 import { useServices, useShell } from '../app/context'
 import type { ServerCopy } from '../projects/serverCopy'
+import { saveThrough } from './useSave'
 
 export function SaveConflictBox() {
-  const { serverCopy } = useServices()
-  return serverCopy ? <Box copy={serverCopy} /> : null
+  const { serverCopy, clan } = useServices()
+  return serverCopy ? <Box copy={serverCopy} owner={clan} /> : null
 }
 
-function Box({ copy }: { copy: ServerCopy }) {
+/** `owner`: the project's .clan store, which the bar's save state belongs to (useSave). */
+function Box({ copy, owner }: { copy: ServerCopy; owner: unknown }) {
   const shell = useShell()
   const conflict = useSyncExternalStore(copy.subscribe, copy.get)
   const [busy, setBusy] = useState(false)
@@ -21,7 +23,8 @@ function Box({ copy }: { copy: ServerCopy }) {
     setBusy(true)
     setError(null)
     try {
-      await fn()
+      // A save, as Save now is: the bar says saving, then saved (or not saved).
+      await saveThrough(owner, fn)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

@@ -71,6 +71,32 @@ name the stand-in, its port, or branch on which implementation answered.
   document's own members and arrive in `clan.facts` and `clan.findings`. The
   frozen data reaches a model only as §10.13 says. `upstream` is read-only:
   a `data_patch` that names it is refused (Contract 4 §8.1).
+- **`production_upstream`** (2026-11-22, features/production-spinoff): on a document whose `data.upstream` holds a Production project (a
+  copy whose `app` is `production-tool`), the first such copy whole, `{id, data}`, beside the index above (which still lists it). It is
+  the one frozen copy that travels whole, with what it carried itself put back under its own `data.upstream` (owner 2026-11-23: its full
+  brief and research, never only the Brief node's spine; a kit is left out): the Deck's `build_deck` reads its finals, assets and the FULL
+  brief (objectives, audience, mandatories, budget, timing; the spine `briefs` only when the project carries no brief) from it (no picture bytes: those are
+  fetched from the relay by hash with the assets pass), puts it back under `data.upstream.<id>` for the Confidential marks, and sends it
+  to the engine as `production_upstream`. Absent when the document carries no Production project.
+- **`carried_upstream`** (2026-11-23, features/territories): on a Territories document (app `ie.napkin.territories`), the frozen copies of
+  `data.upstream` that are a brief or research, whole, `{<document id>: copy}`, beside the index above (a kit and a Production project are
+  left out). `run_territories` reads the brief from them (`doc.ctx_data_carried` puts them back under `data.upstream`), because from the
+  index alone the engine finds no brief and asks for a category and a market. The index still lists them. Absent when the document
+  carries none, and on every other app.
+- **`brief_upstream`** (2026-11-25, UAT round 4 L2): on a Deck Maker document whose `data.upstream` holds a brief (the first entry with a
+  Brief Maker field such as `objectives` or `mandatories`; never a Production project or a kit), the host sends `{id, data}` with that brief
+  whole, beside the index. `build_deck@1` puts it back under `data.upstream.<id>` and sends it to the engine as `brief_upstream`, which
+  builds from its fields. Absent when the Deck carries no brief. (Before it, a Deck from a brief built from an empty brief: the middleware
+  saw only the index.) What the brief carried itself (its research, and any other document the spin-off hoisted beside it; never a
+  Production project or a kit) goes back under the brief's own `upstream`, whole (2026-11-26, 5-tool run): a Confidential mark the brief's
+  chain holds on its research names that document, and `marks_of` and the engine's marks check read it there. A mark naming a document
+  the Deck does not hold is still refused.
+- **`brand_upstream`** (2026-11-25, acceptance A60): on a Deck Maker document that wears a Brand Clan (its `lineage.attached[]` entry of app
+  `ie.napkin.brand`), the host sends `{id, version, data, logos}`: the frozen copy at `data.upstream.<id>` whole, the version held, and its
+  logo files as the host copied them in on attach or Update (`logos`: `human/assets/brand/<id>/<file>` to base64; at most 4 MB of files).
+  `build_deck@1` forwards it to the engine as `brand_upstream` (anything else is dropped), and the engine dresses the deck from it as from a
+  deck document (`run_deck --brand-upstream`): the Brand Clan's colours, type and logo. Absent when the Deck wears none. (Before it, a deck
+  whose Start said it wore the client's Brand Clan was built in the default look: the middleware saw only the index.)
 - **`upstream_ask`** (2026-11-09, features/spinoff-and-links): on a document
   whose pipeline declares `extract_ask`, the ask of the brief it carries:
   `{document_id, direct, fields: {<path>: text}}`, the paths drawn only from
@@ -97,7 +123,12 @@ name the stand-in, its port, or branch on which implementation answered.
   `start_campaign`'s identify proposes `campaign.client_org` from it when
   neither the roster, the material nor a carried brief names one: origin
   `proposed`, with `workspace_ref: "<id>"` in place of `fact_ids` /
-  `upstream_refs` (Contract 3, client_org only).
+  `upstream_refs` (Contract 3, client_org and brand only). From 2026-11-24 it
+  also settles `campaign.brand` when the material claims no brand as the
+  client's (it names only comparators, or none): a brand named like the
+  client (`same_house`), else the client's name without its legal suffix,
+  each `proposed` with `workspace_ref`. With two or more brands claimed as
+  the client's it still asks, the client as the first option.
 - **`upstream_payload`** (2026-09-30): the research a brief carries, as Sai's
   brief engine takes it — exactly the engine's `upstream` object,
   `{brand?, category?, competitors, facts, decisions}` — printed by the
@@ -162,7 +193,7 @@ name the stand-in, its port, or branch on which implementation answered.
 | `start_campaign` | `{ "prompt": "...", "attachments": [{ "material_id", "name", "sha256", "text"? }] }` | The chat intake (§8). Long. Each `material_id` must be a key of `clan.data.materials` with that `sha256` (the view indexes the file first). Nothing to read at all is `400 invalid_input`, as for `extract_ask` |
 | `answer_question` | `{ "job_id": "...", "question_id": "...", "option_id"?: "...", "text"?: "...", "skip"?: true }` | Exactly one of `option_id` / `text` / `skip` (§8.3; *`skip` added 2026-11-12*). For a `draft_brief` job waiting at intake it is `{ "job_id", "questions_id", "answers": { "<question id>": "<text>" \| null } }` instead (§10.3) |
 | `compose_report` | `{}` | Short. Re-composes `data.report` from the document as it stands (§8.5) |
-| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
+| `draft_brief` | `{ "prompt"?: "...", "attachments": [{ "name", "label"?, "sha256", "media_type"?, "asset"?, "text"?, "image"?: { "media_type", "data" } }], "intake"?: true, "redraft"?: true }` | Brief Maker (§10). Long. `image` is base64 bytes of a picture attachment (§10.1). `label` is the file's own name as the person chose it; `name` is the stored one the host reads it by. The material is named by `label` when given (*`label` added 2026-11-25*). `intake: true` lets the job stop once for a few questions (§10.3). Nothing to read at all is `400 invalid_input` |
 | `regenerate_field` | `{ "field": "<dotted field key>", "guidance"?: "..." }` | Brief Maker (§10.10). Long. `field` one of the eighteen keys of §10.4 |
 | `fix_parts` | `{ "verdict": "<decision id>", "guidance"?: "..." }` | Brief Maker (§10.15). Long. `verdict` a bad verdict still standing on the brief |
 | `ask_research` | `{ "question": "...", "lens"?: "<lens id>", "about"?: "f_…" \| "fi_…", "attachments"?: [{ "name", "sha256", "text"? }] }` | Research Tool. Long. `question` up to 1000 characters. `lens` puts the answer after that lens's section; without it the answer gets a section of its own. `about` is the fact or finding the question was asked from: it must be in the document and in use (a fact not superseded, excluded or rejected; a finding `proposed` or `verified` that cites no fact out of use), else `400 invalid_input`. It leads the evidence, and the prompt says the question is about it. The answer is written to `data.asks[<id>]`, which records `about` (`null` when none was given) and `in_report`: `true` for a general question, `false` for one with `about`, whose answer the view shows under that item until a person adds it to the report (their attributed write of `in_report: true`, `in_report_by`, `in_report_at`; Take out writes `false`). Needs markets and categories, as `research_lens` does (*`about`, `in_report` added 2026-11-12*) |
@@ -1829,3 +1860,170 @@ stand-in. The host finds the parts itself, deterministically, from the
 client's words and the app's part names (Contract 4 §7.5.2a), and nothing in
 client review calls the middleware. A request for `find_client_parts` is
 `400 unknown_task`.
+
+## 12. Deck Maker: `build_deck`
+
+*Added 2026-11-04* (`features/deck-maker-server.clan`). One task, `build_deck@1`, runs one **segment** of a Deck Maker run through the
+deck engine (`engine/deck/server.py`) and writes what the engine reports into the document. The Deck's `app/pipeline.yaml` declares
+`request_kind: middleware`: the host settles a reply's change only for that kind (`ops/middleware.rs`, `REQUEST_KIND`).
+
+- **Input.** `input` is empty: the job reads the document. The engine is sent `inputs.prompt` (`text`, `client`, `project`, `agency`),
+  `inputs.kind` (`agency` or `investor`), `inputs.format` and `run.approvals`, which the person wrote, and the process-wide
+  `NAPKIN_DECK_RENDER` (`0`: the last segment stops at the deck and writes no files, so no LibreOffice is needed).
+- **A segment, not a run.** The job is `long` with one stage, `build`. It runs the engine up to the next gate, or on to the finished deck
+  once the last gate is approved, then ends `done`. A gate is a finished segment with `run.state: gate`; nothing waits across it, so a
+  restart of the middleware loses nothing. A gate goes on only when its approval is in `run.approvals` **and** the stage output it covers
+  existed when the call arrived (the engine decides; an approval of an earlier run never skips a gate of a new one). The gates are
+  `storyline` (after stage b), `territories` (after c) and `idea` (after d); Review is the screen after the last gate, not a gate.
+  An investor deck has the storyline gate only.
+- **The change.** Each poll that finds the engine's report changed carries one staged change. Its `data_patch` writes the run keys
+  the engine owns (`run.state`, `run.stage`, `run.stages`, `run.gate`, `run.agent`, `run.checks`, `run.error`, `run.done`,
+  `run.images`, never a cost; a key the run no longer has, such as the agent at a gate or the gate once approved, is set to `null`), and once the deck
+  is built `deck`, `validation`, `evidence`, `report` and `exports` (file names and sizes: the files stay on the engine's disk). It never writes
+  `run.approvals`, `run.decisions` or `run.gate_requests`: the person writes those beside it, so the **read-set** names `run.<key>`, never
+  the whole `run`, and a decision the person made while the job ran does not make the host judge the job's base stale. Each change
+  carries one `edit` decision by `build_deck@1.x/engine` with its reasoning; its `targets` are the paths it writes. The merged data
+  validates against the app's `schema.json`. A repeated poll of a finished job returns the same change, and the host skips it (§5).
+- **Failure is shown as failure.** An engine that answers an error, does not answer in time, cannot be reached, or answers something that
+  is not a run ends the job `failed` with its message (`job.error.type`: the engine's own type, or `engine_timeout`, `engine_unreachable`,
+  `engine_garbage`), and the run is written `failed` with the same message in `run.error` (`retryable: true`, the running row marked
+  `failed`, the agent in its `error` state). Nothing is ever made up: no deck, no cost, no percentage. What the engine had already written
+  stays in its cache, so the next call resumes there.
+- **Errors at the call.** `400 invalid_input` when `inputs.prompt.text` is empty; `503 engine_unavailable` when no engine is configured
+  (`NAPKIN_DECK_ENGINE_URL` unset); `409 job_state` when a `build_deck` for this document is still running (one segment at a time). The
+  engine itself runs one segment at a time too: its own 409 ends this job `failed`, with its message.
+- **Cancel.** `cancel_job` stops the job at once. The engine's segment cannot be stopped from here: it finishes, and its stage outputs
+  stay in the engine's cache.
+- **Cost.** No cost reaches the document or the app: costs are for the Napkin team only, never in the product (Sai,
+  19 Nov 2026). The engine's `run.cost_usd` and its report's `cost_usd`, `engine_usd_total` and `usd_basis` are dropped here, and
+  an older document's `run.cost_usd` is set to `null`. The picture cards keep their prices: a yes to a spend names it. `trace.usage` reports
+  zeros: the engine's model calls are its own, capped there (`NAPKIN_DECK_MAX_USD`), not metered by this middleware.
+- **Not yet.** `ask_change` (rewrite one slide's words; no handler, so a request for it is `400 unknown_task`), the document's brief and
+  research as inputs, the person's intake answers, attached documents, acting on an `edit` or `retry` decision, and a poll that survives a
+  restart of the middleware (an in-memory job store, as everywhere here: the next `build_deck` resumes from the engine's cache).
+- **Pictures (deck-image-gen).** With `NAPKIN_DECK_IMAGES=1` on the engine, the request may carry `marks` (always sent by `build_deck`: the
+  document's Confidential parts, `[]` when none), `review` and `approver`, and `run.approvals.images {decision approve, by human:<id>, at,
+  card, usd}` (a yes to ONE card by id). The engine answers with `run.images {state, cards {subjects?, pictures?, heroes?}, spent_usd,
+  cap_usd}` (engine-owned, passed through); each card holds `id, rows, usd, spent_usd, cap_usd, left_usd, held_back, optional, unknown,
+  over_cap, prompts {<slide>.<slot>: prompt}`. The app does no arithmetic and the middleware makes no picture: the engine plans, makes only
+  for a yes naming an open card, and a yes for a card that is no longer open fails the segment with `stale_card`. The API key is the
+  engine host's environment (`RUNWAYML_API_SECRET`) and never travels in a request.
+- **Production pictures (deck-prod-picker).** `attach_production@1` (short, writes nothing) takes `input {name, data_b64}`: a Production
+  `.clan` or export `.zip` the person attached, base64, at most 64 MB (`413 too_large` above; `400` for any other name or bad base64). It
+  sends the bytes to the engine's `POST /production {doc, name, data_b64}`, which checks the file as its picker reads it and keeps it by
+  its sha256; the result is `{summary, sha256, name, kind, rows, eligible}` and the app records `inputs.production`. `build_deck` then
+  passes `inputs.production {sha256, fetch, look}` on every segment (absent when the document names no file); the engine adds
+  `--production FILE`, and `--production-fetch` / `--production-look` only when the person turned them on. The payload gains
+  `production` (the picker's view, never a location). Nothing is fetched by the middleware.
+- **Deck files (deck-cloud).** `fetch_deck_file@1` (short, writes nothing) takes `input {name}`, `deck.html` or `deck.pptx`, and answers `result {name, media_type, bytes, data_b64}` from the deck engine's `GET /file/<doc>/<name>`; any other name is a 400, a file not built yet a 404 `no_file`, no engine a 503. The PDF is not served: the app sends `deck.html` to the host's Chromium export.
+
+## 13. Territories: `run_territories`, `fetch_territories_file`
+
+*Added 2026-11-23* (`features/territories-handlers.clan`). Territories runs **inside the middleware**, like Brief and Research (owner,
+2026-11-23): the handlers call `engine/territory` in this process. There is no engine URL, no sidecar and no second container. The document
+is the only state (a run's stage, gates and answers live in `data.run`), so a step that dies resumes from the document. The Territories
+`app/pipeline.yaml` declares `request_kind: middleware`.
+
+- **One task, many steps.** `run_territories@1` takes `input.step` (absent = `run`), the seam the app already uses:
+  - **Model steps** (long, one stage `run`; a job thread calls `engine/territory/runner.py`):
+    `run` (explore: the insights, then the gates, to the next stop; `runner.run`), `steer` (`crew_id`, `kind` one of `further`, `pull`,
+    `cross` with `with`, `stop`, `by`), `more` (`territory_id`, `steer?`, `n?`, `by`), `push` (`territory_id`, `instruction?`, `by`),
+    `rerank_routes` (`by`; one blind-judge call).
+  - **The crew in the job status** (2026-11-24, `features/territories-redesign.clan`). `job_status` for `run_territories` adds `job.crew`: `[]`
+    until explore sets off, then one entry per member `{id, name, short, role, colour, heading, state, routes}` with `state` `out` until that
+    member is back (`back` or `stopped`, `routes` its count). It lives only in the job (lost when the job is), never in the document, which
+    still gets `crew`, `expeditions` and `territories` only at the end. `progress.done` counts members back.
+  - **Quick moves** (no model; answered in the request: the first reply is already `done` with its change, or `failed` with the refusal in words):
+    `undo` (`action_id`, `by`), `greenlight_route` / `remove_route` (`territory_id`, `by`), `answer_ask` (`ask_id`, `answer`, `note?`, `by`),
+    `record_review` (`by`), `approve` (`gate`, default `greenlight`, `note?`, `by`), `send_routes` (`to` one of `deck-maker`,
+    `production-tool`, `territory_ids`, `not_chosen`, `by`). The rules are `engine/territory/gates.py`'s; an open gate is refreshed after a move so
+    `run.gate.blocked_by` and `asks` match the document.
+- **Pictures a step made** (2026-11-26, owner: the host stores the bytes; `features/territories-pictures-frames.clan`). A `frames` or `frames_approve`
+  step's change carries every picture it made, placed or held, as `assets_put: [{name, sha256, data_b64}]`, `name` = `frames/<sha256>.<png|jpg|webp>`.
+  The host checks each name against its bytes (at most 64, 25 MB each; anything else refuses the change whole) and keeps it at `human/assets/<name>`:
+  a link to the workspace's file store when it has one, embedded otherwise; one it already holds is not added again. The reply's `change` says
+  `assets_saved`. The page draws a frame at `/assets/frames/<sha256>.png`; a spin-off carries the link. A page that knows a picture only by its hash
+  (Production's route nodes) reads it from napkin-web's `GET /api/t/{tenant}/blobs/{sha256}` (pictures only, the caller's workspace only).
+- **Pictures that arrive.** A document with pictures (an `assets` map, its own or its frozen source's at `upstream.<id>.assets`) has every one put on the
+  workspace store (`NAPKIN_TERRITORY_BLOBS`, else the territory data root; `blobs/<aa>/<sha256>`) by `territory.pictures.rehome` before `run` reads it,
+  and `require_all` refuses a partial arrival in words (`job.error.type: refused`, "19 of 23 pictures arrived ...", nothing runs). The bytes come from a
+  reader the source's feature registers (`delivery.register_asset_reader`, the signed assets pass); with none, a picture not already on the store is
+  named missing. The quick step `place_pictures` (`territory_id?`, and `slot_id` + `sha256` to name one) puts arrived pictures into slots by link:
+  `pictures.fill` (once each, never one hash in two slots or on two routes) or `pictures.attach`; a refusal is words. A greenlit Final with no stated
+  rights holds the gate (`picture_rights`, gates.blockers).
+- **A person's choices about a world, and the write race.** `set_lead` (`territory_id`, `line` or null), `star_line` (`territory_id`, `line`, `on`) and
+  `keep_feel` (`territory_id`, `dial_set` of `tone`, `energy`, `register`, `brand` as whole numbers 0 to 100 (the schema's dial), or null) are small moves, not a patch of
+  the whole `territories` array (RFC 7396 replaces arrays, so an engine write and a choice at the same moment lost one of the two). With no step of the
+  document running a move applies to the current document and the reply carries its change. While a step runs (a `push`, a `more`) the move is checked
+  against the document now (a refusal is a failed job in words) and **held inside that step**: it is applied to the document the step returns, under the
+  step's own lock, in the same change, so both survive; a cancelled step writes the held moves as a change of their own. Any other step on a document
+  that has one running is still `409`. `push` takes `instruction` as the World view's four names (`braver`, `safer`, `more ownable`, `more proof`) or
+  the person's own words.
+- **The Pictures view's choices.** `set_final` (`territory_id`, `picture_id` (the slot id; `slot_id` or `sha256` also name it), `on` true/false) and `set_rights` (`territory_id?`, `picture_id` or `sha256`, `rights` one of
+  `generated`, `own`, `licensed`, `unknown`) are small moves of the same kind (`territory.pictures.set_final` / `set_rights`; a held-inside-a-running-step,
+  same lock). The open gate is refreshed: a Final with no stated rights holds the greenlight (`picture_rights`) until the rights move.
+- **What goes to the runner.** The document (`data`), the carried `facts`, `findings` and `sources` as the request holds them, the Confidential
+  marks (`build_deck.marks_of`: the same reading as the deck, always a list), a per-document store (`NAPKIN_TERRITORY_DATA/<doc id>/`: the resume
+  cache, so a retry never repays a finished call) and the job's cancel Event. The model is the engine's `LiveLLM` over `engine/brief_llm.py`
+  (the Anthropic API, the local model backend, or Bedrock with the task role under `NAPKIN_MODEL_API=bedrock`); the runner's cap is
+  `NAPKIN_TERRITORY_MAX_USD` (default 3.00).
+- **The change.** One staged change per step: the merge patch from the document the job read to the document the runner returned (arrays whole,
+  a key that went `null`). A model step never writes `run.approvals`, `run.decisions` or `run.gate_requests` (the person's): the read-set names
+  `run.<key>`, never the whole `run`. `approve`, `answer_ask`, `record_review` and a send that went write the person's own move, as the person asked.
+  One `edit` decision by `run_territories@1.x/engine` carries the reasoning; its `targets` are the paths it writes. The runner's ledger entries
+  (`ask`, one `spend` per paid call, `outcome`) become `edit` decisions by `run_territories@1.x/ledger` whose `action` is the entry's kind and whose
+  rationale says the figures in words: **the only place a price is written**, never the document (`contract.lint` holds that). An entry already in
+  the chain is not sent again.
+- **Failure is shown as failure.** A run the engine could not finish is a change that writes `run.state: failed` and `run.error` (words,
+  `retryable`) and a job that is `done`. A move the engine refuses (a steer with nobody named, a second undo, a route not greenlit) is a job
+  `failed` with `error {type: refused, message}` (the engine's words) and no change. A runner that is busy with another run of the document is a
+  job `failed` with `error.type: job_state`.
+- **Errors at the call.** `400 invalid_input` for an unknown `step` or a missing id; `503 engine_unavailable` when the engine package is not in the
+  middleware; `409 job_state` when a `run_territories` step on this document is still running (one step at a time per document).
+- **Cancel.** `cancel_job` stops the job at once: no further model call is made, what was already paid for is in the store (the next run reads it,
+  never pays twice), and nothing the job computed is written.
+- **`send_routes` and a destination that is not built.** `sends[].status` is `sent` only when a destination was registered
+  (`napkin/territories/delivery.py register_destination`) and returned; otherwise the send is written `not_built`, the run stays at its
+  gate and the words say "<Destination> is not built yet, so nothing was sent. The choice is saved."
+- **`fetch_territories_file@1`** (short, writes nothing): `input.name` names a file a feature registered with
+  `delivery.register_file(name, media_type, make)` (territories-exports); the reply's `result` is
+  `{name, media_type, bytes, data_b64}`. `503 not_built` with words when nothing is registered, `400 unknown_file` for a name nobody registered,
+  `502 file_failed` (words, never a trace) when it could not be made, `413` over 24 MB. The PDF of a board is the exports feature's to register.
+- **Not yet.** `look_up@1` (territories-lookups), the picture steps, a poll that survives a restart of the middleware (an in-memory job store, as
+  everywhere here: the next step resumes from the document and the store).
+## 14. Brand Clan: `brand_identify`, `brand_build`
+
+*Added 2026-11-23* (`features/brand-clan.clan`, lane B; the Brand Clan itself is `docs/contracts/brand-clan.md`, section 7 is what these write against). Two tasks, both per agency
+(the scope's tenant), both on the document the file was added to (`clan` names that Brief, Research or Production document; it is never written). **Confidential**
+(owner, 2026-11-13): the bible goes to the model and nowhere else. No purpose here (`brand_identify`, `brand_build_piece`, `brand_build_pictures`) is ever logged with a request or
+reply body, whatever `NAPKIN_RUNLOG_BODIES` says; no error message carries what the file said; nothing reaches the shared layers, RAG or evals.
+
+- **The file** (both tasks) is `input.file {name, pages?, text?, data_b64?}`, or, for a file already stored in the document, **exactly one `input.attachments[]` entry `{name: <stored name>, label: <the person's name for it>}`**,
+  which the host fills as it does for every task (`ops/read.rs`: `text`, a PDF as `document {media_type, data}` up to 32 MB, a Word or PowerPoint file's `images`). A zip goes as `data_b64`. The file's name in the
+  Brand Clan is `label`, never the stored name.
+- **`brand_identify@1`** (short, writes nothing). `input {file | attachments, client {id, name}, brand_clans [{document_id, path, name, default}]}`. The host's
+  text and page count are used as sent; with only the bytes the middleware reads the file itself (PDF, Word, PowerPoint, zip, picture, text). Step 1 is free rules over the file name and text
+  (`brand/signals.py`: name words, "logo clear space", "colour palette", "typography", "tone of voice", hex or Pantone codes, more than 8 pages, a zip's logo or font files): `no` stops there, **no
+  model call, no question**. Otherwise step 2 is **one** Claude Haiku call (purpose `brand_identify`, Bedrock id from `model_routes.ALIASES["haiku-4.5"]`, built-in route, a routes file overrides it;
+  at most 6,000 characters of text, 200 tokens out; about a cent), counted in `trace.usage` like every model call. Result: `{ask, reason, pages, signals {score, verdict, found}, model_called,
+  brand_bible, brand_name, confidence, matches_client, question}`. `ask` is true when the model says yes with confidence of at least 0.5. `question` is mock a1:
+  `{mode new|choose, options, update {document_id, name}|null, pages, over_cap, page_cap: 120}`; with no Brand Clan `options` is `[build, not_bible]`, otherwise `[update, new, not_bible]`
+  with `update` the Brand Clan whose name is in the file's name (a non-default one is preselected, still asked), else the default. A detection that fails or times out is **not an error**:
+  `ask: false, reason: detection_failed`; the file chip keeps its "Build a Brand Clan from this" action. `brand_name` is matched to `client.name` (`matches_client`), never typed by the person.
+- **`brand_build@1`** (long). `input {file | attachments, client {id}, workspace (the `{tenant}` of the host's routes; the shell reads it from `/api/session`), mode new|update, name? (new, default "Original"), brand_clan {document_id, path, name} (update), confirmed_over_cap?}`.
+  `400` for bad input, `503 host_unavailable` when no host is configured to write to (`NAPKIN_BRAND_HOST_URL`, and `NAPKIN_BRAND_HOST_TOKEN`, 32+ bytes, the same secret as on napkin-web; sent as `Authorization: Bearer`, with `X-Napkin-Actor: process:brand_build` and no cookie), `409 over_cap` for a file over
+  **120 pages** until `confirmed_over_cap: true` (the middleware never reads more than 400), `409 job_state` while another `brand_build` runs on the document. The job reads the file in runs of 15 pages, each
+  sent as its own PDF so the model sees logos and colour chips as pictures (`brand_build_piece`, Sonnet 5.5), then the pictures the file holds (embedded JPEGs and 8-bit images of a PDF, a zip's picture
+  files) in batches of 12, each classified logo, example or other (`brand_build_pictures`). The merge (`brand/merge.py`) invents nothing: an invalid hex, an unknown role or a picture the model never
+  saw is dropped; every item gets a stable id; a section the file did not give is omitted from the candidate and listed in `candidate.gaps`. **Nothing is written unless the build has content**
+  (`422 no_content`, the file untouched). The write goes through the host as `process:brand_build` (`brand/writer.py`; the actor is named on the request, the host records it from its context):
+  **new**: `create {name, candidate, source, from {kind build, file}}`, the candidate naming each file `human/assets/<sha10>-<name>` (sha10: first 10 hex digits of the SHA-256 of the bytes), then `asset.put` each file into the new document (the reply's path must equal the name used, else the job fails); **update**: `asset.put` each file into the existing document, then `proposal.set {candidate, source, from {kind upload, file}}`
+  (a new version waiting for a person: nothing changes until they take it). A write the host refuses ends the job `failed` (`502 host_write_failed`, the host's status and reason); an unreadable file
+  `422 unreadable_file`, `415 unsupported_file`. Result: `{summary, mode, document_id, path, name, pending, counts, gaps (areas), actor}`, no bible text. `change` is always null. `cancel_job`
+  stops the spend and the write.
+- **Vector logos.** A logo a PDF draws as paths is rendered with pypdfium2 (`==5.14.0`, licence reviewed in `licences/policy.toml`): on the cover pages and each page whose text speaks of a logo, the regions the drawing occupies (not a page-sized background, not a page of more than 300 paths) are rendered at 2x, cropped to the region, and join the embedded pictures for the model to classify.
+- **Not yet.** CMYK, masked and JPX embedded pictures; a file over 64 MB (the middleware's request cap).
+- **The shell's side** (`app/src/shell/brand/`). An app that stored a file in its document says so to the shell with `window.parent.postMessage({type: 'clan:file-added', name: <stored name>, label: <the person's name>}, '*')`
+  (Brief Maker and Research after `upload-asset`, Production after its own upload). The shell hears only its own frame, and only in Brief Maker, Research and Production. It calls `brand_identify` with that one
+  attachment through the document's `/api-proxy` (each `brand_identify` and `brand_build` is a charged call; `job_status` is not), asks the one question when `ask` is true, and starts `brand_build` on the answer. A job
+  in flight is kept in the tab's session storage and picked up again after a reload. Detection that fails leaves a small "Build a Brand Clan from this" action and asks nothing.

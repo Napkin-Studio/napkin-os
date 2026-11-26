@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain begins to fall on a grey street. @maya_front snaps open a bright yellow @umbrella_open and smiles up at the sky."
+     },
+     {
+      "type": "direction",
+      "text": "Slow push in; yellow is the only colour."
+     }
+    ],
+    "note": "I reworded the action and the direction, keeping the same events and names."
+   }
+  ],
+  "rationale": "Rephrase keeps the facts, names, length and block order, changing only the wording."
+ }
+}

@@ -1,0 +1,277 @@
+/* The Storyboard editor (mock Storyboard.dc.html): the sub bar, then shot cards four across on the
+   dot grid, each with its frame, camera chips, words, Direction and Change this frame. */
+.sb-sub {
+  flex-shrink: 0; height: 44px; display: flex; align-items: center; gap: 14px; padding: 0 24px;
+  background: var(--paper); border-bottom: 1px solid var(--line-soft); font-size: 12.5px; white-space: nowrap; overflow: hidden;
+}
+.sb-len { font-size: 12px; color: var(--ink); }
+.sb-target { border: 0; background: transparent; font: inherit; color: inherit; padding: 0; cursor: pointer; }
+.sb-crewline { display: inline-flex; align-items: center; gap: 6px; padding-left: 14px; border-left: 1px solid var(--line-soft); color: var(--ink2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sb-tag { font-family: var(--f-mono); font-size: 11px; color: var(--tool-ink); letter-spacing: 0.04em; }
+.sb-ratio { background: var(--card); cursor: pointer; }
+.sb-body { padding: 16px 24px 48px; }
+.sb-error { color: var(--danger); font-weight: 600; margin-bottom: 12px; }
+.sb-planning { max-width: 420px; height: 220px; border-radius: var(--r-card); overflow: hidden; }
+.sb-empty { max-width: 460px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.sb-empty p { margin: 0; color: var(--ink2); font-size: 13px; line-height: 1.45; }
+/* stretch: the cards of a row share one height, so the "One video" bracket under them is one straight line
+   (it stepped across a shorter card). The left gutter holds the first column's + and link handles, which sit
+   left of their card (half off-screen at 1600 px; live test 2026-11-16). */
+.sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px 36px; align-items: stretch; padding-left: 40px; }
+@media (min-width: 1400px) { .sb-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sb-card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-soft); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.sb-card.on { border: 2px solid var(--tool); padding: 11px; }
+.sb-card.confirming { min-height: 120px; justify-content: center; }
+.sb-cardhead { display: flex; align-items: center; gap: 8px; height: 26px; }
+.sb-handle { color: var(--ink3); font-size: 12px; letter-spacing: -2px; cursor: grab; }
+.sb-num { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+.sb-card.on .sb-num { background: var(--tool); }
+.sb-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+.sb-dur { color: var(--ink2); }
+/* The canvas selection bar's menu is also .sb-more (selbar.css: min-width 220px); not here. */
+.sb-cardhead .sb-more { min-width: 0; flex: none; }
+.sb-more { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink2); font-size: 15px; }
+.sb-more:hover { background: var(--soft); }
+.sb-frame { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: var(--soft); }
+.sb-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-framejob { position: absolute; inset: 0; }
+.sb-noframe { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed var(--line); border-radius: 8px; font-size: 12px; color: var(--ink2); background: var(--card); }
+.sb-endcard { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 12px; border-radius: 8px; background: #14161B; color: #F4F1EA; text-align: center; overflow: hidden; }
+.sb-endcard b { font: 700 15px/1.2 var(--font-ui, inherit); }
+.sb-endcard span { font-size: 12px; opacity: .85; }
+.sb-endcard small { position: absolute; left: 8px; right: 8px; bottom: 6px; font-size: 10.5px; opacity: .7; }
+.sb-endcard .linkbtn { color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.sb-nopics { max-width: 30ch; padding: 0 12px; text-align: center; font-size: 11px; line-height: 1.4; color: var(--ink3, var(--ink2)); }
+.sb-vtag { position: absolute; left: 8px; top: 8px; padding: 1px 7px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-family: var(--f-mono); font-size: 10.5px; color: var(--ink2); }
+.sb-badgewrap { position: absolute; right: 8px; top: 8px; }
+.sb-badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: var(--r-pill); font-size: 11px; background: color-mix(in srgb, var(--card) 92%, transparent); color: var(--ink2); }
+.sb-badge.ok { background: var(--ok-bg); color: var(--success); }
+.sb-badge.warn { background: var(--warn-bg); color: var(--warn); }
+.sb-badge.warm { background: var(--warn-bg); color: var(--ink); }
+.sb-openie {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 14px;
+  border: 0; border-radius: var(--r-pill); background: var(--card); box-shadow: var(--shadow-pop); font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; opacity: 0;
+}
+.sb-frame:hover .sb-openie, .sb-openie:focus-visible { opacity: 1; }
+.sb-frame:hover img { filter: brightness(0.82); }
+.sb-crop { position: absolute; left: 8px; bottom: 6px; font-family: var(--f-mono); font-size: 10.5px; color: #FFFFFF; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.sb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-chip { height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-pill); font-size: 11.5px; color: var(--ink2); }
+.sb-chip.changing { border: 1.5px dashed var(--warn); }
+.sb-words { font-size: 13px; line-height: 1.5; }
+.sb-words .shoteditor.compact .fragment { border-color: transparent; background: transparent; padding: 2px 0; }
+.sb-words .shoteditor.compact .fragment:focus-within, .sb-words .shoteditor.compact .fragment.ProseMirror-focused { border-color: var(--tool); padding: 6px 8px; background: var(--paper); }
+.sb-words .fragment p[data-type="direction"] { border: 1px solid var(--line); border-left: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 8px 12px; }
+.sb-words .fragment p[data-type="direction"]::before { color: var(--ink); font-size: 12.5px; letter-spacing: 0; text-transform: none; }
+.sb-gap { position: absolute; left: -29px; top: 112px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--tool); background: var(--card); color: var(--tool-ink); font-size: 15px; line-height: 1; cursor: pointer; opacity: 0.35; z-index: 2; padding: 0; }
+.sb-gap:hover, .sb-gap:focus-visible, .sb-gap[aria-expanded='true'] { opacity: 1; }
+.sb-insert { width: 300px; }
+.sb-inserthead { padding: 8px 12px 4px; }
+.sb-insert .pt-menurow { align-items: flex-start; font-size: 13px; line-height: 1.35; }
+.sb-ins-blank { width: 34px; height: 22px; border: 1.5px dashed var(--line); border-radius: 4px; flex: none; margin-top: 2px; }
+.sb-addtile { min-height: 200px; align-self: start; border: 1.5px dashed var(--line); border-radius: var(--r-card); background: transparent; font-size: 13px; color: var(--ink); cursor: pointer; }
+.sb-addtile:hover:not(:disabled) { background: var(--card); }
+.sb-change { font-size: 13px; }
+.sb-change b { font-weight: 600; }
+.sb-change .input { flex: 1; min-width: 0; }
+/* Edit parts | Redraw frame (features/frame-edit-or-redraw.clan, mock frame-edit-or-redraw-v2): the house segmented
+   look with a dark selected segment; on a narrow card it drops under the title. */
+.sb-headrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sb-mode-old button { height: 26px; padding: 0 11px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sb-mode button:disabled { cursor: default; }
+.sb-mode svg { width: 13px; height: 13px; }
+.sb-modehint { color: var(--ink2); font-size: 12.5px; line-height: 1.45; }
+.sb-cost { font-size: 11.5px; color: var(--ink3); margin-left: 4px; white-space: nowrap; }
+.sb-ask, .sb-nochange, .sb-running { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); }
+.sb-ask { border-color: var(--ask-line, #F08A6E); box-shadow: 0 0 0 4px var(--ask-glow, rgba(255, 79, 46, .08)); }
+.sb-ask .row, .sb-nochange .row, .sb-running .row, .sb-result .row { align-items: flex-start; flex-wrap: wrap; }
+.sb-ask p, .sb-nochange p { margin: 0; line-height: 1.45; flex: 1; min-width: 180px; }
+.sb-keeps { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink2); min-width: 0; }
+.sb-keeps b { color: var(--ink); font-weight: 600; margin-right: 4px; }
+.sb-notmeant { margin-top: 4px; }
+.sb-notmeant .btn.link { height: auto; padding: 0 2px; font-size: inherit; }
+.sb-bar { height: 4px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.sb-bar i { display: block; height: 100%; width: 42%; background: var(--tool); border-radius: 2px; animation: sb-prog 2.4s var(--ease, ease) infinite alternate; }
+@keyframes sb-prog { from { width: 18%; } to { width: 72%; } }
+@media (prefers-reduced-motion: reduce) { .sb-bar i { animation: none; } }
+@media (max-width: 600px) { .sb-mode { margin-left: 0; } }
+.sb-changejob { height: 120px; border-radius: 8px; overflow: hidden; }
+.sb-result { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line-soft); }
+.sb-diff { display: flex; gap: 10px; align-items: flex-start; }
+.sb-proposal { position: relative; width: 104px; height: 58px; border-radius: 6px; overflow: hidden; background: var(--soft); flex: none; }
+.sb-proposal img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-proposal span { position: absolute; left: 4px; bottom: 3px; padding: 0 5px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-family: var(--f-mono); font-size: 9.5px; }
+.sb-diffrow { display: flex; gap: 6px; align-items: baseline; font-family: var(--f-mono); font-size: 11px; color: var(--ink2); }
+.sb-diffrow del { color: var(--danger); background: var(--danger-bg); padding: 0 3px; }
+.sb-diffrow ins { text-decoration: none; color: var(--success); background: var(--ok-bg); padding: 0 3px; }
+.sb-applyline { align-self: stretch; border-radius: 6px; padding: 4px 8px; }
+.sb-cardfoot { display: flex; justify-content: flex-end; margin-top: -6px; }
+
+/* Delete a shot (ui-behaviour 3.11, 3.3 Delete; item 4): × beside More, shown on hover or focus; the card takes Delete. */
+.sb-del { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; color: var(--ink3); font-size: 15px; opacity: 0; transition: opacity 120ms; }
+.sb-card:hover .sb-del, .sb-card:focus-within .sb-del, .sb-del:focus-visible { opacity: 1; }
+.sb-del:hover { color: var(--danger); background: var(--danger-bg); }
+.sb-card:focus-visible { outline: 2px solid var(--tool); outline-offset: 2px; }
+.sb-deleted { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+@media (hover: none) { .sb-del { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sb-del { transition: none; } }
+
+/* Drag reorder (ui-behaviour 3.11): the handle is the grip; the card lifts tilted with a blue
+   outline and a shadow; its old spot stays dashed; a 4px blue drop line says where it lands. */
+button.sb-handle { border: 0; background: transparent; padding: 0 4px; min-width: 24px; min-height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; touch-action: none; user-select: none; font-family: inherit; }
+button.sb-handle:hover:not(:disabled) { background: var(--soft); color: var(--ink); }
+button.sb-handle:active:not(:disabled) { cursor: grabbing; }
+button.sb-handle:focus-visible { outline: 2px solid var(--tool); outline-offset: 1px; }
+button.sb-handle:disabled { cursor: default; opacity: 0.5; }
+.sb-card.slot { border: 1.5px dashed var(--line); box-shadow: none; background: transparent; }
+.sb-card.slot > * { opacity: 0.35; }
+.sb-card.sorting .sb-gap { visibility: hidden; }
+.sb-lifted { border: 2px solid var(--tool); padding: 11px; box-shadow: var(--shadow-pop), 0 18px 40px rgba(0, 0, 0, 0.18); transform: rotate(-2deg); cursor: grabbing; height: auto !important; max-height: 100%; overflow: hidden; }
+.sb-lifted .sb-handle { color: var(--tool-ink); }
+.sb-liftwords { font-size: 12.5px; color: var(--ink2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sb-dropline { position: absolute; top: 0; bottom: 0; width: 4px; border-radius: 2px; background: var(--tool); z-index: 3; pointer-events: none; }
+.sb-dropline.before { left: -20px; }
+.sb-dropline.after { right: -20px; }
+.sb-dropline > span { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--paper); background: var(--tool); padding: 2px 8px; border-radius: var(--r-pill); }
+.sb-dragnote { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 12px; background: var(--card); color: var(--ink); border: 1px solid var(--line-soft); box-shadow: var(--shadow-pop); font-size: 13px; line-height: 1.4; }
+.sb-dragnote .pt-mono { color: var(--ink2); margin-right: 4px; }
+
+/* Connected video (features/connected-video.clan): a pin on frames the video hits, "guide" on frames inside
+   one take, and the quiet note when the video went its own way. */
+.sb-mark { position: absolute; left: 8px; top: 32px; display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--card) 90%, transparent); font-size: 10.5px; font-weight: 600; }
+.sb-mark.pin { color: var(--tool-ink); }
+.sb-mark.guide { color: var(--ink2); font-style: italic; }
+.sb-guidenote { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; font-size: 12.5px; color: var(--ink2); border-top: 1px solid var(--line-soft); }
+/* The shots that will be one video: a light bracket under their cards ("One video"), and ✂ / 🔗 at the
+   gap before a card (44px targets). */
+.sb-bracket { position: absolute; left: 0; right: -36px; bottom: -10px; height: 8px; border-bottom: 2px solid var(--tool); pointer-events: none; }
+.sb-card.instrip.first .sb-bracket { border-left: 2px solid var(--tool); border-bottom-left-radius: 6px; }
+.sb-card.instrip.last .sb-bracket { right: 0; border-right: 2px solid var(--tool); border-bottom-right-radius: 6px; }
+.sb-bracket > span { position: absolute; left: 10px; bottom: -9px; padding: 0 6px; background: var(--canvas-bg); color: var(--tool-ink); font-size: 10.5px; font-weight: 600; line-height: 14px; border-radius: var(--r-pill); }
+.sb-joinh { position: absolute; left: -40px; top: 150px; z-index: 2; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; font-size: 13px; color: var(--ink2); }
+.sb-joinh > span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--card); border: 1.5px solid var(--line); }
+.sb-joinh:hover > span, .sb-joinh:focus-visible > span { border-color: var(--tool); color: var(--tool-ink); }
+.sb-joinh:focus-visible { outline: none; }
+.sb-joinh:focus-visible > span { outline: 2px solid var(--tool); outline-offset: 2px; }
+.sb-card.sorting .sb-joinh { visibility: hidden; }
+@media (max-width: 700px) { .sb-bracket { right: 0; } .sb-joinh { left: auto; right: 8px; top: -22px; } }
+
+/* ── The storyboard as a paper sheet (features/production-new-ui.clan; mock production-new-ui-v2 "storyboard"):
+   the desk round it, a sheet with its tab, a head, the Director agent's note and "N clips out of date" as a line on
+   the sheet, and the shots in a three-column grid of cells divided by hairlines. Paper in dark too. ── */
+.sb-body.sb-desk { padding: 26px 24px 60px; background: var(--desk); }
+.sb-sheet { position: relative; width: min(1060px, 100%); margin: 18px auto 0; background: var(--paper-fixed, #FBF8F1); color: #141413; border: 1px solid #E2DACB;
+  border-radius: 2px; box-shadow: var(--shadow-paper); --ink: #141413; --ink-soft: #3A372F; --muted: #6D655A; --faint: #9A9183; --line: #E2DACB; --card: #FFFDF8; --paper: #FBF8F1; }
+.sb-sheet .stab { position: absolute; top: -21px; left: 22px; height: 21px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 6px; font: 600 10.5px var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase; background: #FBF8F1; border: 1px solid #E2DACB; border-bottom: 0; border-radius: 3px 3px 0 0; color: #141413; }
+.sb-sheet .stab::before { content: ''; width: 14px; height: 9px; background: repeating-linear-gradient(135deg, #1C1F24 0 3px, #FBF8F1 3px 6px); }
+.sb-sheet .sh-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 34px 56px 22px; border-bottom: 1px solid #E2DACB; }
+.sb-sheet .sh-head small { display: block; font: 600 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: #6D655A; margin-bottom: 8px; }
+.sb-sheet .sh-head h1 { margin: 0; font: 800 30px/1.1 var(--font-ui); letter-spacing: -.025em; }
+.sb-sheet .sh-head .r { font: 500 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #3A372F; text-align: right; }
+.sb-sheet .sheet-note { margin: 14px 56px 0; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-radius: 4px;
+  background: color-mix(in srgb, #E7D5AC 30%, #FBF8F1); font-size: 13px; }
+.sb-sheet .sheet-note .warn { color: #B4541A; font-weight: 600; }
+.sb-sheet .sheet-note .ok { color: #2F7A4B; font-weight: 600; }
+.sb-sheet .sheet-note .sp-btn { background: #FFFDF8; color: #141413; border-color: #E2DACB; }
+.sb-sheet .sb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 14px 40px 40px; }
+.sb-sheet .sb-card { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 16px 14px 18px; gap: 8px; border-right: 1px solid #E2DACB; border-bottom: 1px solid #E2DACB; }
+.sb-sheet .sb-card:nth-child(3n) { border-right: 0; }
+.sb-sheet .sb-card.on { border: 0; border-right: 1px solid #E2DACB; border-bottom: 1px solid #E2DACB; padding: 16px 14px 18px; background: color-mix(in srgb, #E7D5AC 18%, transparent); }
+.sb-sheet .sb-num { width: 18px; height: 18px; border-radius: 2px; background: #141413; color: #FBF8F1; font: 700 10.5px var(--font-mono); }
+.sb-sheet .sb-card.on .sb-num { background: #141413; }
+.sb-sheet .sb-title { font: 600 14px var(--font-ui); color: #141413; }
+.sb-sheet .sb-dur { font: 500 11px var(--font-mono); color: #6D655A; }
+.sb-sheet .sb-frame { border-radius: 1px; border: 1px solid #141413; background: #EFE9DE; }
+.sb-sheet .sb-vtag { left: 7px; top: 7px; border-radius: 2px; background: rgba(251, 248, 241, .92); color: #141413; font: 600 10px var(--font-mono); }
+.sb-sheet .sb-chips { gap: 0; }
+.sb-sheet .sb-chip { height: auto; padding: 0; border: 0; border-radius: 0; font: 500 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: #6D655A; }
+.sb-sheet .sb-chip + .sb-chip::before { content: '·'; margin: 0 6px; }
+.sb-sheet .sb-words { font: 400 13.5px/1.55 var(--font-ui); color: #141413; }
+.sb-sheet .sb-addtile { min-height: 180px; align-self: stretch; border: 0; border-radius: 0; color: #3A372F; }
+.sb-sheet .sb-gap { left: -12px; top: 130px; }
+.sb-sheet .sb-joinh { left: -22px; }
+.sb-sheet .sh-head .r .sb-inputs { margin-top: 8px; text-transform: none; letter-spacing: 0; display: flex; justify-content: flex-end; font-family: var(--font-ui); }
+.sb-fit.pt-pill { background: none !important; border: 0 !important; font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.sb-fit.ok { color: var(--ok); } .sb-fit.warn { color: var(--warn); }
+.sb-reorder { white-space: nowrap; }
+@media (max-width: 1180px) { .sb-reorder { display: none; } }
+.sb-sheet .sb-addtile:hover:not(:disabled) { background: color-mix(in srgb, #E7D5AC 18%, transparent); }
+.sb-sheet .sb-badge { border-radius: 2px; }
+@media (max-width: 1100px) { .sb-sheet .sb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px 20px 30px; } .sb-sheet .sb-card:nth-child(3n) { border-right: 1px solid #E2DACB; } .sb-sheet .sb-card:nth-child(2n) { border-right: 0; } .sb-sheet .sh-head { padding: 26px 28px 18px; } .sb-sheet .sheet-note { margin: 12px 28px 0; } }
+@media (max-width: 720px) { .sb-sheet .sb-grid { grid-template-columns: 1fr; } .sb-sheet .sb-card { border-right: 0 !important; } }
+/* The band (mock .band): the storyboard's own controls in one row under the bar. */
+.sb-sub.band { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 50px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--desk); }
+.sb-sub.band .sb-len { font: 500 12px var(--font-mono); color: var(--muted); }
+.sb-sub.band .pt-pill.ok { background: none; border: 0; color: var(--ok); font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.sb-sub.band .pt-pill.warn { background: none; border: 0; color: var(--warn); font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.sb-sub.band .hint { font-size: 12.5px; }
+/* On the sheet the film-strip bracket and its gap buttons are in the paper's ink, not the agency colour. */
+.sb-sheet .sb-bracket, .sb-sheet .sb-card.instrip.first .sb-bracket, .sb-sheet .sb-card.instrip.last .sb-bracket { border-color: #141413; }
+.sb-sheet .sb-bracket > span { background: #141413; color: #FBF8F1; }
+.sb-sheet .sb-gap { border-color: #3A372F; color: #141413; background: #FFFDF8; }
+
+/* ── The Booth on a selected shot (mock production-new-ui-v2 "frame", "frame-ask", "redraw", "redraw-result"):
+   the cell tinted with a rule on its left, the Booth with versions, Change this frame, camera, words, length and
+   the shot's rows. Asks and failures on the cell itself. ── */
+.sb-sheet .sb-card { cursor: pointer; }
+.sb-sheet .sb-card.on { background: color-mix(in srgb, #F6E36B 26%, transparent); }
+.sb-sheet .sb-card.on::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; background: #141413; }
+.sb-sheet .sb-action { margin: 0; font: 400 13.5px/1.5 var(--font-ui); color: #2A2620; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.sb-card .tagcall { position: absolute; right: 14px; top: 16px; z-index: 2; font: 700 9px/16px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 0 7px; border-radius: 999px;
+  background: #FEF3DC; color: #B45309; border: 1px solid rgba(180, 83, 9, .35); cursor: pointer; }
+.sb-failed { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px; text-align: center;
+  background: rgba(255, 241, 238, .94); border: 1px solid #C9462A; border-radius: 1px; font-size: 12.5px; color: #3b1a12; }
+.sb-failed b { font-weight: 700; }
+.sb-failed .row { gap: 6px; margin-top: 4px; }
+.shotbooth { display: flex; flex-direction: column; gap: 16px; }
+.shotbooth .vers { display: flex; gap: 6px; flex-wrap: wrap; }
+.shotbooth .vers button { position: relative; width: 74px; padding: 0; border-radius: 4px; border: 1px solid var(--line); overflow: hidden; background: var(--card); cursor: pointer; }
+.shotbooth .vers button img, .shotbooth .vers button i { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+.shotbooth .vers button span { position: absolute; left: 4px; top: 4px; font: 600 9.5px var(--font-mono); background: rgba(255, 253, 248, .92); color: #141413; padding: 0 4px; border-radius: 2px; }
+.shotbooth .vers button[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--ag-base, var(--ink)); border-color: transparent; }
+.shotbooth .sb-mode { margin: 0; }
+.shotbooth .sb-modehint { color: var(--muted); font-size: 13px; }
+.shotbooth .sb-changerow { display: flex; gap: 8px; align-items: stretch; }
+.shotbooth .sb-changerow .field { flex: 1; min-width: 0; height: 44px; padding: 0 12px; }
+.shotbooth .sb-send { height: auto; padding: 0 12px; }
+.shotbooth .disc-line { font-size: 12.5px; color: var(--muted); }
+.shotbooth .disc-line li { overflow-wrap: anywhere; }
+.shotbooth .disc-line summary { cursor: pointer; font-weight: 600; color: var(--ink-soft, var(--ink)); list-style: none; }
+.shotbooth .disc-line summary::-webkit-details-marker { display: none; }
+.shotbooth .disc-line summary::before { content: '\25B8  '; }
+.shotbooth .disc-line[open] summary::before { content: '\25BE  '; }
+.shotbooth .disc-line ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.shotbooth .disc-line li.promise { border-top: 1px solid var(--line); padding-top: 4px; }
+.shotbooth .sb-ask { border: 1px solid var(--warn, #B45309); border-radius: 8px; padding: 14px; gap: 10px; box-shadow: none; background: var(--card); }
+.shotbooth .sb-ask .hd { display: flex; align-items: center; gap: 8px; font: 600 10.5px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--warn, #B45309); }
+.shotbooth .sb-ask .q { margin: 0; font: 600 15px var(--font-ui); }
+.shotbooth .sb-ask .opt { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); cursor: pointer; }
+.shotbooth .sb-ask .opt:hover { border-color: var(--ink); }
+.shotbooth .sb-ask .opt b { font: 600 14px var(--font-ui); display: flex; align-items: baseline; gap: 8px; }
+.shotbooth .sb-ask .opt small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.shotbooth .sb-ask .rec-tag { font: 700 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ok, #2F7A4B); }
+.shotbooth .sb-ask .faint { margin: 0; font-size: 12.5px; }
+.shotbooth .cam-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.shotbooth .camchip { position: relative; padding: 0 4px 0 9px; cursor: pointer; }
+.shotbooth .camchip select { appearance: none; border: 0; background: transparent; color: inherit; font: 600 12px var(--font-ui); padding: 0 14px 0 0; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-size: 4px 4px; background-position: right 4px center, right 0 center; background-repeat: no-repeat; }
+.shotbooth .sb-booth-words { border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 8px 12px; font-size: 14px; line-height: 1.55; }
+.shotbooth .sb-length { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.shotbooth .sb-length .lbl { width: 60px; }
+.shotbooth .icon-btn { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+.shotbooth .icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.shotbooth .brow:disabled { opacity: .5; cursor: not-allowed; }
+.shotbooth .sb-shotlinks { display: flex; gap: 14px; align-items: center; }
+.shotbooth .sb-shotlinks .side-link { background: none; border: 0; padding: 0; font-size: 12.5px; cursor: pointer; color: var(--ink); height: auto; }
+.sb-sheet .sheet-note .wl { display: inline-flex; align-items: center; gap: 8px; }
+.sb-sheet .sheet-note .wl b { font-weight: 700; }
+.sb-sheet .sheet-note .sheet-ask { flex-basis: 100%; }
+.shotbooth .camchip select { field-sizing: content; }
+
+/* Keep a person from frame 1 (features/pt-canvas-r2.clan, UAT round 2 UX 4). */
+.sb-keep { font-size: 12px; margin: 4px 0 0; align-self: flex-start; }
+.sb-kept { font-size: 12px; margin: 4px 0 0; }
+.sb-keepform { gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; font-size: 12px; }
+.sb-keepform .input { width: 110px; }
+.sb-keepnote { flex-basis: 100%; font-size: 11.5px; line-height: 1.35; }

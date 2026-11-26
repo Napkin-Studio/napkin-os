@@ -1,0 +1,31 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7F00000000000000000RM01",
+  "op": "frame",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_regionremove03",
+  "purpose": "remove area",
+  "node": {
+    "kind": "shot",
+    "id": "shot_01K7B00000000000000000SH04"
+  },
+  "parentIds": [],
+  "input": {
+    "remove": true,
+    "image": {
+      "sha256": "sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "url": "https://cdn.napkin.test/out/sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "mime": "image/png"
+    },
+    "region": {
+      "x": 0.3,
+      "y": 0.2,
+      "w": 0.25,
+      "h": 0.3
+    },
+    "aspect": {
+      "w": 1344,
+      "h": 756
+    }
+  }
+}

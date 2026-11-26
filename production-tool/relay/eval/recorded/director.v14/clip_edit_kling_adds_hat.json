@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip_edit\", \"question\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"klingO3_standard\", \"op\": \"clip_edit\", \"prompt\": \"put the hat from @hat_front on the baby's head. Take the hat of @hat_front only; change nothing else in the clip.\", \"video\": \"sha256:7777777777777777777777777777777777777777777777777777777777777777\", \"refs\": [{\"sha256\": \"sha256:7777777777777777777777777777777777777777777777777777777777777777\", \"name\": \"current\", \"role\": \"current\"}, {\"sha256\": \"sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1\", \"name\": \"hat_front\", \"role\": \"object\"}], \"audio\": false}, \"rationale\": \"Kling O3 Standard takes pictures on clip_edit, so the hat is sent as its own ref after the clip, used as a donor for the hat only.\", \"confidence\": 0.9}"
+}

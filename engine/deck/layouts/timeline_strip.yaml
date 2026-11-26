@@ -1,0 +1,97 @@
+id: timeline_strip
+version: 1
+group: content
+purpose: timeline
+description: Steps along a strip, each with a label and a line.
+slot_summary: title, steps, lead, note
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- person_beat
+- requirement_trace
+- appendix_sources
+when:
+  blocks_any:
+  - steps
+priority: 40
+alternatives:
+- timeline_rows
+- role_grid
+roomier: timeline_rows
+density: standard
+pick: rule
+family: timeline
+renderer: timeline_strip
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  steps:
+    kind: list
+    role: body
+    from_blocks:
+    - steps
+    min_items: 2
+    max_items: 8
+    dominant: true
+    item:
+      heading_max_chars: 40
+      body_max_chars: 140
+  lead:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    - statement
+    max_chars: 367
+  note:
+    kind: text
+    role: caption
+    from_blocks:
+    - small
+    max_chars: 122

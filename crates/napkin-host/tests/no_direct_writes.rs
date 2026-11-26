@@ -164,7 +164,15 @@ fn document_operations_return_changes_and_write_nothing() {
             edit::PatchData::parse(r#"{"patch":{"verdict":"yes"},"agent":"human"}"#).unwrap(),
         )
         .unwrap(),
-        edit::upload_asset(&ctx, &doc, "note.txt", Some("human"), b"hello".to_vec()).unwrap(),
+        edit::upload_asset(
+            &ctx,
+            &doc,
+            None,
+            "note.txt",
+            Some("human"),
+            b"hello".to_vec(),
+        )
+        .unwrap(),
         edit::set_title(&ctx, &doc, "Renamed").unwrap(),
         edit::set_context(&ctx, &doc, "# Context", false).unwrap(),
         edit::fork(&ctx, &doc, &*store, &["a".into(), "b".into()]).unwrap(),

@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A @jogger runs past far behind @maya_front as she ties her laces on a park bench."
+     },
+     {
+      "type": "direction",
+      "text": "Shallow focus on Maya."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 0.5,
+      "text": "Everyone else is already moving. You just have to start."
+     }
+    ],
+    "note": "I added a short VO beat that sets her quiet start against the runner behind her."
+   }
+  ],
+  "rationale": "The words stay as they are; one brief VO beat fits the shot's short length and avoids naming anything outside the refs."
+ }
+}

@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip\", \"question\": {\"kind\": \"block\", \"text\": \"This shot needs a storyboard frame first, so its character stays themselves.\", \"why\": \"This model cannot keep the baby the same from words alone without a first frame.\", \"options\": [{\"id\": \"plan_first\", \"label\": \"Make a storyboard frame first\", \"value\": {\"route\": \"plan_storyboard\"}}], \"allow_text\": true}, \"rationale\": \"Veo 3.1 has no refs without a first frame, and the shot has required character refs, so a storyboard frame is needed first.\", \"confidence\": 0.95}"
+}

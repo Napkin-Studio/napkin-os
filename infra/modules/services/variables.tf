@@ -91,6 +91,32 @@ variable "web_dogfood" {
   default     = false
 }
 
+variable "production_relay_url" {
+  description = "The Production Tool relay napkin-web proxies /production/api to (NAPKIN_PRODUCTION_RELAY_URL; the hackathon stack's relay_function_url). Empty: no /production and no 'Make an ad' card (features/os-sign-in.clan)."
+  type        = string
+  default     = ""
+}
+
+variable "production_relay_secret_arn" {
+  description = "Secrets Manager ARN of the key napkin-web signs X-Napkin-Identity with (NAPKIN_PRODUCTION_RELAY_SECRET; the hackathon stack's TOKEN_SECRET). Set together with production_relay_url."
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_relay_secret_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
+  }
+}
+
+variable "production_service_key_arn" {
+  description = "Secrets Manager ARN of napkin-web's service key for the relay (NAPKIN_PRODUCTION_SERVICE_KEY; the hackathon stack's SERVICE_KEY, napkin-hackathon/SERVICE_KEY): every call but the Deck's picture pass carries it as a bearer and signs the user claim with it (features/production-jobs-via-host.clan). Set together with production_relay_url."
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_service_key_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_service_key_arn are set together, or neither"
+  }
+}
+
 variable "middleware_runlog" {
   description = "Keep the middleware's per-job run log (sizes and costs; bodies only with middleware_runlog_bodies) on web's EFS under /data/_runlog, where napkin-web serves and purges it (NAPKIN_RUNLOG_DIR; features/dogfood-log-quality.clan). Dogfood environments only."
   type        = bool
@@ -143,4 +169,54 @@ variable "middleware_env" {
   description = "Extra environment for the middleware (model, layers, research, retrieval)"
   type        = map(string)
   default     = {}
+}
+
+variable "deck_enabled" {
+  description = "Run the Deck Maker engine (engine/deck/Dockerfile) as a second container of the middleware task: ECR repository <name>/deck, an EFS access point for its run cache, the middleware's NAPKIN_DECK_ENGINE_URL, and a task of 2048 CPU / 4096 MiB (features/deck-cloud.clan). Off: one container, no repository, no access point."
+  type        = bool
+  default     = false
+}
+
+variable "territory_enabled" {
+  description = "Keep the Territories engine's per-document store (NAPKIN_TERRITORY_DATA: spend ledger and caps, run stages, look-up notes, the pictures ledger, held pictures) on EFS, through its own access point at the file system's /territory, mounted in the middleware container at /territory (features/territories-cloud.clan). Off: the store is the task's scratch disk, wiped by every deploy."
+  type        = bool
+  default     = false
+}
+
+variable "deck_memory" {
+  description = "The deck container's hard memory limit in MiB (it is not essential: past it only the deck container is stopped). The rest of the task's 4096 is the middleware's."
+  type        = number
+  default     = 2048
+}
+
+variable "deck_max_usd" {
+  description = "The most one deck run may spend on model calls (NAPKIN_DECK_MAX_USD); a deck costs about 0.50 to 1.25 USD"
+  type        = string
+  default     = "2.00"
+}
+
+variable "backup_enabled" {
+  description = "Back up web's EFS (every project and library document) with AWS Backup: daily at 03:00 UTC, kept 35 days, in its own vault (features/production-in-library). Off by default; uat and staging turn it on."
+  type        = bool
+  default     = false
+}
+
+variable "production_upload_origin" {
+  description = "The S3 origin the relay's presigned upload links point at (NAPKIN_PRODUCTION_UPLOAD_ORIGIN; the hackathon bucket on its regional endpoint). The browser PUTs upload bytes there; the Production page's CSP connect-src names it. Empty: not named."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.production_upload_origin == "" || startswith(var.production_upload_origin, "https://")
+    error_message = "production_upload_origin is empty or an https:// address"
+  }
+}
+
+variable "production_media_base" {
+  description = "The https base Production's pictures are served from (NAPKIN_PRODUCTION_MEDIA_BASE; the hackathon stack's CloudFront url). napkin-web tells the tool in /api/session as media_base. Empty: media_base is null."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.production_media_base == "" || startswith(var.production_media_base, "https://")
+    error_message = "production_media_base is empty or an https:// address"
+  }
 }

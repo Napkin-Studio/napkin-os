@@ -34,6 +34,7 @@ pub(crate) const DATA_PATH: &str = "shared/data.yaml";
 const APP_MANIFEST_PATH: &str = "app/manifest.yaml";
 pub(crate) const CHAIN_PATH: &str = "agent/decision-chain.yaml";
 pub(crate) const ASSET_PREFIX: &str = "human/assets/";
+const EXTRACTED_PREFIX: &str = "human/assets/.extracted/";
 const BRANCH_PREFIX: &str = "agents/";
 pub(crate) const UPSTREAM_PREFIX: &str = "upstream/";
 
@@ -222,6 +223,7 @@ pub fn make_template(clan: &ClanFile, app: AppInfo, opts: MakeTemplateOptions) -
                 content_type: "application/yaml".into(),
                 priority: None,
                 sha256: None,
+                linked: false,
             });
         }
         Some(yaml.into_bytes())
@@ -280,6 +282,11 @@ pub struct SpinoffOptions {
     /// Where the source file lives, recorded in lineage. Defaults to the
     /// `file:///unknown/<id>.clan` form used elsewhere.
     pub source_uri: Option<String>,
+    /// Carry the source's assets as links (`FileEntry::linked`, the sha256 of
+    /// the bytes) instead of copying them. The caller has already stored the
+    /// bytes under that hash in the workspace's blob store; a source asset
+    /// that is already a link is carried as a link whatever this says.
+    pub link_assets: bool,
 }
 
 /// `clan`'s bytes with `manifest.client` set to `client` (or cleared with
@@ -590,6 +597,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
             src_data_bytes.as_deref().unwrap_or_default(),
             last_decision,
             false,
+            opts.link_assets,
         )?);
         // What the source had linked rides along with its hoisted upstream,
         // so the new document can tell later whether any of it moved on.
@@ -599,10 +607,18 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
         // were made about travels with them. The template's own assets win a
         // collision.
         for (path, bytes) in &src_entries {
-            if path.starts_with(ASSET_PREFIX) && !entries.iter().any(|(p, _)| p == path) {
+            if !path.starts_with(ASSET_PREFIX) {
+                continue;
+            }
+            if opts.link_assets && linkable_asset(path) {
+                link_asset(&mut manifest.files, &entries, src_manifest, path, bytes);
+            } else if !entries.iter().any(|(p, _)| p == path)
+                && !manifest.files.iter().any(|f| f.path == *path && f.linked)
+            {
                 entries.push((path.clone(), bytes.clone()));
             }
         }
+        carry_links(&mut manifest.files, src_manifest);
     }
 
     let mut builder = ClanBuilder::new(manifest);
@@ -822,12 +838,16 @@ pub fn take_upstream(
         let carries = path.starts_with(BRANCH_PREFIX)
             || path.starts_with(UPSTREAM_PREFIX)
             || path.starts_with(ASSET_PREFIX);
-        if !carries || entries.iter().any(|(p, _)| p == path) {
+        if !carries
+            || entries.iter().any(|(p, _)| p == path)
+            || manifest.files.iter().any(|f| f.path == *path && f.linked)
+        {
             continue;
         }
         entries.push((path.clone(), bytes.clone()));
         register_carried(&mut manifest.files, pm, path, None);
     }
+    carry_links(&mut manifest.files, pm);
 
     // ── the manifest: the next revision, carrying what was taken ──────────
     manifest.next_revision();
@@ -866,6 +886,7 @@ pub(crate) fn carry_upstream(
     src_data_bytes: &[u8],
     last_decision: Option<String>,
     source_wins: bool,
+    link_assets: bool,
 ) -> Result<Carried> {
     let src_manifest = source.manifest();
     let mut carried = Carried {
@@ -930,12 +951,73 @@ pub(crate) fn carry_upstream(
         if !carries {
             continue;
         }
+        if link_assets && linkable_asset(path) {
+            link_asset(files, entries, src_manifest, path, bytes);
+            continue;
+        }
         if !put_entry(entries, path, bytes, source_wins) {
             continue;
         }
         register_carried(files, src_manifest, path, None);
     }
+    carry_links(files, src_manifest);
     Ok(carried)
+}
+
+/// Whether a source asset travels as a link: every asset but the extracted
+/// text beside an upload, which is small, is what the model reads, and stays
+/// in the document.
+pub fn linkable_asset(path: &str) -> bool {
+    path.starts_with(ASSET_PREFIX) && !path.starts_with(EXTRACTED_PREFIX)
+}
+
+/// Carry one embedded source asset as a link: the registry entry names the
+/// bytes by their sha256 and the bytes are left out. The target's own entry
+/// for the path wins, as it does for bytes.
+fn link_asset(
+    files: &mut Vec<FileEntry>,
+    entries: &[(String, Vec<u8>)],
+    src: &Manifest,
+    path: &str,
+    bytes: &[u8],
+) {
+    if files.iter().any(|f| f.path == path) || entries.iter().any(|(p, _)| p == path) {
+        return;
+    }
+    let name = path.strip_prefix(ASSET_PREFIX).unwrap_or(path);
+    let mut entry = src
+        .file_by_path(path)
+        .cloned()
+        .unwrap_or_else(|| FileEntry {
+            id: format!("human-asset-{}", name.replace(['/', '.'], "-")),
+            path: path.to_string(),
+            role: "human-asset".into(),
+            content_type: "application/octet-stream".into(),
+            priority: None,
+            sha256: None,
+            linked: false,
+        });
+    entry.sha256 = Some(sha256_prefixed(bytes));
+    entry.linked = true;
+    if files.iter().any(|f| f.id == entry.id) {
+        entry.id = format!("{}-{}", entry.id, src.document_id());
+    }
+    files.push(entry);
+}
+
+/// The source's own links ride along whatever the mode: a link is a whole
+/// registration, there are no bytes to copy.
+fn carry_links(files: &mut Vec<FileEntry>, src: &Manifest) {
+    for f in src.files.iter().filter(|f| f.linked) {
+        if files.iter().any(|g| g.path == f.path) {
+            continue;
+        }
+        let mut entry = f.clone();
+        if files.iter().any(|g| g.id == entry.id) {
+            entry.id = format!("{}-{}", entry.id, src.document_id());
+        }
+        files.push(entry);
+    }
 }
 
 /// Put `bytes` at `path` in `entries`. A path already there is replaced when
@@ -1084,6 +1166,7 @@ fn yaml_entry(id: &str, path: &str, role: &str) -> FileEntry {
         content_type: "application/yaml".into(),
         priority: None,
         sha256: None,
+        linked: false,
     }
 }
 

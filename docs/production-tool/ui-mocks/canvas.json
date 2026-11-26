@@ -1,0 +1,210 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-13T17:40:00Z"
+  },
+  "title": "Production Tool UI",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "1 \u00b7 Canvas: the project at a glance"
+    },
+    "CanvasLinking.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "2 \u00b7 Canvas: link nodes, make a video"
+    },
+    "CanvasReferences.dc.html": {
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "3 \u00b7 Canvas: references, roles and @"
+    },
+    "SketchInk.dc.html": {
+      "x": 4560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4 \u00b7 Canvas: 16:9 sketch area and ink to text"
+    },
+    "TabletCanvas.dc.html": {
+      "x": 6080,
+      "y": 0,
+      "w": 1180,
+      "h": 820,
+      "title": "5 \u00b7 iPad with Pencil"
+    },
+    "ScriptScreenplay.dc.html": {
+      "x": 0,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "6 \u00b7 Script editor: screenplay view"
+    },
+    "ScriptAV.dc.html": {
+      "x": 1520,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "7 \u00b7 Script editor: Video | Audio view"
+    },
+    "Storyboard.dc.html": {
+      "x": 3040,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "8 \u00b7 Storyboard editor"
+    },
+    "ImageEditor.dc.html": {
+      "x": 4560,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "9 \u00b7 Image editor"
+    },
+    "VideoEditor.dc.html": {
+      "x": 6080,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "10 \u00b7 Video editor"
+    },
+    "PhoneReview.dc.html": {
+      "x": 0,
+      "y": 2800,
+      "w": 390,
+      "h": 844,
+      "title": "11 \u00b7 Phone review"
+    },
+    "States.dc.html": {
+      "x": 470,
+      "y": 2800,
+      "w": 1440,
+      "h": 900,
+      "title": "12 \u00b7 States, jobs and errors"
+    },
+    "Crew.dc.html": {
+      "x": 1990,
+      "y": 2800,
+      "w": 1440,
+      "h": 900,
+      "title": "13 \u00b7 The crew"
+    },
+    "Loader.dc.html": {
+      "x": 3510,
+      "y": 2800,
+      "w": 1440,
+      "h": 900,
+      "title": "14 \u00b7 Loader and busy pointer",
+      "is_interactive": true
+    },
+    "Scope.dc.html": {
+      "x": 7340,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4b \u00b7 Canvas: inputs, scope and what is sent"
+    },
+    "Asks.dc.html": {
+      "x": 8860,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4c \u00b7 Canvas: when Dex asks"
+    },
+    "Assets.dc.html": {
+      "x": 10380,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4d \u00b7 Assets: import, team library, spin-in, export"
+    },
+    "Formats.dc.html": {
+      "x": 11900,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "4e \u00b7 Scamp sheets and Make all sizes",
+      "is_interactive": true
+    },
+    "DecisionTree.dc.html": {
+      "x": 5030,
+      "y": 2800,
+      "w": 1440,
+      "h": 900,
+      "title": "15 \u00b7 Decision tree"
+    },
+    "SoundEditor.dc.html": {
+      "x": 7600,
+      "y": 1400,
+      "w": 1440,
+      "h": 900,
+      "title": "10b \u00b7 Video editor: sound"
+    },
+    "Voices.dc.html": {
+      "x": 6550,
+      "y": 2800,
+      "w": 1440,
+      "h": 900,
+      "title": "13b \u00b7 Character voices"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "CanvasLinking.dc.html",
+    "CanvasReferences.dc.html",
+    "SketchInk.dc.html",
+    "TabletCanvas.dc.html",
+    "Scope.dc.html",
+    "Asks.dc.html",
+    "Assets.dc.html",
+    "Formats.dc.html",
+    "ScriptScreenplay.dc.html",
+    "ScriptAV.dc.html",
+    "Storyboard.dc.html",
+    "ImageEditor.dc.html",
+    "VideoEditor.dc.html",
+    "PhoneReview.dc.html",
+    "States.dc.html",
+    "Crew.dc.html",
+    "Loader.dc.html",
+    "DecisionTree.dc.html",
+    "SoundEditor.dc.html",
+    "Voices.dc.html"
+  ],
+  "notes": {
+    "rowCanvas": {
+      "x": 0,
+      "y": -300,
+      "text": "The canvas: where the ad comes together",
+      "kind": "title1",
+      "maxW": 13340
+    },
+    "rowEditors": {
+      "x": 0,
+      "y": 1100,
+      "text": "Editors: double-click a node to open one",
+      "kind": "title1",
+      "maxW": 9040
+    },
+    "rowReview": {
+      "x": 0,
+      "y": 2500,
+      "text": "Phone review, states, the crew, the loader and the decision tree",
+      "kind": "title1",
+      "maxW": 7990
+    }
+  },
+  "designSystems": []
+}

@@ -1,0 +1,5 @@
+{
+ "version": "director.v7",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip_patch\", \"question\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"aleph2\", \"prompt\": \"the bottle tips over at this point. Everything else stays exactly as it is: the people, the place, the light and the camera.\", \"refs\": [{\"sha256\": \"sha256:7777777777777777777777777777777777777777777777777777777777777777\", \"name\": \"current\", \"role\": \"current\"}], \"audio\": false}, \"rationale\": \"The note is about something in this moment (the bottle), so I made the patch job with the note first and the standard keep-the-rest line.\", \"confidence\": 0.93}"
+}

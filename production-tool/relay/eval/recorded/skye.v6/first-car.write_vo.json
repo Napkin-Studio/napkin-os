@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@maya_front sits in her first car, grips the wheel with both hands, takes a breath, and turns the key."
+     },
+     {
+      "type": "direction",
+      "text": "Interior, low angle up at her."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 0.5,
+      "text": "Some firsts, you never forget."
+     }
+    ],
+    "note": "I added one short VO line over the shot and left your words as they were."
+   }
+  ],
+  "rationale": "The shot already shows the first-car moment, so the VO is one short line that adds feeling without repeating the action. It fits inside the shot's length and the 15 s target."
+ }
+}

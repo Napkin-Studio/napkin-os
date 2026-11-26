@@ -115,7 +115,69 @@ variable "middleware_count" {
   default     = 1
 }
 
+variable "deck_enabled" {
+  description = "Run the Deck Maker engine beside the middleware (a second container, 2 vCPU / 4 GB task). false drops the container and the middleware's NAPKIN_DECK_ENGINE_URL; build_deck then says the engine is off."
+  type        = bool
+  default     = true
+}
+
 variable "github_oidc_provider_arn" {
   description = "The account's existing token.actions.githubusercontent.com provider (staging's stack owns it; AWS allows one per account)"
   type        = string
+}
+
+variable "production_relay_url" {
+  description = "The hackathon stack's relay_function_url: napkin-web proxies /production/api to it. Empty: no /production on UAT."
+  type        = string
+  default     = ""
+}
+
+variable "production_relay_secret_arn" {
+  description = "The ARN of napkin-hackathon/TOKEN_SECRET (the hackathon stack's secret_ids output), which napkin-web signs X-Napkin-Identity with"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_relay_secret_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_relay_secret_arn are set together, or neither"
+  }
+}
+
+variable "production_service_key_arn" {
+  description = "The ARN of napkin-hackathon/SERVICE_KEY (the hackathon stack's secret_ids output), which napkin-web calls the relay with (bearer plus signed user claim)"
+  type        = string
+  default     = ""
+  validation {
+    condition     = (var.production_service_key_arn == "") == (var.production_relay_url == "")
+    error_message = "production_relay_url and production_service_key_arn are set together, or neither"
+  }
+}
+
+variable "production_upload_origin" {
+  description = "The S3 origin the relay's presigned upload links point at: the hackathon bucket on its regional endpoint. The Production page's CSP connect-src names it."
+  type        = string
+  default     = "https://napkin-hackathon-741448934623.s3.eu-west-1.amazonaws.com"
+}
+
+variable "production_media_base" {
+  description = "The https base Production's pictures are served from: the hackathon stack's CloudFront address (its url output). napkin-web tells the tool in /api/session as media_base."
+  type        = string
+  default     = "https://d1kyxuk8u2ulz5.cloudfront.net"
+}
+
+variable "territory_enabled" {
+  description = "Keep the Territories store (NAPKIN_TERRITORY_DATA) on EFS (features/territories-cloud.clan; owner, 2026-11-26). false: the task's scratch disk, wiped by every deploy."
+  type        = bool
+  default     = true
+}
+
+variable "territory_images" {
+  description = "Territories makes pictures (Runway frames for the greenlit routes) on UAT: NAPKIN_TERRITORY_IMAGES=1, a cap of USD 2.00 per document, and the Runway key as RUNWAYML_API_SECRET on the middleware (owner, 2026-11-26: on, $2 per document). Off until the frames reach the document's pictures in the browser (features/territories-cloud.clan open question)."
+  type        = bool
+  default     = false
+}
+
+variable "runway_secret_name" {
+  description = "The Secrets Manager secret holding the Runway key, read by name: the Production Tool relay's own (infra/envs/hackathon/secrets.tf), so UAT keeps one Runway key and no second copy. Read only when territory_images is on."
+  type        = string
+  default     = "napkin-hackathon/RUNWAY_API_KEY"
 }

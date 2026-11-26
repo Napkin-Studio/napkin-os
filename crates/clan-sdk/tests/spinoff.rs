@@ -100,6 +100,7 @@ fn entry(path: &str, role: &str) -> FileEntry {
         content_type: "application/yaml".into(),
         priority: None,
         sha256: None,
+        linked: false,
     }
 }
 
@@ -814,13 +815,111 @@ fn the_packed_deck_maker_declares_its_spinoff_contract() {
     let _ = std::fs::remove_dir_all(&out);
     let app = packed.manifest().app.as_ref().expect("app block");
     assert_eq!(app.app_id, "ie.napkin.deck-maker");
-    assert_eq!(app.version, "0.2.1");
+    assert_eq!(app.version, "0.6.0");
+    let spec = app.spinoff.as_ref().expect("app.spinoff");
+    assert_eq!(
+        spec.accepts,
+        vec![
+            BRIEF_APP.to_string(),
+            RESEARCH_APP.to_string(),
+            "ie.napkin.production".to_string(),
+            "ie.napkin.territories".to_string()
+        ]
+    );
+    assert!(spec.upstream);
+    assert!(spec.map.is_none() && spec.lift.is_empty());
+}
+
+/// Runs the real packer for Territories (`examples/make_territories.rs`) and returns the packed template.
+fn packed_territories() -> ClanFile {
+    // Once per test binary: the tests run in parallel and the packer writes its files under one directory.
+    static PACKED: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    open(PACKED.get_or_init(pack_territories).clone())
+}
+
+fn pack_territories() -> Vec<u8> {
+    let out = std::env::temp_dir().join(format!("territories-pack-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    let app_path = out.join("territories.app.clan");
+    let example_path = out.join("territories.example.clan");
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let run = std::process::Command::new(cargo)
+        .args([
+            "run",
+            "-q",
+            "--locked",
+            "-p",
+            "clan-sdk",
+            "--example",
+            "make_territories",
+            "--",
+        ])
+        .arg(&app_path)
+        .arg(&example_path)
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "packer failed: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let packed = std::fs::read(&app_path).unwrap();
+    let _ = std::fs::remove_dir_all(&out);
+    packed
+}
+
+#[test]
+fn the_packed_territories_declares_its_spinoff_contract() {
+    let packed = packed_territories();
+    let app = packed.manifest().app.as_ref().expect("app block");
+    assert_eq!(app.app_id, "ie.napkin.territories");
+    assert_eq!(app.version, "0.1.0");
     let spec = app.spinoff.as_ref().expect("app.spinoff");
     assert_eq!(
         spec.accepts,
         vec![BRIEF_APP.to_string(), RESEARCH_APP.to_string()]
     );
-    assert!(spec.upstream);
+    assert!(spec.upstream && spec.map.is_none() && spec.lift.is_empty());
+}
+
+#[test]
+fn research_to_brief_to_territories_holds_both_whole_and_carries_no_approval() {
+    let research = research();
+    let brief = spin(&brief_maker(), &research);
+    let brief_doc = brief.manifest().document_id().to_string();
+    let territories = spin(&packed_territories(), &brief);
+
+    let data = yaml(&territories, DATA);
+    let up = data["upstream"].as_mapping().unwrap();
+    assert_eq!(up.len(), 2, "the brief and the research, side by side");
+    assert_eq!(data["upstream"][RESEARCH_DOC], frozen(&research));
+    assert_eq!(data["upstream"][brief_doc.as_str()], frozen(&brief));
+    assert_eq!(
+        territories
+            .manifest()
+            .carried()
+            .expect("lineage.carried")
+            .document_id,
+        brief_doc
+    );
+    // The source's pins and findings are merged into this document's own members.
+    assert_eq!(
+        yaml(&territories, FACTS)["facts"],
+        yaml(&research, FACTS)["facts"]
+    );
+    assert_eq!(
+        yaml(&territories, FINDINGS)["findings"],
+        yaml(&research, FINDINGS)["findings"]
+    );
+    // No gate is pre-passed: nothing under `run` comes from a source, and carrying the same source twice adds none.
+    assert!(data.get("run").is_none());
+    let again = spin(&packed_territories(), &brief);
+    assert!(yaml(&again, DATA).get("run").is_none());
+    assert!(
+        validate(&territories).is_valid(),
+        "{}",
+        validate(&territories).display()
+    );
 }
 
 // ── Taking the parent's newer version (§5.5, reversed for spin-offs) ─────────
@@ -1004,4 +1103,82 @@ fn the_packed_research_tool_takes_a_brief_carried_whole() {
 
 fn app_info_brief() -> AppInfo {
     app("Brief Maker", BRIEF_APP, None)
+}
+
+// ── assets as links (features/spinoff-asset-links) ──────────────────────────
+
+const EMAIL: &str = "human/assets/client-email.txt";
+const SIDECAR: &str = "human/assets/.extracted/client-email.txt.txt";
+
+fn link_spin(template: &ClanFile, source: &ClanFile) -> ClanFile {
+    open(
+        spinoff(
+            template,
+            source,
+            SpinoffOptions {
+                link_assets: true,
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    )
+}
+
+#[test]
+fn a_link_spinoff_names_the_asset_by_hash_and_leaves_the_bytes_out() {
+    let source = research();
+    let bytes = source.read_entry(EMAIL).unwrap();
+    let out = link_spin(&brief_maker(), &source);
+
+    assert!(!out.has_entry(EMAIL), "no bytes in the copy");
+    let e = out.manifest().file_by_path(EMAIL).expect("registered");
+    assert!(e.linked);
+    assert_eq!(e.sha256.as_deref(), Some(sha256_prefixed(&bytes).as_str()));
+    // The extracted text stays in the document, the model reads it.
+    assert!(out.has_entry(SIDECAR));
+    assert!(validate(&out).is_valid(), "{:?}", validate(&out));
+
+    // The next hop carries the link on without bytes ever existing.
+    let deck = link_spin(&deck_template(), &out);
+    assert!(!deck.has_entry(EMAIL));
+    let e2 = deck.manifest().file_by_path(EMAIL).expect("carried");
+    assert!(e2.linked);
+    assert_eq!(e2.sha256, e.sha256);
+    // And even an embed-mode hop only carries it as the link it is.
+    let deck2 = spin(&deck_template(), &out);
+    assert!(!deck2.has_entry(EMAIL));
+    assert!(deck2.manifest().file_by_path(EMAIL).unwrap().linked);
+}
+
+#[test]
+fn the_default_spinoff_still_embeds_the_asset() {
+    let source = research();
+    let out = spin(&brief_maker(), &source);
+    assert_eq!(
+        out.read_entry(EMAIL).unwrap(),
+        source.read_entry(EMAIL).unwrap()
+    );
+    assert!(!out.manifest().file_by_path(EMAIL).unwrap().linked);
+}
+
+#[test]
+fn validate_refuses_a_link_without_a_hash() {
+    let out = link_spin(&brief_maker(), &research());
+    let mut m = out.manifest().clone();
+    m.files.iter_mut().find(|f| f.path == EMAIL).unwrap().sha256 = None;
+    let mut b = ClanBuilder::new(m);
+    for (p, v) in out.read_all_entries().unwrap() {
+        if p != MANIFEST_PATH {
+            b.add_entry(p, v);
+        }
+    }
+    let bad = open(b.build().unwrap());
+    assert!(
+        validate(&bad)
+            .structural
+            .iter()
+            .any(|s| s.contains("linked file")),
+        "{:?}",
+        validate(&bad)
+    );
 }

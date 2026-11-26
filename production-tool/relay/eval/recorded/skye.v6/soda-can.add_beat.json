@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A cold @soda_can sweats on a picnic table. A hand reaches in, cracks it open, and the fizz rises."
+     },
+     {
+      "type": "direction",
+      "text": "Macro; slow motion on the fizz."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 2,
+      "text": "A bead of condensation slides down the @soda_can and drips onto the wood."
+     }
+    ],
+    "note": "I added a beat where a bead of condensation runs down the can before the hand arrives."
+   }
+  ],
+  "rationale": "The shot lacked a moment showing the chill before the hand reaches in; a condensation drip adds it without changing the existing words."
+ }
+}

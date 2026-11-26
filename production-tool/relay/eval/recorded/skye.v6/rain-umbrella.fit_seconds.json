@@ -1,0 +1,27 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "Rain hits a grey street. @maya_front opens a yellow @umbrella_open and grins at the sky."
+     },
+     {
+      "type": "direction",
+      "text": "Slow push in; the yellow is the only colour."
+     }
+    ],
+    "duration_s": 2.5,
+    "note": "I tightened the action to one 15-word beat so it plays in 2.5 seconds."
+   }
+  ],
+  "rationale": "One action line of 15 words counts 2.5 s by the length rule; all @names and the direction are kept."
+ }
+}

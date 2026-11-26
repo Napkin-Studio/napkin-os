@@ -1,0 +1,41 @@
+/* Final and Rights? (features/prod-assets-route.clan) */
+.final-toggle.on { background: var(--plan); color: var(--paper); border-color: var(--plan); }
+.rights-chip { position: absolute; transform: translate(6px, 6px); height: 20px; padding: 0 7px; border-radius: 6px; border: 1px dashed var(--line); background: var(--card); color: var(--ink2); font-size: 11px; box-shadow: var(--shadow-pill); cursor: pointer; }
+.rights-chip:hover, .rights-chip[aria-expanded="true"] { border-color: var(--tool); color: var(--tool-ink); }
+/* Scaled with the canvas from its top-left; a dot when zoomed far out (UAT round 2 R2-11). */
+.rights-chip { transform-origin: top left; }
+.rights-chip.dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; border-style: solid; background: var(--tool, #c8553d); transform: translate(4px, 4px); box-shadow: none; }
+.rights-menu .pt-menurow .hint { margin-left: 8px; }
+.ie-finalrow { display: flex; align-items: center; gap: 8px; padding: 0 0 10px; }
+
+/* The Final marker and the rights chip, as the owner-approved mock (features/pt-final-and-fit.clan). */
+.final-badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 7px; border-radius: var(--r-pill); background: var(--plan); color: var(--paper); font-weight: 600; font-size: 11.5px; box-shadow: var(--shadow-pill); white-space: nowrap; pointer-events: none; }
+.final-badge svg { width: 12px; height: 12px; }
+.final-badge.sm { height: 18px; font-size: 10.5px; padding: 0 7px 0 5px; }
+.final-badge.dot { width: 10px; height: 10px; padding: 0; background: var(--plan); }
+.final-badge.canvas { position: absolute; transform-origin: top left; }
+.rights-chip { display: inline-flex; align-items: center; transform-origin: bottom left; border-style: solid; }
+.rights-chip.generated, .rights-chip.own, .rights-chip.licensed { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.rights-chip.unknown { border: 1px dashed var(--warn); color: var(--warn); background: var(--warn-soft); }
+.rights-chip.dot { transform: translate(4px, -14px); }
+.rights-chip.dot.generated, .rights-chip.dot.own, .rights-chip.dot.licensed { background: var(--ok); }
+.rights-chip.dot.unknown { background: var(--warn); }
+.rights-chip.tile { position: static; transform: none; }
+/* Rights asked when a picture is marked Final: a small dialog menu, not a modal. */
+.final-rights { width: 292px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); }
+.final-rights h3 { font-size: 13px; margin: 0 0 2px; }
+.final-rights p { color: var(--muted); margin: 0 0 8px; font-size: 12px; }
+.final-rights .opt { display: flex; gap: 9px; width: 100%; text-align: left; padding: 8px 9px; border-radius: 8px; border: 1px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; }
+.final-rights .opt + .opt { margin-top: 2px; }
+.final-rights .opt.sel { background: var(--tool-soft); border-color: var(--tool); }
+.final-rights .opt i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--faint); margin-top: 2px; flex: none; }
+.final-rights .opt.sel i { border-color: var(--tool); background: radial-gradient(var(--tool) 45%, transparent 50%); }
+.final-rights .opt b { display: block; font-weight: 600; }
+.final-rights .opt span span { color: var(--muted); font-size: 12px; }
+.final-rights .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+/* The version strip under a canvas picture: the Final version is solid ink with a tick. */
+.vstrip { position: absolute; display: flex; gap: 4px; transform-origin: top left; }
+.vstrip .ver { height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; color: var(--ink2); cursor: pointer; }
+.vstrip .ver.sel { border-color: var(--ink); }
+.vstrip .ver.fin { background: var(--plan); color: var(--paper); border-color: var(--plan); font-weight: 600; }
+.vstrip .ver svg { width: 10px; height: 10px; }

@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "A slow pan drifts across a calm sea at dusk, and the logo settles over it."
+     },
+     {
+      "type": "direction",
+      "text": "Keep room for the tagline."
+     }
+    ],
+    "note": "I reworded the shot and its direction, keeping the same facts and length."
+   }
+  ],
+  "rationale": "Rephrased the action and direction with the same meaning and similar length; no @names were present to preserve."
+ }
+}

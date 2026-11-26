@@ -538,7 +538,8 @@ void main(){
       F.R = R; F.cx = cx; F.cy = cy; F.p = p; F.breath = breath; F.pingOn = pingOn; F.A = A; F.B = B;
     }
     function draw(gl, r, dpr, cw, ch, sc) {
-      if (!E.hasEnv || !PH.agent || !P) return;
+      // F.A/F.B are set by the first step() with an envelope; a draw before it has no palettes to send.
+      if (!E.hasEnv || !PH.agent || !P || !F.A || !F.B) return;
       P.use();
       const ox = r.left, oy = r.top, A = F.A, B = F.B;
       const half = RING.ringR + 70;

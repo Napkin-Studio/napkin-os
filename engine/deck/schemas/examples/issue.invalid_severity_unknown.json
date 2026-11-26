@@ -1,0 +1,10 @@
+{
+  "id": "i_3fa91c07",
+  "round": 0,
+  "slide": "s07",
+  "source": "qa_render",
+  "check": "text_overflow",
+  "severity": "critical",
+  "message": "The body text runs past the bottom of the box.",
+  "status": "open"
+}

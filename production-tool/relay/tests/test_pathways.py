@@ -18,8 +18,9 @@ import httpx
 import pytest
 from PIL import Image
 
-from conftest import CDN, Harness
-from contracts_dir import contracts_dir
+from conftest import CDN, Harness, base_config, envelope
+from contracts_dir import contracts_dir, pricing
+from runtime import with_defaults
 from director import new_id
 from providers import Registry
 from providers._seam import Adapted, Resolver
@@ -27,7 +28,7 @@ from providers.runway import RunwayProvider
 from provider_schemas import errors as schema_errors
 
 PATHWAYS = ("runway",)
-PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit")
+PROVIDER_OPS = ("generate", "view", "frame", "region_edit", "clip", "clip_edit", "upscale")
 ASSET_HOSTS = ("cdn.test", "hack.napkin.ie")  # ours in these tests, and in the recorded director fixtures
 
 
@@ -108,12 +109,18 @@ class StandIns:
 
 # ── a relay on one pathway, with the real adapters ──────────────────────────
 def pathway_config(name: str) -> dict:
-    cfg = json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text())
-    cfg["flags"] = {**cfg["flags"], "regionEditCanvas": True, "regionEditFrames": True, "videoRegionEdit": True,
-                    "feelEdit": True, "storyboard": True, "video": True, "stitch": True}
+    cfg = with_defaults(json.loads((contracts_dir() / "examples" / f"config.pathway.{name}.json").read_text()))
+    cfg["flags"] = {**cfg["flags"], "videoRegionEdit": True, "feelEdit": True}
+    cfg["director"] = base_config()["director"]  # a test's own director on the newest prompt, as configs named it
     cfg["inFlightPerParticipant"] = 6
     cfg["quotas"] = {"image": 1000, "video": 1000, "render": 1000}
     return cfg
+
+
+# The Image editor's makers (features/image-editor.clan): Ideogram (region_edit) and Magnific (upscale) are
+# off unless the agency asks, so these cases run for an agency that turned them on.
+EDITOR_ALLOW = {"claude": True, "makers": ["runway", "google", "ideogram", "magnific"]}
+EDITOR_OPS = ("region_edit", "upscale")
 
 
 def pathway(name: str, **cfg_over) -> tuple[Harness, StandIns]:
@@ -136,8 +143,8 @@ def named(n: int, name: str, role: str = "character") -> dict:
     return {"id": new_id("ref"), "name": name, "role": role, "kind": "picture", "asset": asset(n)}
 
 
-SHOT = {"id": new_id("shot", "pathways"), "order": 1, "duration_s": 5, "composition": "medium",
-        "action": "@maya waves at the camera", "camera_move": "static", "refs": ["maya"]}
+SHOT = {"id": new_id("shot", "pathways"), "kind": "shot", "duration_s": 5, "camera": {"size": "medium", "movement": "static"},
+        "action": "@maya waves at the camera", "refs": ["maya"]}
 MAYA = [named(1, "maya_front"), named(2, "maya_side")]
 BOX = {"x": 0.2, "y": 0.2, "w": 0.3, "h": 0.3}
 
@@ -148,7 +155,22 @@ INPUTS = {
     "region_edit": {"image": asset(6), "region": BOX, "mask": asset(7), "text": "make the hat red", "ratio": "16:9"},
     "clip": {"shot": SHOT, "image": asset(6), "refs": MAYA, "ratio": "16:9"},
     "clip_edit": {"video": asset(8, "video/mp4"), "feel": {"strength": "flex"}, "text": "warmer light"},
+    "upscale": {"image": asset(6), "scale": 4, "aspect": {"w": 1344, "h": 768}},
 }
+
+
+def sent_settings(op: str, body: dict) -> dict:
+    """The settings a Runway body carries that its price depends on."""
+    if op == "clip":
+        return {"durationS": body["duration"], "audio": body["audio"]}
+    if op == "clip_edit":
+        return {}  # priced at the op's default input length: the request does not carry the clip's
+    if op == "upscale":  # Magnific: the input's longest side (the request's aspect) times the scale
+        return {"scaleFactor": body["scaleFactor"], "inputPx": 1344}
+    if body.get("model") == "ideogram_4_5":  # priced by quality: the image is a reference, preciseEdit is high
+        return {"outputs": body.get("outputCount", 1), "refs": len(body.get("referenceImages") or []),
+                **({"preciseEdit": True} if body.get("preciseEdit") else {})}
+    return {"outputs": body.get("outputCount", 1), "ratio": body["ratio"]}
 
 
 def expected_provider(cfg: dict, h: Harness, op: str) -> str:
@@ -158,11 +180,34 @@ def expected_provider(cfg: dict, h: Harness, op: str) -> str:
 def run(h: Harness, op: str, inp: dict, **req_over) -> dict:
     """POST the job, then poll as the browser does until it ends."""
     token = h.as_person()
-    req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": inp, **req_over}
+    req = {**envelope(op, new_id("job")), "input": inp, **req_over}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     for _ in range(12):
         if job["state"] in ("completed", "failed", "cancelled", "uncertain"):
             break
+        h.clock.tick(10)
+        job = h.poll(token, job["jobId"])
+    return job
+
+
+def run_patch(h: Harness, inp: dict) -> dict:
+    """Fix this moment (features/clip-moment-edit.clan) on the pathway: the flag on, routed to Runway, and
+    stitch's two stages answered as the Lambda would (tests/test_clip_patch.py drives them in detail)."""
+    h.cfg["flags"] = {**h.cfg["flags"], "clipPatch": True}
+    h.cfg["routing"] = {**h.cfg["routing"], "clip_patch": ["runway"]}
+    token = h.as_person()
+    inp = {**inp, "video": {**inp["video"], "url": f"{CDN}/in/{inp['video']['sha256']}"}}  # a take in our store
+    _, job = h.call("POST", "/jobs", {**envelope("clip_patch", new_id("job")), "input": inp}, token, expect=200)
+    scratch = f"ads/scratch/{job['jobId']}"
+    h.blobs.put(f"{scratch}/cut.json", json.dumps({"ok": True, "takeS": 6.0, "w": 1280, "h": 720, "fps": 24.0, "stills": [
+        {"sha256": "sha256:" + "5" * 64, "bytes": 5}]}).encode(), "application/json")
+    for _ in range(12):
+        if job["state"] in ("completed", "failed", "cancelled", "uncertain", "needs_input"):
+            break
+        if h.store.get_job(job["jobId"]).get("_stage") == "splice":
+            h.blobs.put(f"{scratch}/splice-1.json", json.dumps({"ok": True, "sha256": "sha256:" + "6" * 64, "bytes": 9,
+                                                                "durationS": 6.0, "exact": True, "seams": []}).encode(),
+                        "application/json")
         h.clock.tick(10)
         job = h.poll(token, job["jobId"])
     return job
@@ -173,6 +218,8 @@ def run(h: Harness, op: str, inp: dict, **req_over) -> dict:
 @pytest.mark.parametrize("op", PROVIDER_OPS)
 def test_every_step_runs_on_its_pathway(name, op):
     h, stand = pathway(name)
+    if op in EDITOR_OPS:
+        h.limits("blue", allow=EDITOR_ALLOW)
     job = run(h, op, INPUTS[op])
     provider = expected_provider(h.cfg, h, op)
     sheet = h.relay.registry.sheet(provider)
@@ -184,7 +231,9 @@ def test_every_step_runs_on_its_pathway(name, op):
     assert sent, f"{provider} received nothing for {op}"
     for s in sent:
         assert not s["errors"], f"{provider} {s['endpoint']} body breaks its published schema: {s['errors']}"
-    assert job["cost"]["estimate"] == (sheet["ops"][op]["estimateUsd"] or 0) or job["cost"]["unknown"]
+    # The reservation is the sheet's price (contracts/pricing.py) at the settings the body really sent.
+    want = pricing().op_usd(sheet, op, None, sent_settings(op, sent[-1]["body"]))
+    assert want is not None and job["cost"]["estimate"] == want and not job["cost"]["unknown"]
 
 
 @pytest.mark.parametrize("name", PATHWAYS)
@@ -214,12 +263,60 @@ def test_clips_that_cannot_take_refs_send_the_frame_and_name_the_character_in_wo
     assert "@" not in body["promptText"]
 
 
-def test_runway_region_edits_send_the_image_and_a_copy_with_the_box_drawn():
+def test_a_clip_with_a_character_and_no_frame_is_refused_not_sent_character_less():
+    """The owner's @on ad came out a generic person, 2026-11: a clip that names a character but has no
+    first frame cannot carry it on Veo 3.1 (no refsWithoutFrame), and naming it in words alone loses it.
+    The relay refuses rather than send a character-less clip; the web makes a storyboard frame first, which
+    carries the character. Here, with no frame and no model, the job fails loudly instead of lying."""
     h, stand = pathway("runway")
+    job = run(h, "clip", {"shot": SHOT, "refs": MAYA, "ratio": "16:9"})
+    assert job["state"] == "failed", (job.get("error"), stand.sent)
+    assert job["error"]["code"] == "internal"
+    assert not stand.to("runway")  # nothing character-less reached the provider
+
+
+def test_a_clip_straight_from_the_script_with_no_cast_goes_to_text_to_video():
+    """ui-behaviour 3.5: no frame and no character, so Veo 3.1 makes it from words alone."""
+    h, stand = pathway("runway")
+    job = run(h, "clip", {"shot": {**SHOT, "action": "A runner crests the cliff at dawn.", "refs": []},
+                          "ratio": "16:9"})
+    assert job["state"] == "completed", (job.get("error"), stand.sent)
+    sent = stand.to("runway")
+    assert [s["endpoint"] for s in sent] == ["POST /v1/text_to_video"]
+    assert not sent[0]["errors"], sent[0]["errors"]
+    body = sent[0]["body"]
+    assert "promptImage" not in body and "referenceImages" not in body and "@" not in body["promptText"]
+    sheet = h.relay.registry.sheet("runway")
+    assert job["cost"]["estimate"] == pricing().op_usd(sheet, "clip", None, sent_settings("clip", body))
+
+
+def test_runway_region_edits_send_the_image_and_a_mask_made_from_the_box():
+    """ideogram_4_5 (features/image-editor.clan): the image first, and the box as a black-edit mask."""
+    h, stand = pathway("runway")
+    h.limits("blue", allow=EDITOR_ALLOW)
     run(h, "region_edit", INPUTS["region_edit"])
-    refs = stand.to("runway")[0]["body"]["referenceImages"]
-    assert [r["tag"] for r in refs[:2]] == ["current", "marked"]
-    assert refs[1]["uri"].startswith("data:image/png;base64,")
+    body = stand.to("runway")[0]["body"]
+    assert body["model"] == "ideogram_4_5" and len(body["referenceImages"]) == 1
+    assert body["maskUri"].startswith("data:image/png;base64,") and "ratio" not in body
+
+
+def test_with_ideogram_off_a_region_edit_runs_on_gemini_with_the_box_drawn():
+    """An agency with Ideogram off: region_edit runs on its Gemini 3 Pro alternate."""
+    h, stand = pathway("runway")
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google"]})
+    run(h, "region_edit", {k: v for k, v in INPUTS["region_edit"].items() if k != "mask"})
+    body = stand.to("runway")[0]["body"]
+    assert body["model"] == "gemini_image3_pro"
+    assert [r["tag"] for r in body["referenceImages"][:2]] == ["current", "marked"]
+
+
+def test_with_magnific_off_upscale_is_refused_up_front():
+    h, stand = pathway("runway")
+    token = h.as_person()
+    h.limits("blue", allow={"claude": True, "makers": ["runway", "google"]})
+    _, out = h.call("POST", "/jobs", {**envelope("upscale", new_id("job")), "input": INPUTS["upscale"]}, token)
+    assert out["error"]["code"] in ("not_allowed", "capability_missing", "flag_off"), out
+    assert not stand.to("runway")
 
 
 # ── when something goes wrong ───────────────────────────────────────────────
@@ -236,7 +333,7 @@ def test_a_permanent_status_error_ends_the_job_at_once_not_at_the_timeout(op):
     h, stand = pathway("runway")
     stand.status_reply["runway"] = httpx.Response(404, json={"error": "no such task"})
     token = h.as_person()
-    req = {"contractVersion": "2", "jobId": new_id("job"), "op": op, "parentIds": [], "input": INPUTS[op]}
+    req = {**envelope(op, new_id("job")), "input": INPUTS[op]}
     _, job = h.call("POST", "/jobs", req, token, expect=200)
     h.clock.tick(10)
     job = h.poll(token, job["jobId"])  # one poll, well inside the 600 s timeout
@@ -274,9 +371,12 @@ def test_the_recorded_director_output_runs_on_its_pathway(fixture_name):
     sheets = {n: load_sheet(n) for n in ("mock", "runway")}
     h.relay.director = ClaudeDirector(Director(ModelPort(FakeWire(f["reply"]), "claude-haiku-4-5", timeout=5),
                                                PROMPTS, sheets))
-    job = run(h, f["op"], f["input"])
+    job = run_patch(h, f["input"]) if f["op"] == "clip_patch" else run(h, f["op"], f["input"])
+    if f["reply"].get("question"):  # the director asked: the job waits for a person, nothing is sent
+        assert job["state"] == "needs_input" and job["question"]["id"].startswith("q_") and not stand.sent
+        return
     assert job["state"] == "completed", (fixture_name, job.get("error"), stand.sent)
-    if f["op"] == "shot_list" or job.get("needsUser"):
+    if f["op"] == "shot_list":
         assert not stand.sent
         return
     assert job["provider"] == f["provider"]
@@ -293,11 +393,30 @@ def _script(name: str):
     return module
 
 
-def test_the_cost_of_a_reference_production_per_pathway_is_pinned():
-    """A price change in a capability sheet shows up here, so it is seen in review."""
-    costs = {c["pathway"]: (c["totalUsd"], c["bestTotalUsd"], c["unknown"]) for c in
-             (_script("pathway_costs").costs(n) for n in PATHWAYS)}
-    assert costs == {"runway": (11.0, 11.0, [])}  # features/default-models.clan: a good model always
+def test_the_cost_of_an_ad_is_pinned():
+    """A price change in a capability sheet shows up here, so it is seen in review
+    (contracts/cost-model.json, features/runway-sheet-sync.clan)."""
+    costs = {c["id"]: (c["credits"], c["usd"]) for c in _script("ad_costs").costs()}
+    assert costs == {"typical": (1073, 10.73), "typical_takes": (2753, 27.53), "typical_audio": (1793, 17.93),
+                     "typical_audio_takes": (4913, 49.13), "heavy": (7873, 78.73), "campaign": (1524, 15.24)}
+
+
+def test_a_price_change_in_the_sheet_moves_the_ad_totals():
+    ad_costs = _script("ad_costs")
+    sheet = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
+    sheet["models"]["veo3.1"]["pricing"]["credits"] = 25  # no-audio Veo 3.1 up from 20 to 25 a second
+    moved = {c["id"]: c["credits"] for c in ad_costs.costs(the_sheet=sheet)}
+    assert moved["typical"] == 1073 + 6 * 6 * 5 and moved["typical_audio"] == 1793  # audio-on lines unchanged
+    assert moved["campaign"] == 1524  # Make all sizes uses no Veo
+    assert ad_costs.main(["--check"]) == 0  # the committed sheet still gives the expected totals
+
+
+def test_an_unpriced_line_fails_loudly_never_free():
+    ad_costs = _script("ad_costs")
+    sheet = json.loads((contracts_dir() / "capabilities" / "runway.json").read_text())
+    del sheet["models"]["aleph2"]
+    with pytest.raises(ad_costs.pricing().PriceError):
+        ad_costs.costs(the_sheet=sheet)
 
 
 def test_the_smoke_script_sends_nothing_without_live(monkeypatch, capsys):

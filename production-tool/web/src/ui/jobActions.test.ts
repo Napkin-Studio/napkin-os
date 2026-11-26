@@ -22,3 +22,12 @@ describe('what a failed job offers', () => {
     expect(failedActions(undefined)).toEqual({ otherModel: true, report: true })
   })
 })
+
+describe('a stepped job says its step (pt-canvas-r4, S1-1)', () => {
+  it('says step N of M only for more than one call', async () => {
+    const { stepWords } = await import('./jobActions')
+    expect(stepWords({ step: 2, steps: 3 })).toBe(' · step 2 of 3')
+    expect(stepWords({ step: 1, steps: 1 })).toBe('')
+    expect(stepWords(undefined)).toBe('')
+  })
+})

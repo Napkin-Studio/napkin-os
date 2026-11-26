@@ -24,6 +24,7 @@ pub mod middleware;
 pub mod office;
 pub mod read;
 pub mod review;
+pub mod upgrade;
 
 use serde_json::Value;
 

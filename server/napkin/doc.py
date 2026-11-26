@@ -142,6 +142,18 @@ def ctx_data(clan: dict) -> dict:
     return d if isinstance(d, dict) else {}
 
 
+def ctx_data_carried(clan: dict) -> dict:
+    """``ctx_data`` with the frozen ancestors put back whole under ``upstream``. The host sends ``clan.data.upstream`` as an index (§1) and, to a
+    Territories document, the full carried brief and research beside it as ``clan.carried_upstream {<id>: frozen copy}``; the engine reads the
+    brief from ``data.upstream`` as it is in the document. Without ``carried_upstream`` the data is what ``ctx_data`` gives."""
+    data = ctx_data(clan)
+    carried = (clan or {}).get("carried_upstream")
+    if not isinstance(carried, dict) or not carried:
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, **{k: v for k, v in carried.items() if isinstance(v, dict)}}}
+
+
 def field_env(data: dict, name: str) -> dict | None:
     env = (data.get("campaign") or {}).get(name)
     return env if isinstance(env, dict) else None
@@ -316,7 +328,10 @@ def build_materials(inp: dict, data: dict):
         if not isinstance(text, str) or not text.strip():
             unread.append(mid)
             continue
-        mats.append(Material(mid, text, a["name"], "other", sha, mid in known))
+        # `label`: the file's own name as the person chose it ("copperell-brand-notes.txt"); `name` is the stored one
+        # the host reads it by ("document-1795538546841-0.txt"). The material is named for a person (acceptance run A9).
+        label = a.get("label") if isinstance(a.get("label"), str) and a.get("label").strip() else a["name"]
+        mats.append(Material(mid, text, label.strip()[:200], "other", sha, mid in known))
     return mats, unread
 
 

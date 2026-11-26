@@ -19,9 +19,10 @@ import Launcher from './shell/Launcher'
 import { LandingHome } from './shell/landing/LandingHome'
 import { useLanding } from './shell/landing/useLanding'
 import { initialsOf, jobOf, routeOfDocument, whoIs } from './shell/landing/model'
-import { toolById, toolOfApp } from './shell/landing/tools'
+import { PRODUCTION_APP_ID, productionDocUrl, toolById, toolOfApp } from './shell/landing/tools'
 import Toolbar from './components/Toolbar'
-import { signedInUser } from './host/http'
+import { productionOn, signedInUser } from './host/http'
+import { brandApi } from './host/brandClans'
 import { signOut } from './shell/signOut'
 import { docEntry, isDocEntryState, isNotFound, launchIsMine } from './shell/lastOpen'
 import { spinoffTitle } from './shell/docTitle'
@@ -53,6 +54,9 @@ import { DOC_LOADED } from './shell/AppRuntime'
 // --border, --muted) alias onto them in index.css, so both follow. The accent
 // is --accent, not --create: an app may recolour the chrome's accent but not
 // the Create department.
+/** The Brand Clan operations of this shell's host. */
+const brands = brandApi(host)
+
 const THEME_VARS: Record<string, string> = {
   accent: '--accent', bg: '--paper', surface: '--card',
   text: '--ink', border: '--line', muted: '--ink2',
@@ -107,6 +111,9 @@ export default function App() {
   // On the device: the public viewer, a file opened here, an offline copy, or
   // a signed-in page that could not reach the studio.
   const [device, setDevice] = useState(onDevice)
+  // The server serves the Production Tool to this person: a brief's Continue in offers it (features/brief-node.clan).
+  const [production, setProduction] = useState(false)
+  useEffect(() => { if (!device) void productionOn().then(setProduction) }, [device])
   const [unreachable, setUnreachable] = useState(false)
   const [offlineOpen, setOfflineOpen] = useState(false)
   // The People page (features/people-admin.clan): an admin's, from the account menu.
@@ -170,7 +177,8 @@ export default function App() {
   const isLatest = (n: number) => n === openSeq.current
 
   const refreshApps = useCallback(async () => {
-    try { setInstalled(await host.listApps()) } catch (e) { console.error(e) }
+    // Production is installed for its spin-offs, not to launch: its projects open in the Production Tool (/production/d/<id>).
+    try { setInstalled((await host.listApps()).filter(a => a.app_id !== PRODUCTION_APP_ID)) } catch (e) { console.error(e) }
   }, [])
   // Once at start too: a document opened straight from a link (or a reload)
   // names its tool in the bar from this list, without the home ever showing.
@@ -214,6 +222,12 @@ export default function App() {
 
   const runArtifact = useCallback(async (n: number, open: OpenResult, source?: DeviceSource) => {
     if (!isLatest(n)) return
+    // A Production project is a library document like any other, but the Production Tool is what edits it:
+    // the shell hands it over by its id, wherever the open came from (library, spin-off, a link).
+    if (!source && !open.is_template && open.manifest.app?.app_id === PRODUCTION_APP_ID && hasServer && !onDevice()) {
+      window.location.assign(productionDocUrl(open.path))
+      return
+    }
     resetTheme() // clear any prior app's theme before this one (re)applies its own
     setRunning({ artifactPath: open.path, open, editMode: false, source })
     setScreen('app')
@@ -408,7 +422,7 @@ export default function App() {
       host.on('clan-request-save', () => { saveCurrent() }),
       host.on('clan-export-request', async p => {
         if (!p) return
-        const ext = p.kind === 'pdf' ? 'pdf' : 'html'
+        const ext = p.kind === 'pdf' ? 'pdf' : p.kind === 'pptx' ? 'pptx' : p.kind === 'json' ? 'json' : 'html'
         const dest = await host.pickSaveDestination(p.filename, ext)
         if (!dest) return
         setBusy(`Saving the ${ext.toUpperCase()}…`)
@@ -513,6 +527,8 @@ export default function App() {
       onOpenFile={handleOpenFile}
       onOffline={hasServer && !device ? () => setOfflineOpen(true) : undefined}
       onDecisions={() => setDeskDecisions(true)}
+      brand={brands}
+      trash={host.trash}
     />
   ) : landing.state === 'loading' ? (
     <LogoSpinnerFill label="Opening the studio…" />
@@ -612,6 +628,7 @@ export default function App() {
           onOpenDocument={openPath}
           // The medallion and the agency pill both go to the desk (owner, 2026-11-11).
           onHome={() => leaveTo({ level: 'agency' })}
+          onTrashed={landing.reload}
           client={docChip}
           account={account}
           toolKey={toolOfApp(running.open.manifest.app?.app_id)?.id ?? null}
@@ -641,6 +658,7 @@ export default function App() {
           onExport={exportCurrent}
           onSpinoff={spinOff}
           onStartFresh={startFresh}
+          productionTarget={production && !device}
           // In the studio (or the desktop's files) each change is kept as it
           // is made; on the device it stays in the tab (DeviceBanner says so).
           saved={!device && !running.open.is_template}

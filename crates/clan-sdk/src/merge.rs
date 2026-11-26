@@ -195,6 +195,7 @@ pub fn fork_with_contexts(
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
         manifest.files.push(FileEntry {
             id: format!("branch-decisions-{agent_id}"),
@@ -203,6 +204,7 @@ pub fn fork_with_contexts(
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
 
         let mut builder = ClanBuilder::new(manifest);
@@ -543,6 +545,7 @@ pub fn merge(branches: &[ClanFile], opts: MergeOptions) -> Result<MergeOutcome> 
             content_type: "application/yaml".into(),
             priority: None,
             sha256: None,
+            linked: false,
         });
     }
 

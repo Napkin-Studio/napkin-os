@@ -4,12 +4,13 @@
   "input": {
     "shot": {
       "id": "shot_01K6E7K1V6R2BP8H3W9Y4F5AGJ",
-      "order": 5,
+      "kind": "shot",
       "duration_s": 4,
-      "composition": "close",
+      "camera": {
+        "size": "close",
+        "movement": "push_in"
+      },
       "action": "The mask comes to rest facing the viewer, light sliding across its facets. On screen: \"FACET\"",
-      "camera_move": "push_in",
-      "status": "locked",
       "refs": [
         "mask"
       ]
@@ -66,7 +67,7 @@
       "ratio": "768:1344",
       "outputs": 1
     },
-    "needsUser": null,
+    "question": null,
     "rationale": "Front view for identity, @anchor for the workshop, @previous for continuity; the script's title card FACET is drawn exactly, nothing else written.",
     "confidence": 0.8
   },

@@ -1,0 +1,144 @@
+{
+  "contractVersion": "3",
+  "jobId": "job_01K7B00000000000000000CP01",
+  "op": "cutdown",
+  "projectId": "proj_01K7B00000000000000000PR01",
+  "nonce": "n_cutplan01a",
+  "node": {
+    "kind": "format_set",
+    "id": "fset_01K7B00000000000000000FS01"
+  },
+  "parentIds": [],
+  "input": {
+    "aspect": {
+      "w": 16,
+      "h": 9
+    },
+    "delivery": {
+      "width": 1920,
+      "height": 1080
+    },
+    "cutdown": {
+      "step": "plan",
+      "shots": [
+        {
+          "shotId": "shot_01K7B00000000000000000SH01",
+          "takeId": "take_01K7B00000000000000000TK01",
+          "words": "Maya walks into the kitchen at dawn.",
+          "inS": 0,
+          "outS": 3,
+          "takeS": 4,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "stills": [
+            {
+              "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "url": "https://studio.napkin.ie/out/sha256:1111111111111111111111111111111111111111111111111111111111111111",
+              "mime": "image/png"
+            },
+            {
+              "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+              "url": "https://studio.napkin.ie/out/sha256:5555555555555555555555555555555555555555555555555555555555555555",
+              "mime": "image/png"
+            }
+          ]
+        },
+        {
+          "shotId": "shot_01K7B00000000000000000SH02",
+          "takeId": "take_01K7B00000000000000000TK02",
+          "words": "She opens the fridge: a bottle of First Light.",
+          "inS": 0,
+          "outS": 4,
+          "takeS": 6,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "stills": [
+            {
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "url": "https://studio.napkin.ie/out/sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "mime": "image/png"
+            },
+            {
+              "sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+              "url": "https://studio.napkin.ie/out/sha256:6666666666666666666666666666666666666666666666666666666666666666",
+              "mime": "image/png"
+            }
+          ]
+        },
+        {
+          "shotId": "shot_01K7B00000000000000000SH03",
+          "takeId": "take_01K7B00000000000000000TK03",
+          "words": "She drinks, eyes closed.",
+          "spoken": "I never miss the first light.",
+          "inS": 0,
+          "outS": 3.5,
+          "takeS": 4,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "stills": [
+            {
+              "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "url": "https://studio.napkin.ie/out/sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "mime": "image/png"
+            },
+            {
+              "sha256": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+              "url": "https://studio.napkin.ie/out/sha256:7777777777777777777777777777777777777777777777777777777777777777",
+              "mime": "image/png"
+            }
+          ]
+        },
+        {
+          "shotId": "shot_01K7B00000000000000000SH04",
+          "takeId": "take_01K7B00000000000000000TK04",
+          "words": "The bottle on the counter, sunlit.",
+          "inS": 0,
+          "outS": 3,
+          "takeS": 4,
+          "takeSize": {
+            "w": 1920,
+            "h": 1080
+          },
+          "stills": [
+            {
+              "sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "url": "https://studio.napkin.ie/out/sha256:4444444444444444444444444444444444444444444444444444444444444444",
+              "mime": "image/png"
+            },
+            {
+              "sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+              "url": "https://studio.napkin.ie/out/sha256:8888888888888888888888888888888888888888888888888888888888888888",
+              "mime": "image/png"
+            }
+          ]
+        },
+        {
+          "shotId": "shot_01K7B00000000000000000SH05",
+          "inS": 0,
+          "outS": 2.5,
+          "endCard": true
+        }
+      ],
+      "lengths": [
+        15,
+        6
+      ],
+      "aspects": [
+        {
+          "w": 9,
+          "h": 16
+        },
+        {
+          "w": 4,
+          "h": 5
+        }
+      ]
+    }
+  }
+}

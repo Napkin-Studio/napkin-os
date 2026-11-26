@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front pulls on @headphones_black in the middle of a loud platform, and the crowd fades into music."
+     },
+     {
+      "type": "direction",
+      "text": "Sound switches to music as the headphones go on."
+     }
+    ],
+    "note": "I rephrased the action and the direction, keeping the same events and names."
+   }
+  ],
+  "rationale": "Rephrase keeps the facts, @names, block types and length, with the direction last."
+ }
+}

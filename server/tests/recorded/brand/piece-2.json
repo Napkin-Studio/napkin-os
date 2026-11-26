@@ -1,0 +1,35 @@
+{
+ "colours": [
+  {
+   "name": "Tide Blue",
+   "hex": "#0A6BA0",
+   "role": "other"
+  },
+  {
+   "name": "Sand",
+   "hex": "#e8d9b5",
+   "role": "panel"
+  }
+ ],
+ "typography": [
+  {
+   "family": "tidewell serif",
+   "weight": "700",
+   "use": "",
+   "role": "head"
+  }
+ ],
+ "tone": "",
+ "rules": [
+  {
+   "text": "write in short sentences",
+   "kind": "do"
+  }
+ ],
+ "imagery_style": "",
+ "imagery_bans": [
+  "stock handshakes",
+  "Neon filters"
+ ],
+ "logo_note": ""
+}

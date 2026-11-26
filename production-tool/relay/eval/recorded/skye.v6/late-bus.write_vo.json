@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front runs for the last night bus, the doors close, then open again; the driver waves him on."
+     },
+     {
+      "type": "direction",
+      "text": "Wide from across the street."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "vo",
+      "at_s": 1,
+      "text": "The last bus still waits for you."
+     }
+    ],
+    "note": "I added a short VO beat at 1 s and kept your action and direction as they were."
+   }
+  ],
+  "rationale": "The VO adds the idea of the bus waiting without repeating the action, and it is short enough to fit the shot's pace."
+ }
+}

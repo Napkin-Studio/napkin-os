@@ -5,22 +5,23 @@
 
 import type { ProductionDocument, StaleMark } from '../contracts/types'
 import { shotChange } from '../jobs/stale'
+import { refName, shotNumber } from '../model/selectors'
 
 export function behindLabel(d: ProductionDocument, mark: Pick<StaleMark, 'caused_by'> & Partial<Pick<StaleMark, 'reason'>>): string {
   const { kind, id } = mark.caused_by
-  const order = (shotId: string | undefined) => (d.shots ?? []).find((s) => s.id === shotId)?.order
+  const order = (shotId: string | undefined) => shotNumber(d, shotId) || undefined
   switch (kind) {
     case 'frame': {
-      const n = order((d.frames ?? []).find((f) => f.id === id)?.shot_id)
+      const n = order(d.frames[id]?.shot_id)
       return n ? `Behind frame ${n}` : 'Behind a frame'
     }
-    case 'take': {
-      const n = order((d.takes ?? []).find((t) => t.id === id)?.shot_id)
+    case 'generation': {
+      const n = order(d.generations[id]?.shot_ids[0])
       return n ? `Behind clip ${n}` : 'Behind a clip'
     }
     case 'ref': {
-      const r = d.refs.find((x) => x.id === id)
-      return r ? `Behind @${r.key}_${r.variant}` : 'Behind a reference'
+      const r = d.refs[id]
+      return r ? `Behind @${refName(r)}` : 'Behind a reference'
     }
     case 'shot': {
       const what = mark.reason ? shotChange({ reason: mark.reason }) : undefined
@@ -40,11 +41,6 @@ export function oldWordsLine(kind: 'frame' | 'take', n: number, mark: Pick<Stale
 
 /** The quiet note on a frame drawn from an older frame before it (jobs/stale.ts frameDrift): not out of date. */
 export const driftLabel = (n: number) => `Drawn from an older frame ${n}`
-
-/** The ad, which carries no mark (jobs/stale.ts adStatus): behind its clips, or the shots. */
-export function adBehindLabel(reason: string | undefined): string {
-  return reason === 'A shot was deleted' ? 'Behind the shots' : 'Behind the clips'
-}
 
 /** The floating bar's count of what is out of date (never what is not made yet, or being made). */
 export const behindCount = (n: number) => `${n} out of date`

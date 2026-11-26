@@ -42,7 +42,7 @@ from .drafters import _query
 from .fields import ARRAY_KEYS, KEYS, LABELS, _is_human, bare, clean, filled, get, last_writer, put
 from .job import BriefJob, log
 from . import checks, intake
-from .questions import dedupe, without_answered
+from .questions import answered_items, dedupe, without_answered
 
 # The Review agent's whole-brief review: a full brief's dimensions, claims and notes run past 8000 output
 # tokens (thinking counts against the cap), and a cut-off review writes only half the parts.
@@ -67,7 +67,7 @@ DIMS = ["objectives_quality", "audience_vividness", "single_minded_message", "ev
         "budget_interlock", "strategic_clarity", "language"]
 BASES = ["client", "research", "library", "assumption"]
 WHAT = {
-    "project_name": "a short working name", "client": "the client and brand",
+    "project_name": "a short working name, one to four words, no brackets or caveats (a doubt about it is an open question)", "client": "the client and brand",
     "job": "the job in one plain sentence: the problem reframed as the change in what one person thinks, feels or does (not the task)",
     "background": "the business situation and why now",
     "barrier": "what stands in their way: the belief, habit, fear or rival in their head or routine, in plain words",
@@ -346,7 +346,8 @@ class PlannedBriefJob(BriefJob):
         """The Brief agent's parts with what each rests on (provenance.clean_parts): the one cleaner of every path.
         An assumption says it is one first, so every sentence and the claim read from it are the same text."""
         if isinstance(out, dict):
-            marked = checks.mark_assumptions(out, self.whole.get("insight"))
+            marked = checks.mark_assumptions(out, self.whole.get("insight"),
+                                             answers=checks.answers_text(get(self.W, "open_questions")))
             if marked:
                 self.caps.runlog.note("assumptions_marked", stage=stage, parts=marked)
         got = prov.clean_parts(out, self._prov(ev), stage=stage, keys=keys, prior=prior)
@@ -1035,6 +1036,55 @@ class PlannedBriefJob(BriefJob):
         """Whether the Review agent's chain issue from the check loop is placed as a note."""
         return True
 
+    def _line_question(self, questions) -> list:
+        """The client named candidate lines and could not choose ("MESSAGE: "Clean, without the plastic." or "Refill. Not
+        landfill." Board can't decide."). The questions then ask about them whatever the model wrote: a line question that
+        leaves them out is asked again naming them, the agency's suggestion kept as an option (owner, 2026-11-24); with no
+        line question at all, code's own goes in right after the answers, so the cap of twelve never cuts it (UAT round
+        4, L1). Unchanged when the draft carries an end line or the line question is answered."""
+        said = "\n".join(t for t in (str(get(self.W, "brief_input") or ""), self._said()) if t)
+        cands = checks.candidate_lines(said)
+        mands = (self.whole.get("mandatories") or {}).get("value") if "mandatories" in self.whole else get(self.W, "mandatories")
+        n = len(answered_items(get(self.W, "open_questions")))
+        got = checks.settle_line_question(cands, mands, list(questions), answered=n)
+        if got is None:
+            return list(questions)
+        self.caps.runlog.note("line_question_settled", candidates=cands[:4],
+                              rewrote=len(got) == len(questions))
+        return got
+
+    def _carry_fixed_line(self):
+        """The line the planner fixed in an answered open question goes into mandatories as the end line, word for
+        word, so Production's end card and the deck read it from the brief (UAT round 4: "Refill. Not landfill." was
+        only in the answer). Only where this job writes mandatories: a part a person holds is left as it is."""
+        e = self.whole.get("mandatories")
+        if not isinstance(e, dict):
+            return
+        line = checks.fixed_line(answered_items(get(self.W, "open_questions")))
+        new = checks.carry_fixed_line(e.get("value"), line)
+        if new is not None:
+            e["value"] = new
+            self.caps.runlog.note("fixed_line_carried", line=line[:120])
+
+    def _propose_fixed_line(self):
+        """The board's line is settled, but this job does not write mandatories (a person kept it, "Keep as is"): the end
+        line is proposed, never written over the person's part. The person takes it with Use this (acceptance run A8:
+        a kept Mandatories held "'Refill. Not landfill.' used word for word" and no end line). -> the decision, or None."""
+        if "mandatories" in self.whole:
+            return None  # written, or proposed for a held part, with the draft (_carry_fixed_line)
+        line = checks.fixed_line(answered_items(get(self.W, "open_questions")))
+        new = checks.carry_fixed_line(get(self.W, "mandatories"), line)
+        if new is None:
+            return None
+        r = rsn.make(f"The board's line goes first in mandatories as the end line, word for word: '{line}'.",
+                     [rsn.point("The planner answered the line question and said to use it word for word", [])],
+                     rsn.certainty("high", "the planner chose the line in their own answer"),
+                     "the person keeps their own wording", only_option="the part is a person's, so it is suggested, not changed")
+        d = self.dec(("propose", "mandatories", "end_line"), "edit", "propose", ["mandatories"], [], r, "judge", proposed_value=new)
+        self.proposals.append({"field": "mandatories", "value": new, "decision": d["id"]})
+        self.caps.runlog.note("fixed_line_proposed", line=line[:120])
+        return d
+
     def _place(self, rv, ev):
         patch, decisions = {}, []
         mat_ids = [m.id for m in self.mats if m.readable]
@@ -1047,6 +1097,7 @@ class PlannedBriefJob(BriefJob):
                 claim_bad.setdefault(c["part"], []).append(c)
         assumed = []
         client = self._client()
+        self._carry_fixed_line()
         for k, v in self.whole.items():
             if k == "open_questions":
                 continue
@@ -1076,6 +1127,9 @@ class PlannedBriefJob(BriefJob):
             self.basis[k] = v["basis"]
             decisions.append(d)
         decisions += self._answered(rv)
+        proposed_line = self._propose_fixed_line()
+        if proposed_line:
+            decisions.append(proposed_line)
         # The Review agent: one note per issue, naming the parts it touches
         for i, n in enumerate(rv.get("notes") or []):
             parts = [p for p in n["parts"] if p in KEYS and p not in self.locked]
@@ -1093,10 +1147,12 @@ class PlannedBriefJob(BriefJob):
                                       **({"reason_code": "brief_review"} if fix else {})))
         decisions += self._passed(decisions)
         # the open questions: the plan's, the draft's and the Review agent's, once each
-        qs = self._question_seed()
+        # what the planner already answered stays, first, so a twin the agents ask again is merged into it
+        qs = answered_items(get(self.W, "open_questions")) + self._question_seed()
         qs += list((self.whole.get("open_questions") or {}).get("value") or [])
         qs += list(rv.get("questions") or [])
         qs += checks.figure_questions(self.whole, lambda k: LABELS.get(k, k))  # a figure left unmarked is still to confirm
+        qs = self._line_question(qs)
         oq, merged = dedupe(without_answered(qs, self.intake_answered))
         if merged:
             self.caps.runlog.note("questions_merged", detail="; ".join(f"{d!r} into {k!r}" for k, d in merged)[:600])

@@ -145,6 +145,17 @@ Existing fields (`agent`, `action`, `timestamp`, `fields_changed`, `pinned`,
 `trace_ref`) stay. Every new field is optional, so every existing file still
 validates. Struct work is W1P-I5.
 
+**`targets` and `cites` on `/patch-data`** (2026-10-13, features/contract-v3).
+An app's attributed write may name what it changed and what it rests on: the
+body's optional `targets[]` (addresses on the open document) and `cites[]`
+(addresses on any document, or decision ids `d_…`) are recorded on the `edit`
+decision as given. Each is checked with the same address reader the layer
+uses everywhere (`normalise_target`); a malformed address, a positional index
+(`shots[0]`), a target on another document, or either field without an
+`agent` is a 400. A body without them writes exactly the decision it always
+did. The kind stays `edit`; an app that needs finer kinds says them in its
+`action` (the Production Tool's verbs, production-tool/contracts/collab.md §8).
+
 **What came first is the chain's order** (owner, 2026-09-30). The chain is
 newest first; a decision nearer the head came after one further down, and no
 rule anywhere — host, SDK, middleware or view — compares `timestamp`s to
@@ -353,7 +364,7 @@ app:
 
 1. `upstream` defaults to `false`. With `false` nothing in this section
    applies and the hop is the older graft — `map`, or the root fold — so
-   Advertising Studio's `map: brief` is unchanged.
+   an app that declares `map: brief` is unchanged.
 2. With `true`, `map` must be absent (declared or passed as the `/spinoff`
    override); a spin-off with both is refused (`422`): the source's data has
    one place, `upstream.<id>`.
@@ -538,7 +549,7 @@ pub fn spinoff(template: &ClanFile, source: &ClanFile, opts: SpinoffOptions) -> 
 
 `clan_sdk` re-exports `Carried` beside `Lineage`. Adding the two fields breaks
 the struct literals that name every field. `SpinoffSpec` in `library.rs`,
-`tests/routes.rs`, `examples/make_advertising_studio.rs` and `clan-cli` gains
+`tests/routes.rs` and `clan-cli` gains
 `upstream: false` and nothing else, and the hand-written
 `impl Default for SpinoffSpec` gains `upstream: false`. `Lineage` in
 `instantiate.rs` gains `carried: None` for `instantiate()` and the filled
@@ -607,6 +618,46 @@ names and shapes below are that branch's, so it merges onto them.
    `upstream` with `campaign.name.value → project.name` and
    `campaign.client_org.value → project.client` (owner, 2026-11-09: research
    to production is upstream + lift). Each `by_source` key is accepted.
+
+### 5.8 Production: an app whose documents are library documents
+
+*Replaced 2026-11-23 (features/production-in-library.clan; contract `docs/contracts/production-clan-app.md`
+section 6).* Production (`ie.napkin.production`, packed by `clan-sdk/examples/make_production.rs`, installed
+with the other apps by the Dockerfile) is an ordinary app: its documents are library documents, listed in the
+library like any other (`app_id == "ie.napkin.production"`), opened at `/production/d/<doc>` (`?doc=<doc>` redirects there for one release), and kept by
+the host's store like every document. They are no longer kept in the relay's S3 (`tenants/<t>/projects/`), and
+the relay's `/clan*` and `/projects*` routes answer 410 `gone` for one release. The old routes
+`POST /api/t/{tenant}/spinoff/production` and `POST /api/t/{tenant}/production/{project}/spinoff` are removed
+(404).
+
+**Into Production.** The generic `POST /api/t/{t}/d/{doc}/spinoff {"app_id":"ie.napkin.production"}` is used
+for a brief, research or territory source. Production declares which sources it accepts and sets
+`spinoff.upstream: true`, so the source's whole data and decisions arrive under `data.upstream.<source doc id>`
+(§5.1 to 5.3) and its pictures as links by sha256. The new document's `source_uri` is
+`doc:<source doc id>@<source version>`, the client of the source is the client of the new document, and a
+Production app that is not installed is 422 `app not installed: <app id>`. The generic route no longer refuses
+Production as a target. The first time the tool opens such a document its store adds the project (`contract_version`,
+`project`, empty maps) beside `upstream` in one attributed write ("start the project"); nothing else of the
+manifest, the carried source or the decisions changes, and later saves keep them. The tool makes the Brief
+node from the carried brief (`data.upstream.<lineage.carried.document_id>`, hash `lineage.carried.data_sha256`).
+
+**Out of Production.** Production is a source for the Deck through the same generic route. The canvas
+checkpoint `human/assets/canvas.ybin.zst` is not carried (it is an internal member and the SDK leaves it
+behind); everything else follows §5.2. A document whose own chain names another workspace is refused 403, as
+for any library document.
+
+**`source_uri`.** Every source is `doc:<doc id>@<version>` (the version is the sha256 of the archive bytes the
+host stores, section 8.5). The older `clan-store:<doc id>` and `production:<project id>@<etag>` forms are read
+as before but no longer written; a later write to the document moves `lineage.parent_uri` on to its previous
+revision (the SDK does this for every document), so the parent is found by `lineage.carried.document_id` (§7.4),
+which every write keeps.
+
+**The Deck's carry.** For a Production source the Deck document holds `data.upstream.<production doc id>` (the
+document's data less its own `projection`/`upstream`: the finals, assets and briefs of contract 3), the carried
+brief hoisted beside it under `data.upstream.<brief document id>`, and `lineage.carried` naming the Production
+document. The source app id is `ie.napkin.production`; the Deck declares that it accepts it. The Deck reads the
+document through the host, not the relay; pictures are fetched by sha256 with the assets pass
+(`docs/contracts/production-tool-identity.md`), which is unchanged.
 
 ---
 
@@ -1508,7 +1559,12 @@ body or reply changes meaning.
      replaced, decision, action, document_id, attached: <record>, seeded,
      kept, carried_decisions, backrefs, clan}`.
    - `POST /attach/update {document_id}` — take its newer version; `verb:
-     updated`, `action: update_from_<noun>`.
+     updated`, `action: update_from_<noun>`. When `document_id` is what the
+     document was made from (Continue in, `how: made_from`) and not linked,
+     it takes the parent's newer version as `POST /upstream/update` does:
+     that route's reply, no `verb`, no `linked` backref (*owner 2026-11-26*,
+     "Update refreshes the parent": a deck made with Continue in from
+     Production answered `409 not linked` to Update from Production).
    - `POST /attach/detach {document_id}` (or `{app_id}` naming the one source
      of that app) — let go. Reply `{ok, decision, action: detach,
      document_id, detached, unseeded, backrefs, clan}`.
@@ -1780,6 +1836,38 @@ exports `setPreviewHtml` and `humanHtml`. `POST /api/t/{t}/d/{doc}/preview-html`
 answers `410` with the reason for one release, then goes.
 `GET /api/t/{t}/d/{doc}/human-html` stays (the view as stored, for tools).
 
+### 8.5 Saving a document: `PUT /d/{doc}/save`, the Base check, snapshots
+
+*Added 2026-11-23 (features/production-in-library.clan; normative text and vectors in
+`docs/contracts/production-clan-app.md` sections 1 to 4 and `docs/contracts/examples/production-clan-app/`).*
+
+- **Save.** `PUT /api/t/{t}/d/{doc}/save` takes the whole `.clan` (`Content-Type: application/vnd.clan+zip`,
+  at most 32 MiB) with `If-Match: "V"` (required; 428 without) and `X-Clan-Reason: interval|accept|manual|handoff|export|landing`.
+  200 answers `{"version","saved_at","snapshot"}` and `ETag`; 409 `{"error":{"code":"conflict",...},"latest":"V3"}`
+  leaves the store untouched; 422 when the document is not an instance of `ie.napkin.production` or the archive's
+  document identity (`manifest.document_id`, else `manifest.id`) is not this document's; 413 over 32 MiB; 404 for a
+  missing document or another tenant's. A download of a Production document returns the stored bytes exactly and
+  carries `ETag` and `X-Saved-At`, so `If-Match` is the sha256 of what the tool downloaded.
+- **Version.** `V` is `sha256:<64 hex>` of the archive bytes, the host's own Version (also in `GET .../data`).
+- **Base enforcement (every writer).** `PartStore::apply(Change{doc, bytes, base})`: `Base::At(V)` with a different
+  stored version is `HostError::conflict` (HTTP 409); `Base::Absent` over an existing document is 409. The check and
+  the write are one critical section per document, and a write is a temp file in the same directory, fsync, rename,
+  fsync of the directory (a leftover `*.tmp` is ignored). It is implemented only in
+  `crates/napkin-web/src/store.rs`; `napkin-host` stays wasm32-clean (no `std::fs` outside `native`). Every writer,
+  not only `save`, passes through it.
+- **Snapshots (host-internal, never a route).** `<store root>/<tenant>/snapshots/<doc-slug>/<unix-ms>-<reason>-<hex12>.clan`.
+  Taken for `accept`, `handoff`, `export`; and for `interval`, `manual`, `landing` when the newest is 10 minutes or
+  older. The newest 50 are kept, the newest is never deleted, they are not listed in the library, and each tenant's
+  ring is inside the tenant's directory. **Restore** is a documented copy, never a route: a person with access to the store takes the wanted snapshot file and uploads it as a new document (`POST /api/t/{t}/documents/upload`, the same call the tool's "open a file" uses), or copies it over the document's file in the tenant's directory while the server is stopped. The snapshot ring is read, never overwritten.
+- **Trash.** `DELETE /d/{doc}` moves a document to `<tenant>/trash/` for 30 days and keeps its title, tool, client and who deleted it; `GET /trash[?client=]` lists them (`production-clan-app.md` 8a). Every tool shares this one Trash.
+- **Decision: whole-document save is a stepping stone.** The approved design (owner: Shrey) saves the whole file and
+  check its Version, over per-field patch writes (live collaboration), which cost 30 to 40 agent days. The save
+  uses the host's Version and goes through `PartStore::apply` with `Base::At`, the same funnel a later patch route
+  (`/patch-data` with `base_version`) will use, so live sync replaces the transport, not the check. Until then two
+  people saving one project get a 409 and choose; nothing is merged silently.
+
+---
+
 ## 9. Retrieval scope
 
 Each agency has its own RAG index (S6, reversed 2026-09-23). House material
@@ -2046,7 +2134,13 @@ agency is made on the page: name, other spellings, base, accent and one SVG
 wordmark; the rest of its look is derived in the shell. An agency *in code*
 keeps its look in `palette.ts`; only its display name changes here. Every
 change goes to a draft that only the admin's previews show, until it is
-published. Each agency has a `rev`, bumped by every change to it; `PATCH` and
+published. A basic agency also has four optional *style switches*
+(features/agency-style.clan), the same as `palette.ts` `AgencyColours`, snake
+case on the wire: `pill: "accent" | "base"`, `accent_use: "fill" | "line"`,
+`surface: "warm" | "mono"`, `accent_ink: "#RRGGBB"` (`accentInk`). Absent is
+the default look (accent pill, accent as a fill, warm surfaces, the text on
+the accent chosen automatically), so the default is never kept or sent: an
+agency without them reads and is stored exactly as before. Each agency has a `rev`, bumped by every change to it; `PATCH` and
 `publish` name the rev they read, and a stale one is `409`.
 
 | Route | Does |
@@ -2057,19 +2151,20 @@ published. Each agency has a `rev`, bumped by every change to it; `PATCH` and
 | `DELETE /admin/people/{id}` | The Person with `removed_at`. They cannot sign in, and a session they hold is answered `401` at its next request; their documents and decisions stay. `409` for an admin, `404`. |
 | `GET /admin/agencies` | `[Agency]`: every agency in code, then every basic agency (published or not). |
 | `POST /admin/agencies {name, base, accent, aliases?}` | `201` + the Agency, a basic agency as a draft (`published: false`). Its id is the name, lower case, `+`/`&` as "and", letters and digits only, fixed from then on. Unknown keys, a missing field or a colour that is not `#rrggbb` are `400`; `409` when the id, name or an alias is an agency's already. Not on `/agency-looks`, and people cannot be added to it, until published. |
-| `PATCH /admin/agencies/{id}/draft {rev, name?, aliases?, base?, accent?}` | The Agency, with the draft changed. An agency in code takes `name` only (any other field `400`). `400` bad colour, empty name, unknown key or no `rev`; `409` stale `rev` or a name or alias another agency answers to; `404`. A field set back to its published value leaves the draft, and a published agency's empty draft goes. |
+| `PATCH /admin/agencies/{id}/draft {rev, name?, aliases?, base?, accent?, pill?, accent_use?, surface?, accent_ink?}` | The Agency, with the draft changed. A style switch given as `null`, or as its default value, goes back to the default; `accent_ink` is upper-cased like the colours. An agency in code takes `name` only (any other field, a style switch or `null` one included, `400`). `400` bad colour, a style value not one of those above, empty name, unknown key or no `rev`; `409` stale `rev` or a name or alias another agency answers to; `404`. A field set back to its published value leaves the draft, and a published agency's empty draft goes. |
 | `PUT /admin/agencies/{id}/draft/wordmark` | Body: the SVG, `Content-Type: image/svg+xml`. Cleaned by `svg_sanitise.rs` (the port of the shell's `svgSanitise.ts`) and put in the draft. `200 {bytes, kept_bytes, dropped: [element], warnings: [text], svg: "data:image/svg+xml,...", rev}`. `415` another type, not text, or no `<svg>`; `413` over 200 KB as sent, over 48 KB or 2,000 shapes cleaned; `422 {ok:false, error, found: [{what, line}]}` for active content (script, `on*=`, `foreignObject`, an external or `javascript:` href, `<!ENTITY>`, `<!DOCTYPE>`), `found: []` for no viewBox or no shapes; `409` for an agency in code; `404`. |
 | `DELETE /admin/agencies/{id}/draft/wordmark` | The Agency, the draft without a wordmark. `409` for an agency in code or when there is none. |
 | `POST /admin/agencies/{id}/publish {rev}` | The Agency, its draft live (on the log as `agency published`). `409` stale `rev`, no draft, or a name or alias taken meanwhile; `400` no `rev`. |
 | `DELETE /admin/agencies/{id}/draft` | The Agency without its draft; an agency never published goes with it: `{id, removed: true}`. `409` when there is no draft. |
 | `DELETE /admin/agencies/{id}/name` | An agency in code back to the code's name (its published display name and any draft of one go). `409` for a basic agency, or when it already has the code's name. |
-| `GET /admin/agencies/{id}/export` | Copy to code, from the published look: `{palette_ts, svg, agency_logos_files, people_rs}` (the `AGENCY_COLOURS` entry and `AGENCY_ALIASES` lines; the cleaned SVG or `null`; the `agency-logos.mjs` `FILES` line or `null`; the `CODE_AGENCIES` tuple and `CODE_ALIASES` lines). `409` for an agency in code or one not published yet. |
-| `GET /agency-looks` | Public (no session). Published looks only, never a draft: basic agencies `{id, name, base, accent, aliases, logo?, rev}` (`logo` the wordmark as a `data:image/svg+xml,` URI) and agencies in code with a published display name `{id, name, rev}` (`rev` as published). Weak `ETag` of the body, `Cache-Control: private, no-cache`, `304` on `If-None-Match`. The shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows. |
+| `GET /admin/agencies/{id}/export` | Copy to code, from the published look: `{palette_ts, svg, agency_logos_files, people_rs}` (the `AGENCY_COLOURS` entry and `AGENCY_ALIASES` lines; the cleaned SVG or `null`; the `agency-logos.mjs` `FILES` line or `null`; the `CODE_AGENCIES` tuple, still four fields, and `CODE_ALIASES` lines). The `AGENCY_COLOURS` entry's first line adds `pill: 'base'`, `accentUse: 'line'`, `surface: 'mono'`, `accentInk: '#RRGGBB'` for each switch not the default, e.g. `name: 'ACNE', base: '#000000', accent: '#86BC25', pill: 'base', accentUse: 'line', surface: 'mono',`. `409` for an agency in code or one not published yet. |
+| `GET /agency-looks` | Public (no session). Published looks only, never a draft: basic agencies `{id, name, base, accent, aliases, logo?, pill?, accent_use?, surface?, accent_ink?, rev}` (`logo` the wordmark as a `data:image/svg+xml,` URI) and agencies in code with a published display name `{id, name, rev}` (`rev` as published). Weak `ETag` of the body, `Cache-Control: private, no-cache`, `304` on `If-None-Match`. The shell registers them (`palette.ts` `registerAgencyLooks`) before the sign-in card or the studio shows. |
 
 `Person` is `{id, name?, agency, admin, added_by, added_at, removed_at?}`
 (`added_by` is `roster` for the seed). `Agency` (admin list), basic: `{id,
 kind: "basic", name, aliases, base, accent, wordmark (data: URI | null),
-published, draft: {name, aliases, base, accent, wordmark} | null, people, rev,
+pill?, accent_use?, surface?, accent_ink?, published, draft: {name, aliases,
+base, accent, wordmark, pill?, accent_use?, surface?, accent_ink?} | null, people, rev,
 added_by, added_at, changed_by, changed_at, published_by, published_at}`, where
 `draft` is the whole look the draft would publish. In code: `{id, kind:
 "code", name, code_name, aliases, draft: {name} | null, people, rev,
@@ -2077,9 +2172,10 @@ changed_by, changed_at, published_by, published_at}`. `GET /admin/people`'s
 `agencies` are the same rows.
 
 In `people.json`, a basic agency (`agencies[]`) adds to `{id, name, base,
-accent, aliases}`: `wordmark: {file, bytes} | null`, `published` (absent reads
-`true`), `draft` (sparse: only the fields it changes; `wordmark: null` removes
-it), `rev`, `published_rev`, `changed_by/at`, `published_by/at`. `names` is
+accent, aliases}`: `wordmark: {file, bytes} | null`, the style switches when
+not the default (absent: the default), `published` (absent reads `true`),
+`draft` (sparse: only the fields it changes; `wordmark: null` removes it, and a
+style switch `null` puts it back to the default), `rev`, `published_rev`, `changed_by/at`, `published_by/at`. `names` is
 `{<code id>: {name, draft_name, rev, published_rev, changed_by/at,
 published_by/at}}`. Wordmarks are files under `_people/logos/<id>/wordmark-<sha256-8>.svg`;
 an old one is kept when replaced. Unknown keys are refused on write and

@@ -49,6 +49,21 @@
     return root;
   }
 
+  // RFC 7386 JSON merge patch, as napkin-host's json_merge applies it: objects merge key by key, null deletes, anything else replaces.
+  function mergePatch(target, patch) {
+    Object.keys(patch).forEach(function(k) {
+      var v = patch[k];
+      if (v === null) { delete target[k]; return; }
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        if (!target[k] || typeof target[k] !== 'object' || Array.isArray(target[k])) target[k] = {};
+        mergePatch(target[k], v);
+      } else {
+        target[k] = v;
+      }
+    });
+    return target;
+  }
+
   // patchData('dot.path', value, opts)  OR  patchData({k:v, ...}, opts) for a
   // multi-field write recorded as ONE attributed decision.
   function patchData(path, value, opts) {
@@ -67,7 +82,9 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res && res.ok) {
-          if (isObj) { Object.keys(patchObj).forEach(function(k){ window.__CLAN__.data[k] = patchObj[k]; }); }
+          // The page's copy takes the patch as the host did: a JSON merge patch (nested objects merged, null removes a key). Replacing
+          // each top-level key dropped its other fields: an 'Edit beats' write of run.decisions wiped run.gate on the page until a reload.
+          if (isObj) { mergePatch(window.__CLAN__.data, patchObj); }
           else { setByPath(window.__CLAN__.data, path, value); }
           window.dispatchEvent(new CustomEvent('clan:dataupdated', { detail: {} }));
         }

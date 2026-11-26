@@ -1,0 +1,302 @@
+"""build_deck@1 — Deck Maker: one segment of a run, through the deck engine (middleware-api.md §12).
+
+The document's prompt (inputs.prompt), kind, format and picked deck type (inputs.deck_type) go to the engine with the person's approvals (run.approvals, which the app
+writes); the engine runs to the next gate, or on to the finished deck once the last gate is approved. With NAPKIN_DECK_ENGINE_URL
+unset there is no engine: the task says so, and writes nothing."""
+
+import re
+
+from ..deck import engine as eng
+from ..deck.job import DeckJob
+from ..doc import ctx_data
+from ..util import TaskError, bad
+
+NAME, TASK, VERSION, KIND, CAPABILITY_MAJOR = "build_deck", "build_deck", "1.0", "deck", 1
+
+
+def _flat(v) -> str:
+    if isinstance(v, str):
+        return v
+    if isinstance(v, dict):
+        return " ".join(_flat(x) for x in v.values())
+    if isinstance(v, (list, tuple)):
+        return " ".join(_flat(x) for x in v)
+    return "" if v is None else str(v)
+
+
+def _at(data, path):
+    cur = data
+    for part in re.findall(r"[^.\[\]]+", str(path)):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+            cur = cur[int(part)]
+        else:
+            return None
+    return cur
+
+
+def marks_of(data: dict, chain: list) -> list:
+    """The parts a person marked Confidential, with their text, for the engine's picture step (it never sends them to a picture model and holds back
+    any prompt that would draw on one): the Deck's own and each upstream brief's ``confidential_fields``, a ``classify`` decision that is
+    ``model: false`` or ``corpus: false`` on a path of one of those, and materials whose licence is ``client-confidential``. Always a list:
+    an empty one says the document was checked and nothing is marked (the engine refuses pictures when the key is absent)."""
+    out, seen = [], set()
+    scopes = [("", data)] + [(f"upstream.{k}.", v) for k, v in (data.get("upstream") or {}).items() if isinstance(v, dict)]
+    for k, v in (data.get("upstream") or {}).items():   # what a carried Production project or brief carried itself (its full brief; its research,
+        # 5-tool run 2026-11-26): the host sends those under the entry's own upstream, and marked parts are marked there too. Never a kit's.
+        if not isinstance(v, dict) or isinstance(v.get("kit"), dict):
+            continue
+        for k2, v2 in (v.get("upstream") if isinstance(v.get("upstream"), dict) else {}).items():
+            if isinstance(v2, dict):
+                scopes.append((f"upstream.{k}.upstream.{k2}.", v2))
+
+    def add(path, text, kind):
+        text = _flat(text).strip()
+        if text and (path, kind) not in seen:
+            seen.add((path, kind))
+            out.append({"path": path, "text": text, "kind": kind})
+    for prefix, d in scopes:
+        for path in d.get("confidential_fields") or []:
+            add(prefix + str(path), _at(d, path), "confidential_field")
+        mats = d.get("materials")
+        for mid, m in (mats.items() if isinstance(mats, dict) else [(x.get("id"), x) for x in mats or [] if isinstance(x, dict)]):
+            if isinstance(m, dict) and str(m.get("licence") or "").lower() == "client-confidential":
+                add(f"{prefix}materials[{mid}]", f"{m.get('name') or ''} {m.get('text') or ''}", "licence")
+    for k, v in (data.get("upstream") or {}).items():   # a carried Production project: the brief parts it froze as Confidential (its spine, in full)
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            for bid, b in (v.get("briefs") or {}).items():
+                for part in (b or {}).get("confidential") or []:
+                    add(f"upstream.{k}.briefs.{bid}.spine.{part}", ((b.get("spine") or {}).get(part)), "confidential_field")
+    for d in chain or []:
+        if not isinstance(d, dict) or d.get("kind") != "classify" or d.get("superseded_by"):
+            continue
+        lic = d.get("licence") if isinstance(d.get("licence"), dict) else {}
+        if lic.get("model", False) and lic.get("corpus", False):
+            continue
+        for tg in d.get("targets") or []:
+            if isinstance(tg, str) and "#" in tg:
+                path = tg.split("#", 1)[1]
+                for prefix, sc in scopes:
+                    v = _at(sc, path)
+                    if v is not None:
+                        add(prefix + path, v, "classify")
+    return out
+
+
+#: deck-types: the model stages a Change-sheet confirmation may name (inputs.deck_type.confirmed_stages).
+MODEL_STAGES = ("a", "b", "c", "d", "i")
+
+
+def deck_type_of(inputs: dict) -> dict | None:
+    """The person's explicit pick on the type picker, as the engine takes it: ``{id, confirmed_stages?}`` from ``inputs.deck_type``; None when
+    there is no pick ('Not sure', null or absent). The engine checks the id (an unknown or switched-off type is its 400)."""
+    v = inputs.get("deck_type")
+    if not isinstance(v, dict) or not isinstance(v.get("id"), str) or not v["id"].strip():
+        return None
+    out = {"id": v["id"].strip()}
+    conf = [s for s in (v.get("confirmed_stages") or []) if s in MODEL_STAGES]
+    if conf:
+        out["confirmed_stages"] = conf
+    return out
+
+
+#: deck-slide-size: the slide sizes the engine draws (engine spec.SLIDE_SIZES).
+SIZES = ("16:9", "4:3", "a4")
+
+
+def size_of(data: dict) -> str | None:
+    """The person's slide size: ``look.size.canvas`` (Start, Review), else their answer to the intake's ``q_pref_size`` card
+    (``intake.answers.q_pref_size.option_id``, not a skip); None when neither names one of the three (the engine then uses the recipe's or 16:9)."""
+    look = data.get("look") if isinstance(data.get("look"), dict) else {}
+    sz = look.get("size") if isinstance(look.get("size"), dict) else {}
+    if sz.get("canvas") in SIZES:
+        return sz["canvas"]
+    intake = data.get("intake") if isinstance(data.get("intake"), dict) else {}
+    ans = (intake.get("answers") or {}).get("q_pref_size") if isinstance(intake.get("answers"), dict) else None
+    if isinstance(ans, dict) and not ans.get("skipped") and ans.get("option_id") in SIZES:
+        return ans["option_id"]
+    return None
+
+
+def with_production(data: dict, pu) -> dict:
+    """``data`` with the carried Production project put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index
+    (middleware-api.md §1) and the project beside it as ``clan.production_upstream {id, data}``; the marks and the engine read the project from
+    ``data.upstream`` as it is in the document. A ``pu`` that is not ``{id, data: {app: production-tool}}`` changes nothing."""
+    if not (isinstance(pu, dict) and isinstance(pu.get("id"), str) and pu["id"] and isinstance(pu.get("data"), dict)
+            and pu["data"].get("app") == "production-tool"):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, pu["id"]: pu["data"]}}
+
+
+def is_territories(v) -> bool:
+    """A Territories document's data: routes, the greenlit list and the crew (the contract's required members; the host and the engine test the same)."""
+    return isinstance(v, dict) and all(isinstance(v.get(k), list) for k in ("territories", "greenlit", "crew"))
+
+
+def with_territories(data: dict, tu) -> dict:
+    """``data`` with the carried Territories document put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index
+    (middleware-api.md §1) and the document beside it as ``clan.territories_upstream {id, data}``; the marks and the engine read it from
+    ``data.upstream`` as it is in the document. A ``tu`` that is not ``{id, data}`` of a Territories document changes nothing."""
+    if not (isinstance(tu, dict) and isinstance(tu.get("id"), str) and tu["id"] and is_territories(tu.get("data"))):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, tu["id"]: tu["data"]}}
+
+
+def territories_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the Territories document the Deck carries under ``data.upstream`` (the first one), as the engine reads it: its sent routes are
+    gate 2's territories. The pictures are not in it: a picture is a link (its sha256) there."""
+    for k, v in (data.get("upstream") or {}).items():
+        if is_territories(v):
+            return {"id": str(k), "data": v}
+    return None
+
+
+def with_brief(data: dict, bu) -> dict:
+    """``data`` with the carried brief put back whole under ``upstream.<id>``. The host sends ``clan.data.upstream`` as an index (middleware-api.md
+    §1) and a Deck's brief beside it as ``clan.brief_upstream {id, data}``, as it sends a Production project (UAT round 4 L2: without it
+    ``brief_upstream_of`` found only index entries and the engine built from an empty brief). A ``bu`` that is not ``{id, data}`` of a brief
+    (never a Production project) changes nothing."""
+    if not (isinstance(bu, dict) and isinstance(bu.get("id"), str) and bu["id"] and isinstance(bu.get("data"), dict)
+            and bu["data"].get("app") != "production-tool" and any(k in bu["data"] for k in BRIEF_KEYS)):
+        return data
+    up = data.get("upstream") if isinstance(data.get("upstream"), dict) else {}
+    return {**data, "upstream": {**up, bu["id"]: bu["data"]}}
+
+
+def production_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the Production project (``app: production-tool``) the Deck carries under ``data.upstream`` (the first one), as the engine
+    reads it (finals, assets, sizes, briefs). The pictures are not in it: they are held by the relay under their sha256."""
+    for k, v in (data.get("upstream") or {}).items():
+        if isinstance(v, dict) and v.get("app") == "production-tool":
+            return {"id": str(k), "data": v}
+    return None
+
+
+#: The fields a Brief Maker document's data holds (the deck engine's inputs.CLAN_FIELDS values): an upstream entry with any of them is a brief.
+BRIEF_KEYS = ("objectives", "audience", "single_minded_proposition", "reasons_to_believe", "desired_response", "tone_and_world", "mandatories",
+              "background", "insight", "competitor_context", "budget_and_scope", "capture")
+
+
+def brief_upstream_of(data: dict) -> dict | None:
+    """``{id, data}``: the brief (a Brief Maker's data) the Deck carries under ``data.upstream`` (the first one; never a Production project or a
+    Style Pack / Brand Clan kit), for the engine's intake and evidence. UAT round 4 L2: it was never sent, so a brief-only deck built from an
+    empty brief and the intake abstained on every field."""
+    for k, v in (data.get("upstream") or {}).items():
+        if not isinstance(v, dict) or v.get("app") == "production-tool" or isinstance(v.get("kit"), dict):
+            continue
+        if any(f in v for f in BRIEF_KEYS):
+            return {"id": str(k), "data": v}
+    return None
+
+
+def assets_of(v, loopback: bool = False) -> dict | None:
+    """``{base, pass}`` from napkin-web's ``payload.production_assets`` (an https relay base and the signed assets pass), else None: a pass
+    that is not exactly that shape is dropped, never forwarded. It is a bearer token for one agency's pictures: it goes in the engine
+    request body and nowhere else (not the document, the job's view, a log line or an error message)."""
+    if not isinstance(v, dict):
+        return None
+    base, tok = v.get("base"), v.get("pass")
+    local = loopback and isinstance(base, str) and base.startswith("http://")   # dev opt-in (settings.deck_relay_loopback); the engine still checks the host
+    if not (isinstance(base, str) and (base.startswith("https://") or local) and isinstance(tok, str) and tok.startswith("v1.") and len(tok) <= 4096):
+        return None
+    return {"base": base.rstrip("/"), "pass": tok}
+
+
+def members_of(clan) -> dict | None:
+    """``{facts, findings, sources, decisions}``: the research the Deck document carries (its merged members and decision chain, as the host
+    sends them beside the data), for the engine's evidence. None when there are none: a deck of a prompt alone sends nothing."""
+    clan = clan if isinstance(clan, dict) else {}
+    chain = clan.get("decision_chain")
+    out = {"facts": clan.get("facts"), "findings": clan.get("findings"), "sources": clan.get("sources"),
+           "decisions": chain.get("decisions") if isinstance(chain, dict) else chain}
+    out = {k: v for k, v in out.items() if isinstance(v, (list, dict)) and v}
+    return out if out.get("facts") or out.get("findings") else None
+
+
+#: The most logo bytes (base64) a Brand Clan carries to the engine (the host caps the files at 4 MB; base64 adds a third).
+BRAND_LOGOS_MAX = 6 * 1024 * 1024
+
+
+def brand_upstream_of(clan) -> dict | None:
+    """``{id, version, data, logos}``: the Brand Clan the Deck wears, as the host sends it beside the upstream index (``clan.brand_upstream``:
+    its frozen copy and its logo files, ``human/assets/brand/<id>/<file>`` to base64). Anything else is dropped, never forwarded. Acceptance
+    A60: only the index reached the engine, so a deck whose Start said it wore the client's Brand Clan was built in the default look."""
+    bc = (clan or {}).get("brand_upstream") if isinstance(clan, dict) else None
+    if not isinstance(bc, dict) or not isinstance(bc.get("id"), str) or not bc["id"] or not isinstance(bc.get("data"), dict):
+        return None
+    logos = bc.get("logos") if isinstance(bc.get("logos"), dict) else {}
+    prefix = f"human/assets/brand/{bc['id']}/"
+    kept, size = {}, 0
+    for k, v in logos.items():
+        if isinstance(k, str) and k.startswith(prefix) and ".." not in k and isinstance(v, str):
+            size += len(v)
+            if size > BRAND_LOGOS_MAX:
+                break
+            kept[k] = v
+    out = {"id": bc["id"], "data": bc["data"], "logos": kept}
+    if isinstance(bc.get("version"), int):
+        out["version"] = bc["version"]
+    return out
+
+
+def start(req, caps, settings, jid):
+    """Validate now (a 400 before any job, a 503 with no engine); build the job (the caller starts it)."""
+    data = with_brief(with_territories(with_production(ctx_data(req.clan), (req.clan or {}).get("production_upstream")), (req.clan or {}).get("territories_upstream")), (req.clan or {}).get("brief_upstream"))
+    inputs = data.get("inputs") if isinstance(data.get("inputs"), dict) else {}
+    prompt = inputs.get("prompt") if isinstance(inputs.get("prompt"), dict) else {}
+    if not str(prompt.get("text") or "").strip():
+        raise bad("give the deck something to build from: inputs.prompt.text is empty")
+    port = eng.port_for(settings)
+    if port is None:
+        raise TaskError(503, "engine_unavailable", "no deck engine is configured for this middleware (NAPKIN_DECK_ENGINE_URL)")
+    run = data.get("run") if isinstance(data.get("run"), dict) else {}
+    approvals = run.get("approvals") if isinstance(run.get("approvals"), dict) else {}
+    body = {"doc": req.doc,
+            "inputs": {"prompt": {k: prompt.get(k) or "" for k in ("text", "client", "project", "agency")},
+                       "kind": inputs.get("kind") or "agency", "format": inputs.get("format") or "pitch"},
+            "approvals": approvals, "render": bool(getattr(settings, "deck_render", True)),
+            "marks": marks_of(data, ((req.clan or {}).get("decision_chain") or {}).get("decisions") or [])}
+    prod = inputs.get("production") if isinstance(inputs.get("production"), dict) else {}
+    if re.fullmatch(r"(sha256:)?[0-9a-f]{64}", str(prod.get("sha256") or "")):   # the person's Production file (attach_production), on every build
+        body["inputs"]["production"] = {"sha256": str(prod["sha256"]).removeprefix("sha256:"), "fetch": prod.get("fetch") is True,
+                                        "look": prod.get("look") is True}
+    members = members_of(req.clan)
+    if members:   # the research this deck carries: the engine's evidence (and its panel) knows it, not only the prompt
+        body["members"] = members
+    bu = brief_upstream_of(data)
+    if bu:   # spun off a brief: the engine builds from its fields (and a Production project's brief yields to it)
+        body["brief_upstream"] = bu
+    bc = brand_upstream_of(req.clan)
+    if bc:   # the Brand Clan the deck wears, with its logo files (acceptance A60): the engine dresses the deck from it
+        body["brand_upstream"] = bc
+    pu = production_upstream_of(data)
+    if pu:   # spun off from a Production project: carried whole, frozen; finals fill the slots first, pictures are fetched by link at build
+        body["production_upstream"] = pu
+        pa = assets_of(getattr(req, "production_assets", None), bool(getattr(settings, "deck_relay_loopback", False)))
+        if pa:   # napkin-web's read-only pass for this person's pictures: to the engine's picture step only, never into the document
+            body["production_assets"] = pa
+    tu = territories_upstream_of(data)
+    if tu:   # spun off from Territories: the routes the person sent are gate 2's territories and the idea's start (no model call for them)
+        body["territories_upstream"] = tu
+    se = run.get("storyline_edit")
+    if isinstance(se, dict) and isinstance(se.get("beats"), list):   # deck-beat-editor: the person's storyline at gate 1; the engine applies it on approval
+        body["storyline_edit"] = {k: se.get(k) for k in ("base", "beats", "by", "at")}
+    dt = deck_type_of(inputs)
+    if dt:   # deck-types: the person's pick on the type picker (and any new writing they confirmed): the engine builds that type, not the kind's default
+        body["inputs"]["deck_type"] = dt
+    size = size_of(data)
+    if size:   # deck-slide-size: the person's slide size (Start, Review, or the intake card's answer); the engine forwards it as --size
+        body["look"] = {"size": {"canvas": size}}
+    if inputs.get("text_mode") in ("condense", "preserve"):   # the person's choice: condense lets the repair loop move points to the notes and shorten
+        body["inputs"]["text_mode"] = inputs["text_mode"]
+    if isinstance(data.get("review"), dict) and data["review"]:   # the person's whole review (pictures and pins): the picture step reads it, the engine takes the pins from it
+        body["review"] = data["review"]
+        if data["review"].get("pinned"):   # the slides the person pinned: the repair loop leaves them alone
+            body["inputs"]["review"] = {"pinned": data["review"]["pinned"]}
+    approver = str((((inputs.get("pictures") or {}).get("approval") or {}).get("user")) or "")
+    if approver:
+        body["approver"] = approver
+    return DeckJob(jid, TASK, req.handler, req, caps, port=port, body=body)

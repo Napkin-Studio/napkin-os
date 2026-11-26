@@ -13,62 +13,11 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { parseYaml } from './deckMakerYaml'
+import { validate, type Schema } from './schemaCheck'
 
 let root = new URL('.', import.meta.url)
 while (!existsSync(new URL('package.json', root))) root = new URL('..', root)
 const dir = new URL('templates/deck-maker/', root)
-
-// ------------------------------------------------- JSON Schema subset (draft-07)
-
-type Schema = {
-  type?: string | string[]
-  enum?: unknown[]
-  required?: string[]
-  properties?: Record<string, Schema>
-  additionalProperties?: Schema | boolean
-  items?: Schema
-  maxItems?: number
-  oneOf?: Schema[]
-}
-
-function typeOk(v: unknown, t: string): boolean {
-  if (t === 'null') return v === null
-  if (t === 'array') return Array.isArray(v)
-  if (t === 'object') return typeof v === 'object' && v !== null && !Array.isArray(v)
-  if (t === 'integer') return Number.isInteger(v)
-  return typeof v === t
-}
-
-function check(v: unknown, s: Schema, path: string, errs: string[]): void {
-  if (s.type !== undefined) {
-    const ts = Array.isArray(s.type) ? s.type : [s.type]
-    if (!ts.some(t => typeOk(v, t))) { errs.push(`${path}: expected ${ts.join('|')}`); return }
-  }
-  if (s.enum && !s.enum.some(e => e === v)) errs.push(`${path}: ${JSON.stringify(v)} is not one of ${JSON.stringify(s.enum)}`)
-  if (s.oneOf) {
-    const hits = s.oneOf.filter(o => { const e: string[] = []; check(v, o, path, e); return e.length === 0 })
-    if (hits.length !== 1) errs.push(`${path}: matches ${hits.length} of ${s.oneOf.length} oneOf branches`)
-  }
-  if (Array.isArray(v)) {
-    if (s.maxItems !== undefined && v.length > s.maxItems) errs.push(`${path}: more than ${s.maxItems} items`)
-    if (s.items) v.forEach((x, i) => check(x, s.items!, `${path}[${i}]`, errs))
-  } else if (typeof v === 'object' && v !== null) {
-    const o = v as Record<string, unknown>
-    for (const k of s.required ?? []) if (!(k in o)) errs.push(`${path}: missing required "${k}"`)
-    for (const [k, x] of Object.entries(o)) {
-      const p = s.properties?.[k]
-      if (p) check(x, p, `${path}.${k}`, errs)
-      else if (typeof s.additionalProperties === 'object') check(x, s.additionalProperties, `${path}.${k}`, errs)
-      else if (s.additionalProperties === false) errs.push(`${path}: unexpected "${k}"`)
-    }
-  }
-}
-
-function validate(data: unknown, schema: Schema): string[] {
-  const errs: string[] = []
-  check(data, schema, '$', errs)
-  return errs
-}
 
 // ---------------------------------------------------------------------- tests
 
@@ -104,6 +53,67 @@ test('the checker itself catches a wrong type, a bad enum and a missing key', ()
   assert.equal(validate({ a: 'no' }, s).length, 1)
   assert.equal(validate({ a: 1, b: 'y' }, s).length, 1)
   assert.equal(validate({}, s).length, 1)
+})
+
+test('the checker bites on each added keyword: const, pattern, minimum, maximum, minItems, minLength, maxLength, propertyNames, uniqueItems, if/then', () => {
+  const s: Schema = {
+    type: 'object',
+    properties: {
+      c: { const: true }, p: { type: 'string', pattern: '^img_[0-9a-f]{12}$' }, n: { type: 'number', minimum: 0, maximum: 10 },
+      a: { type: 'array', minItems: 1 }, l: { type: 'string', minLength: 1, maxLength: 3 },
+      m: { type: 'object', propertyNames: { pattern: '^s[0-9]{2}$' }, additionalProperties: { type: 'boolean' } },
+      u: { type: 'array', uniqueItems: true },
+    },
+    if: { properties: { c: { const: true } }, required: ['c'] },
+    then: { required: ['t'] },
+  }
+  const ok = { c: true, t: 1, p: 'img_0123456789ab', n: 5, a: [1], l: 'ab', m: { s01: true }, u: [1, 2] }
+  assert.deepEqual(validate(ok, s), [])
+  const { t: _t, ...noThen } = ok // eslint-disable-line @typescript-eslint/no-unused-vars
+  assert.equal(validate(noThen, s).length, 1, 'then applies when if matches')
+  assert.equal(validate({ ...noThen, c: false }, s).length, 1, 'c: false breaks const; then is skipped')
+  for (const bad of [{ c: false }, { p: 'img_x' }, { n: -1 }, { n: 11 }, { a: [] }, { l: '' }, { l: 'abcd' }, { m: { slide1: true } }, { m: { s01: 'no' } }, { u: [1, 1] }]) {
+    assert.equal(validate({ ...ok, ...bad }, s).length, 1, JSON.stringify(bad))
+  }
+})
+
+// Every keyword schema.json uses is one the checker above reads, or a note that checks nothing. A limit written with any other
+// keyword would pass this file's tests unchecked, so adding one has to extend the checker (with a case above that bites) first.
+const CHECKED = ['type', 'enum', 'required', 'properties', 'additionalProperties', 'items', 'maxItems', 'oneOf', 'const', 'pattern',
+  'minimum', 'maximum', 'minItems', 'minLength', 'maxLength', 'propertyNames', 'default', 'uniqueItems', 'if', 'then']
+const NOTES = ['$schema', 'title', 'description', '$comment', 'x-clan-appearance']
+
+function keywords(s: Schema, found: Set<string>): void {
+  for (const [k, v] of Object.entries(s as Record<string, unknown>)) {
+    found.add(k)
+    if (k === 'properties') for (const x of Object.values(v as Record<string, Schema>)) keywords(x, found)
+    else if (k === 'items' || k === 'propertyNames' || k === 'if' || k === 'then' || (k === 'additionalProperties' && typeof v === 'object')) keywords(v as Schema, found)
+    else if (k === 'oneOf') for (const x of v as Schema[]) keywords(x, found)
+  }
+}
+
+test('schema.json uses only keywords the checker reads', () => {
+  const found = new Set<string>()
+  keywords(schema, found)
+  const unread = [...found].filter(k => !CHECKED.includes(k) && !NOTES.includes(k))
+  assert.deepEqual(unread, [], `schema.json uses keywords this file does not check: ${unread.join(', ')}`)
+  // The guard itself bites on a keyword outside both lists.
+  const probe = new Set<string>()
+  keywords({ type: 'object', properties: { a: { type: 'string', format: 'date' } } } as Schema, probe)
+  assert.ok([...probe].some(k => !CHECKED.includes(k) && !NOTES.includes(k)))
+})
+
+test('the added schema fields check what the contract says (deck-visuals.md 6.3)', () => {
+  const ok = { inputs: { pictures: { source: { allow: 'existing', cap_usd: 2.5 }, approval: { approver: 'owner', label: 'Illustrative' } } }, look: { pictures: { on: 'creative' }, density: { level: 'lean' } } }
+  assert.deepEqual(validate(ok, schema), [])
+  const bad = (o: unknown) => validate(o, schema).length > 0
+  assert.ok(bad({ inputs: { pictures: { approval: { label: 'Draft 2' } } } }))
+  assert.ok(bad({ inputs: { pictures: { source: { cap_usd: 11 } } } }))
+  assert.ok(bad({ look: { pictures: { on: 'everywhere' } } }))
+  assert.ok(bad({ look: { surprise: true } }))
+  assert.ok(bad({ review: { pinned: { slide3: { by: 'a', at: 'b' } } } }))
+  assert.ok(bad({ qa: { issues: { nope: {} } } }))
+  assert.ok(bad({ repair: { rounds: [{}, {}, {}] } }))
 })
 
 test('the YAML reader reads the flow, block and quoted forms the data files use', () => {
@@ -208,4 +218,33 @@ test('exports take the older `true` and file-name shapes as well as the object',
   assert.notDeepEqual(validate(d, schema), [])
   d.exports = { pdf: { url: 'x' } }
   assert.notDeepEqual(validate(d, schema), [])
+})
+
+test('the Deck template is 0.6.0 and takes a Production project and a Territories document spun off, and takes a Brand Clan and a Style Pack one at a time (deck-look-kits)', () => {
+  const rs = readFileSync(new URL('../crates/clan-sdk/examples/make_deck_maker.rs', root), 'utf8')
+  assert.match(rs, /version: "0\.6\.0"\.into\(\)/)
+  assert.match(rs, /assert_eq!\(app_block\.version, "0\.6\.0"/)
+  assert.match(rs, /RESEARCH_APP_ID\.into\(\),\s+PRODUCTION_APP_ID\.into\(\),\s+TERRITORIES_APP_ID\.into\(\)/)
+  assert.match(rs, /BRAND_APP_ID\.into\(\),\s+STYLE_PACK_APP_ID\.into\(\)/)
+  assert.match(rs, /many: vec!\[RESEARCH_APP_ID\.into\(\)\]/)
+})
+
+test('look.agency_look is a per-deck opt-out that defaults to on, and a bad value is caught', () => {
+  const look = (schema.properties!.look as Schema).properties!.agency_look as Schema
+  assert.deepEqual(look.default, { use: true })
+  const wrap: Schema = { type: 'object', properties: { agency_look: look } }
+  assert.deepEqual(validate({ agency_look: { use: false, via: 'start' } }, wrap), [])
+  assert.equal(validate({ agency_look: { use: 'no' } }, wrap).length, 1)
+  assert.equal(validate({ agency_look: { use: true, colour: 'red' } }, wrap).length, 1)
+})
+
+test('the gate rows keep n as an integer or a string, and look.agency_look and the preference stamp carry the agency look', () => {
+  const gate = (schema.properties!.run as Schema).properties!.gate as Schema
+  assert.deepEqual((gate.properties!.territories.items as Schema).properties!.n.type, ['integer', 'string'])
+  assert.deepEqual(((gate.properties!.idea.properties!.executions).items as Schema).properties!.n.type, ['integer', 'string'])
+  const al = (schema.properties!.look as Schema).properties!.agency_look as Schema
+  assert.deepEqual(Object.keys(al.properties!).sort(), ['at', 'by', 'update_requested', 'use', 'via'])
+  const meta = ((schema.properties!.deck as Schema).properties!.meta as Schema).properties!
+  assert.deepEqual(Object.keys(meta.preferences.properties!.agency_look.properties!).sort(), ['source', 'use'])
+  assert.ok('accent_line' in meta.theme.properties! && 'held' in meta.theme.properties! && 'style_hold' in meta)
 })

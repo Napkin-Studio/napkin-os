@@ -16,18 +16,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # main takes releases from develop only (CLAUDE.md, Branches).
+  # main takes releases from develop, and hotfix/* branches cut from main
+  # (CLAUDE.md, Branches).
   release-source:
     name: Release source
     runs-on: ubuntu-latest
     steps:
-      - name: A PR into main comes from develop
+      - name: A PR into main comes from develop or a hotfix/* branch
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          if [ "${{ github.head_ref }}" != "develop" ]; then
-            echo "::error::A PR into main must come from develop, not ${{ github.head_ref }}. Target develop instead."
-            exit 1
-          fi
+          case "$HEAD_REF" in
+            develop|hotfix/*) ;;
+            *)
+              echo "::error::A PR into main must come from develop or hotfix/*, not $HEAD_REF. Target develop instead."
+              exit 1
+              ;;
+          esac
 
   rust:
     name: Rust — fmt · clippy · test
@@ -174,7 +180,12 @@ jobs:
       # optional links (torch / sentence-transformers / the vendor SDK) are imported
       # lazily by the modules that need them.
       - name: Install dependencies
-        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest
+        run: pip install numpy requests httpx pypdf pdfplumber python-docx PyYAML python-dotenv pytest python-pptx lxml jsonschema fonttools
+
+      # The deck tests importorskip these, so a missing one would skip tests silently.
+      # Fail loudly here instead. Keep the pip line above identical to PY_ENGINE_DEPS in scripts/check.sh.
+      - name: Check deck dependencies import
+        run: python -c "import pptx, lxml, jsonschema, docx, fontTools"
 
       # BRIEF_TESTS_OFFLINE=1 makes every outbound socket connection raise (rag/conftest.py),
       # so a test that quietly reaches a hosted endpoint fails here instead of passing on
@@ -185,15 +196,37 @@ jobs:
           BRIEF_TESTS_OFFLINE: "1"
         run: python -m pytest -q -p no:cacheprovider
 
+      # The shared Style Pack reader (engine/visuals): the hash both the Territory tool and the Deck use.
+      - name: Style Pack reader tests
+        working-directory: engine
+        run: PYTHONPATH=. python -m pytest -q -p no:cacheprovider -p pytest_skipguard visuals/tests
+
       - name: Agent-server tests
         working-directory: engine/agent-server
         env:
           BRIEF_TESTS_OFFLINE: "1"
         run: python -m pytest -q -p no:cacheprovider
 
+      - name: Territory tool tests
+        working-directory: engine
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+          PYTHONPATH: .
+        run: python -m pytest -q -p no:cacheprovider territory/tests
+
       - name: Mock-agent tests
         working-directory: mock-agent
         run: python -m pytest -q -p no:cacheprovider
+
+      # PYTHONPATH=. because deck/ imports its siblings and brief_llm from engine/. pytest_skipguard prints the skips per suite;
+      # this runner has no LibreOffice, so DECK_SKIP_GUARD and DECK_REQUIRE_SOFFICE stay unset here (scripts/check.sh sets both).
+      # The end-to-end deck gate (deck/tests/test_lumen_gate.py) therefore skips here: the local pre-push hook is the gate.
+      - name: Deck Maker tests
+        working-directory: engine
+        env:
+          BRIEF_TESTS_OFFLINE: "1"
+          PYTHONPATH: .
+        run: python -m pytest -q -p no:cacheprovider -p pytest_skipguard deck/tests
 
   conformance:
     name: CLI conformance harness
@@ -289,6 +322,14 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.10"
+      # A release that changes only the Production Tool's web app must redeploy
+      # staging, which builds it into napkin-web (features/os-sign-in.clan).
+      - name: deploy.yml does not ignore all of production-tool
+        run: |
+          if grep -nE "^[[:space:]]*-[[:space:]]*'?production-tool/\*\*'?[[:space:]]*$" .github/workflows/deploy.yml; then
+            echo "::error::deploy.yml ignores all of production-tool/**; ignore only production-tool/relay/** and production-tool/stitch/**"
+            exit 1
+          fi
       - name: Format
         working-directory: infra
         run: terraform fmt -check -recursive
@@ -356,6 +397,7 @@ jobs:
           cache-dependency-path: |
             production-tool/web/package-lock.json
             production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
       - name: CLAN store — build napkin-wasm, lint, test
         working-directory: production-tool/clan-store
         run: |
@@ -363,6 +405,16 @@ jobs:
           npm run build
           npm run lint
           npm test
+      # Our own canvas engine (features/canvas-engine.clan): its lint and tests, then the PR
+      # bench on the seed-1 G3 scene: storage bytes, memory caps, and draw-time CPU under 2x
+      # bench/baseline.json relative to a control timed in the same job (features/engine-ci.clan).
+      - name: Canvas engine — lint, test, bench
+        working-directory: production-tool/canvas-engine
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm run bench
       - name: Web — lint, test, build
         if: hashFiles('production-tool/web/package.json') != ''
         working-directory: production-tool/web
@@ -371,3 +423,172 @@ jobs:
           npm run lint
           npm test
           npm run build:web
+      - name: Web — e2e (Playwright, real pointer events, in-browser mock)
+        if: hashFiles('production-tool/web/package.json') != ''
+        working-directory: production-tool/web
+        run: |
+          npx playwright install --with-deps chromium
+          npm run e2e
+
+  # napkin-web's image, built (never pushed) when what it bundles changes:
+  # the Dockerfile, .dockerignore, and the Production Tool's web app, CLAN
+  # store and contracts (features/os-sign-in.clan). Nothing else builds the
+  # image before a merge into main deploys it. The job always reports, so the
+  # required check is green when nothing it builds has changed.
+  image:
+    name: Image — napkin-web docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        name: Does the change reach the image
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
+             grep -qE '^(Dockerfile|\.dockerignore|production-tool/(web|clan-store|contracts|canvas-engine)/)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing the image bundles changed: not building it."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build the runtime image (no push)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: napkin-web:ci
+          cache-from: type=gha,scope=web
+      - name: The Production Tool is in the image
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/production/index.html
+      - name: Deck Maker is in the seed (deck-cloud)
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/deck-maker.app.clan
+          docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/deck-maker.example.clan
+      - name: Territories is in the seed (territories-spinoff-in)
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run --rm --entrypoint test napkin-web:ci -f /srv/napkin/seed/territories.app.clan
+          docker run --rm --entrypoint test napkin-web:ci ! -f /srv/napkin/seed/territories.example.clan
+      - name: Image size
+        if: steps.changed.outputs.build == 'true'
+        run: docker image ls napkin-web:ci
+
+  # The deck engine's image (deck-cloud): builds engine/deck/Dockerfile, starts it in replay + web render mode, answers /status,
+  # and builds a deck from the Fernley recording with no soffice or pdftoppm on the machine (deck.pptx and deck.html, no deck.pdf).
+  deck-image:
+    name: Deck image — engine docker build and web-mode replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changed
+        name: Does the change reach the deck image
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$(git merge-base "$BASE" HEAD)" HEAD |
+             grep -qE '^(engine/|server/napkin/model_routes\.py)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nothing the deck image bundles changed: not building it."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build the deck image (no push)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: engine/deck/Dockerfile
+          target: runtime
+          push: false
+          load: true
+          tags: napkin-deck:ci
+          cache-from: type=gha,scope=deck
+      - name: Start it (replay, web render) and read /status
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker run -d --name deck -e NAPKIN_DECK_REPLAY=/srv/napkin/engine/deck/tests/fixtures/fernley/stages napkin-deck:ci
+          for i in $(seq 1 30); do
+            docker exec deck python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8793/status',timeout=4).status==200 else 1)" && ok=1 && break
+            sleep 1
+          done
+          test "${ok:-0}" = 1 || { docker logs deck; exit 1; }
+          docker exec deck python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8793/status').read().decode())"
+      - name: A replay build in web mode writes deck.pptx and deck.html, with no soffice present
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          ! docker exec deck sh -c 'command -v soffice || command -v pdftoppm'
+          docker exec deck python -m deck.web_smoke http://127.0.0.1:8793 || { docker logs deck; exit 1; }
+      - name: The Bedrock client and the model-id mapping are in the image
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          docker exec -e NAPKIN_MODEL_API=bedrock -e NAPKIN_MODEL_REGION=eu-west-1 -e AWS_ACCESS_KEY_ID=x -e AWS_SECRET_ACCESS_KEY=x deck python -c "import brief_llm as L; c=L._anthropic_client(); print(type(c._c).__name__, L.bedrock_model_id('claude-opus-5-5'))"
+      - name: Image size
+        if: steps.changed.outputs.build == 'true'
+        run: docker image ls napkin-deck:ci
+
+  # The licence gate (features/licence-gate.clan, docs/contracts/licences.md): every
+  # lockfile we ship or run, fonts, binaries and model weights against licences/policy.toml.
+  # No path filter: it always runs the full check. The rulesets quote this job's name, so
+  # renaming it breaks branch protection.
+  licences:
+    name: Licences — npm · cargo · python · weights · fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the policy diff reads the PR's base
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            production-tool/web/package-lock.json
+            production-tool/clan-store/package-lock.json
+            production-tool/canvas-engine/package-lock.json
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: licences
+          cache-targets: false
+      # PyPI metadata by exact version, package archives for clarifications, and the
+      # production-only npm installs the font scan reads.
+      - name: Cache licence metadata
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/napkin-licences
+          key: napkin-licences-${{ hashFiles('**/uv.lock', '**/package-lock.json', 'licences/policy.toml') }}
+          restore-keys: napkin-licences-
+      - name: Licence gate (unit tests, then this tree)
+        run: uv run --no-project --python 3.12 --with pytest --with brotli python -m pytest -q -p no:cacheprovider scripts/licences
+      - name: Licence policy changes in this PR
+        if: always() && github.event_name == 'pull_request'
+        run: uv run --no-project --python 3.12 python scripts/licences/check.py --policy-diff "origin/${{ github.base_ref }}" >> "$GITHUB_STEP_SUMMARY"

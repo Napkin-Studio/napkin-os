@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front rides over a crowded bridge at rush hour, threading between stalled cars, grinning beneath his helmet."
+     },
+     {
+      "type": "direction",
+      "text": "Moving alongside him at handlebar height."
+     }
+    ],
+    "note": "I reworded the action and the direction, keeping the same events and the @name."
+   }
+  ],
+  "rationale": "Rephrased with the same facts, length and @sai_front reference; the direction stays last."
+ }
+}

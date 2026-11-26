@@ -4,10 +4,14 @@ import type { ProjectSummary } from '../projects/summary'
 
 /** Where the project is: blue on its way, amber when things wait for an update, green once the ad is made. */
 export function stageChip(s: ProjectSummary): { tone: 'on' | 'warn' | 'done'; text: string } {
-  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Video'
+  const label = s.stage === 'character' ? 'Canvas' : s.stage === 'storyboard' ? 'Storyboard' : 'Film'
   if (s.behind > 0) return { tone: 'warn', text: `${label} · ${s.behind} behind` }
   if (s.adSeconds !== null) return { tone: 'done', text: `Ad rendered · ${s.adSeconds} s` }
-  if (s.stage === 'character') return { tone: 'on', text: s.pictures ? `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` : 'Canvas · empty' }
+  if (s.stage === 'character') {
+    if (s.pictures) return { tone: 'on', text: `Canvas · ${s.pictures} ${s.pictures === 1 ? 'picture' : 'pictures'}` }
+    const items = s.items ?? 0
+    return { tone: 'on', text: items ? `Canvas · ${items} ${items === 1 ? 'item' : 'items'}` : 'Canvas · empty' }
+  }
   return { tone: 'on', text: `${label} · ${s.shots} ${s.shots === 1 ? 'shot' : 'shots'}` }
 }
 
@@ -38,3 +42,29 @@ export function displayName(handle: string | undefined) {
   if (!handle || handle === 'guest') return 'there'
   return handle.slice(0, 1).toUpperCase() + handle.slice(1)
 }
+
+/** Home's notice when a project cannot be opened (made under another contract, projects/session.ts
+ *  ProjectRefused): the reason as one sentence. */
+export function refusalNotice(message: string): string {
+  const t = message.trim()
+  return /[.!?]$/.test(t) ? t : `${t}.`
+}
+
+/** The person's own name from their Napkin OS account (Me.name), when they have one; else the handle. */
+function ownName(me: { name?: string } | null | undefined): string | null {
+  const name = me?.name?.trim()
+  return name ? name : null
+}
+
+/** Who Home greets: "Shrey" from Me.name, else the handle as displayName says it. */
+export function greetName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? displayName(me?.handle)
+}
+
+/** Who the ⋯ menu says is signed in: Me.name, else "@handle" ("@guest" with nobody). */
+export function menuName(me: { handle?: string; name?: string } | null | undefined): string {
+  return ownName(me) ?? `@${me?.handle ?? 'guest'}`
+}
+
+/** Dex's first-visit line on Home: what to bring, and who does what with it (the crew row above names each). */
+export const FIRST_AD = 'Draw or drop your characters and write a few lines of script. The Script agent drafts the rest, I plan the shots, the Camera agent films the frames and clips, the Retouch agent retouches them and the Edit agent edits the ad. The Knowledge agent notes what you ask for and reads it back; the Review agent judges each result.'

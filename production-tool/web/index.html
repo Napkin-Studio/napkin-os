@@ -7,11 +7,26 @@
     <link rel="icon" type="image/svg+xml" href="/mark.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..600&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..900&family=Geist+Mono:wght@400..700&family=Newsreader:opsz,wght@6..72,400..700&display=swap" />
     <title>Napkin Studio Production</title>
+    <!-- Until the app's first render (UAT round 5: a fresh load was a blank page for about 12 s while the scripts,
+         the .clan engine and the project came in), the page says so. React replaces #root's contents. -->
+    <style>
+      html { background: #f4f0e6; color: #141413; }
+      .pt-boot { position: fixed; inset: 0; display: grid; place-items: center; font: 500 14px/1.4 Geist, system-ui, sans-serif; }
+      .pt-boot div { display: flex; flex-direction: column; align-items: center; gap: 14px; opacity: 0; animation: pt-boot-in .3s ease .4s forwards; }
+      .pt-boot img { width: 44px; height: 44px; animation: pt-boot-pulse 1.6s ease-in-out infinite; }
+      .pt-boot span { color: #6b6a64; letter-spacing: .01em; }
+      @keyframes pt-boot-in { to { opacity: 1; } }
+      @keyframes pt-boot-pulse { 50% { opacity: .45; } }
+      @media (prefers-color-scheme: dark) { html:not([data-theme="light"]) { background: #1b1b19; color: #f4f0e6; } html:not([data-theme="light"]) .pt-boot span { color: #a8a69e; } }
+      html[data-theme="dark"] { background: #1b1b19; color: #f4f0e6; }
+      html[data-theme="dark"] .pt-boot span { color: #a8a69e; }
+      @media (prefers-reduced-motion: reduce) { .pt-boot div, .pt-boot img { animation: none; opacity: 1; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="pt-boot" role="status" aria-live="polite"><div><img src="/mark.svg" alt="" /><span>Opening Napkin Studio…</span></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

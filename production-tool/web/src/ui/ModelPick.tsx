@@ -1,24 +1,29 @@
 // The model menu (features/model-choice.clan, look: features/production-tool-look.clan):
 // which model makes the next version. A chip that opens a floating list: each model
-// with its provider, note and price. It appears only where a version is made again;
+// with its provider and note, never a price (owner, 2026-10-13: costs show only in History). It appears only where a version is made again;
 // a first draw runs the routed default. The relay checks every pick, and falls back
 // to Runway's default when the picked provider cannot make it (features/runway-fallback.clan).
 
 import { useCallback, useRef, useState } from 'react'
 import { useConfig } from '../app/context'
-import { modelChoicesFor, type ModelOption } from '../capabilities'
+import { modelChoicesFor, sameOption, type ModelOption } from '../capabilities'
 import type { ModelChoice, Op } from '../contracts/types'
 import { Float } from './Float'
-import { price } from './modelChoice'
 
 const keyOf = (c: ModelChoice) => `${c.provider}:${c.model}`
+
+/** The menu's heading in the words of what it makes (UAT round 1 IMG-21: "Make the next version with" over views). */
+const PICK_HEAD: Partial<Record<Op, string>> = {
+  generate: 'Make the picture with', view: 'Make the views with', frame: 'Draw the frame with', region_edit: 'Change it with',
+  clip: 'Make the clip with', clip_edit: 'Change the clip with', resize: 'Make the sizes with',
+}
 
 /** A provider's small square mark: the first letter on its colour. */
 export function ProviderMark({ provider }: { provider: string }) {
   return <span className={`pmark pmark-${provider}`} aria-hidden="true">{provider.slice(0, 1).toUpperCase()}</span>
 }
 
-/** The models as menu items: name and mark, provider and note, price. */
+/** The models as menu items: name and mark, provider and note. */
 export function ModelItems({ options, current, tagOther, onPick }: {
   options: ModelOption[]
   current?: ModelChoice
@@ -27,7 +32,7 @@ export function ModelItems({ options, current, tagOther, onPick }: {
   onPick: (o: ModelOption) => void
 }) {
   return options.map((o) => {
-    const on = !!current && keyOf(o) === keyOf(current)
+    const on = sameOption(o, current)
     return (
       <button key={keyOf(o)} type="button" role="menuitem" className={`fmi mmi ${on ? 'on' : ''}`} aria-current={on || undefined} onClick={() => onPick(o)}>
         <ProviderMark provider={o.provider} />
@@ -35,7 +40,7 @@ export function ModelItems({ options, current, tagOther, onPick }: {
           <b>{o.label}{tagOther && o.provider !== tagOther && <span className="mmi-tag">another provider</span>}</b>
           <small>{o.provider}{o.note ? ` · ${o.note}` : ''}</small>
         </span>
-        <span className="fmi-hint">{on ? '✓ ' : ''}{price(o.estimateUsd)}</span>
+        {on && <span className="fmi-hint">✓</span>}
       </button>
     )
   })
@@ -48,7 +53,7 @@ export function ModelPick({ op, value, onChange }: { op: Op; value?: ModelChoice
   const close = useCallback(() => setOpen(false), [])
   const options = modelChoicesFor(op, config)
   if (options.length < 2) return null
-  const chosen = options.find((o) => value && keyOf(o) === keyOf(value)) ?? options[0]
+  const chosen = options.find((o) => sameOption(o, value)) ?? options[0]
   return (
     <span className="modelpick" onClick={(e) => e.stopPropagation()}>
       <button ref={ref} type="button" className={`modelchip ${open ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={open}
@@ -57,9 +62,8 @@ export function ModelPick({ op, value, onChange }: { op: Op; value?: ModelChoice
         {chosen.label}
         <span className="caret" aria-hidden="true">▾</span>
       </button>
-      <span className="faint modelprice">{price(chosen.estimateUsd)}</span>
       <Float anchor={ref} open={open} onClose={close} label="Model for the next version" className="modelmenu">
-        <div className="fhead">Make the next version with</div>
+        <div className="fhead">{PICK_HEAD[op] ?? 'Make it with'}</div>
         <ModelItems options={options} current={chosen} onPick={(o) => { onChange({ provider: o.provider, model: o.model }); close() }} />
       </Float>
     </span>

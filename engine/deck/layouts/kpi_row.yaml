@@ -1,0 +1,89 @@
+id: kpi_row
+version: 1
+group: content
+purpose: data
+description: A row of figures, each with its label.
+slot_summary: title, figures, note
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- person_beat
+- requirement_trace
+- appendix_sources
+when:
+  blocks_any:
+  - stats
+priority: 45
+alternatives:
+- cards
+- cards_split
+roomier: cards
+density: lean
+pick: rule
+family: kpi_row
+renderer: kpi_row
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  figures:
+    kind: stat
+    role: display
+    from_blocks:
+    - stats
+    dominant: true
+    min_items: 2
+    max_items: 4
+  note:
+    kind: text
+    role: body
+    from_blocks:
+    - text
+    - small
+    - statement
+    max_chars: 367

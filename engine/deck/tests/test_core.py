@@ -310,13 +310,19 @@ def test_trim_never_moves_a_type_it_does_not_name():
 # ---------------------------------------------------------------- 12: cost and transport hygiene
 
 def test_estimate_usd_uses_the_price_table():
-    """Opus 5.5 at 5/25 and Sonnet 5.5 at 3/15 dollars per million tokens in/out; an unknown model is 0; a list names the dearest."""
-    assert spec.PRICE_PER_MTOK == {"claude-opus-5-5": (5.0, 25.0), "claude-sonnet-5-5": (3.0, 15.0)}
-    assert spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 30.0
-    assert spec.estimate_usd("claude-sonnet-5-5", 2_000, 500) == round(2_000 / 1e6 * 3 + 500 / 1e6 * 15, 4)
-    assert spec.estimate_usd("nope", 5, 5) == 0.0
-    assert spec.estimate_usd("claude-sonnet-5-5,claude-opus-5-5", 1_000_000, 0) == 5.0
-    assert spec.estimate_usd("claude-sonnet-5-5", 0, 0, cache_read=1_000_000, cache_creation=1_000_000) == round(3 * 0.1 + 3 * 1.25, 4)
+    """Opus 5.5 at 4/20 and Sonnet 5.5 at 2/10 dollars per million tokens in/out; their cache reads at 0.05x, writes 1.25x; an unknown
+    model is priced as Opus 5.5 (never 0); a list names the dearest. One table for every tool (engine/prices.json): Haiku is
+    listed (it was priced as Opus before 19 Nov 2026) and the older models' cache reads are 0.1x."""
+    assert spec.PRICE_PER_MTOK["claude-opus-5-5"] == (4.0, 20.0) and spec.PRICE_PER_MTOK["claude-sonnet-5-5"] == (2.0, 10.0)
+    assert spec.estimate_usd("claude-haiku-4-5-20251001", 1_000_000, 1_000_000) == 6.0
+    assert spec.estimate_usd("claude-opus-4-6", 0, 0, cache_read=1_000_000) == 0.5   # 0.1x of 5 on the older Opus
+    assert spec.estimate_usd("claude-opus-5-5", 1_000_000, 1_000_000) == 24.0
+    assert spec.estimate_usd("claude-sonnet-5-5", 2_000, 500) == round(2_000 / 1e6 * 2 + 500 / 1e6 * 10, 4)
+    assert spec.estimate_usd("nope", 1_000_000, 1_000_000) == 24.0 and spec.estimate_usd("nope", 5, 5) > 0
+    assert spec.estimate_usd("claude-sonnet-5-5,mystery", 1_000_000, 0) == 4.0   # one unknown name prices the lot at the maximum
+    assert spec.estimate_usd("claude-sonnet-5-5,claude-opus-5-5", 1_000_000, 0) == 4.0
+    assert spec.estimate_usd("claude-sonnet-5-5", 0, 0, cache_read=1_000_000, cache_creation=1_000_000) == round(2 * 0.05 + 2 * 1.25, 4)
+    assert spec.estimate_usd("claude-opus-5-5", 0, 0) == 0.0
 
 
 class _Ledger(dict):
@@ -327,7 +333,23 @@ def _fake_llm(monkeypatch, replies, ledger=None):
     """Install a stand-in brief_llm: each _json_call attempt reads the next reply through ``parse``. Returns the list of calls made."""
     calls = []
     mod = types.ModuleType("brief_llm")
-    mod.CLI_TIMEOUT_S = 1.0
+    efforts = []
+
+    class PinnedEffort:
+        """brief_llm.pinned_effort: the effort the stage's calls run at."""
+
+        def __init__(self, effort):
+            """Remember the effort."""
+            self.effort = effort
+
+        def __enter__(self):
+            """Set it."""
+            efforts.append(self.effort)
+            return self
+
+        def __exit__(self, *a):
+            """Done."""
+            return False
 
     class NoClaudeAvailable(RuntimeError):
         """No usable reply."""
@@ -354,10 +376,11 @@ def _fake_llm(monkeypatch, replies, ledger=None):
 
     def json_call(user, system=None, retries=1, model=None, parse=None, **kw):
         """Answer from the queue; the reader sees the text."""
-        calls.append({"user": user, "system": system, "model": model, "retries": retries})
+        calls.append({"user": user, "system": system, "model": model, "retries": retries, "effort": efforts[-1] if efforts else None})
         return parse(replies.pop(0)) if replies else None
 
     mod.NoClaudeAvailable, mod._stats_scope, mod._loads_lenient, mod._json_call = NoClaudeAvailable, Scope, loads, json_call
+    mod.pinned_effort = PinnedEffort
     monkeypatch.setitem(sys.modules, "brief_llm", mod)
     return calls
 
@@ -368,6 +391,14 @@ def test_a_call_records_an_estimated_usd_from_tokens(monkeypatch):
     obj, usage = stages._call("b", "u", "s")
     assert obj == {"ok": 1} and len(calls) == 1 and "repaired" not in usage
     assert usage["usd"] == spec.estimate_usd("claude-opus-5-5", 1000, 400) > 0 and usage["usd_estimated"] is True
+
+
+def test_each_stage_calls_at_its_own_effort(monkeypatch):
+    """The stage's effort reaches its pinned-model calls through brief_llm.pinned_effort (no env variable)."""
+    for stage in ("b", "fit"):
+        calls = _fake_llm(monkeypatch, ['{"ok": 1}'])
+        stages._call(stage, "u", "s")
+        assert [c["effort"] for c in calls] == [stages.EFFORT[stage]]
 
 
 def test_a_real_usd_from_the_transport_is_kept(monkeypatch):
@@ -416,11 +447,11 @@ def test_sum_adds_usd_and_keeps_the_flags():
 def test_report_prices_every_stage_that_has_tokens(monkeypatch, tmp_path):
     """A recorded stage whose usage holds tokens but no dollars is priced (estimate, labelled), so usd_total is not 0."""
     row = run_deck._price_stage({"source": "recorded", "model": "claude-opus-5-5", "prompt_tokens": 100_000, "completion_tokens": 20_000})
-    assert row["usd"] == spec.estimate_usd("claude-opus-5-5", 100_000, 20_000) == 1.0 and row["usd_estimated"] is True
+    assert row["usd"] == spec.estimate_usd("claude-opus-5-5", 100_000, 20_000) == 0.8 and row["usd_estimated"] is True
     real = {"model": "claude-opus-5-5", "prompt_tokens": 100_000, "usd": 2.5}
     assert run_deck._price_stage(real) == real   # a real figure is kept
     assert run_deck._price_stage({"source": "missing"}) == {"source": "missing"}
-    assert run_deck._price_stage({"model": "claude-sonnet-5-5", "tokens_in": 1_000_000, "tokens_out": 0})["usd"] == 3.0
+    assert run_deck._price_stage({"model": "claude-sonnet-5-5", "tokens_in": 1_000_000, "tokens_out": 0})["usd"] == 2.0
     d = tmp_path / "stages"
     d.mkdir()
     for f in ("a_requirements.json", "b_storyline.json", "c_territories.json", "d_idea.json"):

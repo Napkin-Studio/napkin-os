@@ -1,0 +1,107 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { forgetMedia, setMediaBase } from '../lib/media'
+import type { ProductionDocument, Shot } from '../contracts/types'
+import { cutItemFor, cutOf, mainVideo, shotsOf } from '../model/selectors'
+import type { Relay } from '../relay/types'
+import { MAYA, snapshotDoc } from '../test/jobFixtures'
+import { SHA, addShots, addTake, job } from '../test/model'
+import { stitchAt, stitchTimeline } from '../relay/mockRender'
+import { stitchInput } from './clips'
+
+// The Film editor's stitch request (features/make-and-edit.clan: from the cut's V1 clips): each shot's clip
+// with its in and out points, in shot order.
+
+const CDN = 'https://cdn.test/out'
+
+// The relay's files are found by their hash at the media base (lib/media.ts); out/ answers for what it made.
+beforeEach(() => {
+  setMediaBase('https://cdn.test')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ ok: String(url).startsWith('https://cdn.test/out/') }) as Response))
+})
+afterEach(() => { vi.unstubAllGlobals(); forgetMedia() })
+
+/** Three shots of 3, 2 and 4 s, each with a picked take the relay made (found at the media base by its hash: no upload). */
+function made(order: number[] = [0, 1, 2]) {
+  const store = snapshotDoc(MAYA)
+  const d = structuredClone(store.get()) as ProductionDocument
+  const shots = addShots(d, 3)
+  ;[3, 2, 4].forEach((s, i) => { shots[i].duration_s = s })
+  // Takes land (and get their edl items, last) in `order`, as parallel clips do.
+  for (const i of order) {
+    const sha = SHA('abc'[i])
+    addTake(d, shots[i], sha, job(d, 'clip', [], sha), { pick: true })
+  }
+  return { d, shots, deps: { relay: null as unknown as Relay, doc: { get: () => d } } as unknown as Parameters<typeof stitchInput>[0] }
+}
+
+/** A shot's clip window in the cut. */
+const itemOf = (d: ProductionDocument, shot: Shot) => cutItemFor(d, shot.id)!.source!
+
+describe('stitchInput', () => {
+  it('sends each shot\'s clip from its start to the end of its slot in the cut', async () => {
+    const { d, deps } = made()
+    const { input, parents } = await stitchInput(deps)
+    const clip = (c: string, trimS: number) => ({ asset: { sha256: SHA(c), url: `${CDN}/${SHA(c)}`, mime: 'video/mp4' }, trimS, outS: trimS })
+    expect(JSON.stringify(input)).toBe(JSON.stringify({ clips: [clip('a', 3), clip('b', 2), clip('c', 4)], ...(mainVideo(d)!.ratio ? { ratio: mainVideo(d)!.ratio } : {}) }))
+    expect(parents).toHaveLength(3)
+  })
+
+  it("plays the person's own end card shot like any other clip (it was dropped for the studio card, 2026-10-19)", async () => {
+    const { shots, deps } = made()
+    shots[2].kind = 'end_card'
+    const { input } = await stitchInput(deps)
+    expect(input.clips).toHaveLength(3)
+    expect(input.clips!.some((c) => 'endCard' in c)).toBe(false)
+    expect(input.clips![2]).toMatchObject({ asset: { sha256: SHA('c') }, trimS: 4 })
+  })
+
+  it('sends each clip\'s in and out points as inS and outS', async () => {
+    const { d, shots, deps } = made()
+    Object.assign(itemOf(d, shots[0]), { in_s: 1.5, out_s: 4 })
+    Object.assign(itemOf(d, shots[1]), { in_s: 0 }) // absent or 0: the clip's start, sent as nothing
+    Object.assign(itemOf(d, shots[2]), { out_s: 3.5 })
+    const { input } = await stitchInput(deps)
+    expect(input.clips!.map(({ trimS, inS, outS }) => ({ trimS, inS, outS }))).toEqual([
+      { trimS: 3, inS: 1.5, outS: 4 }, { trimS: 2, inS: undefined, outS: 2 }, { trimS: 4, inS: undefined, outS: 3.5 },
+    ])
+    expect(input.clips!.every((c) => !('transition' in c))).toBe(true) // no transitions asked for: every join is a cut
+  })
+
+  it('an out point at or before the in point is not sent', async () => {
+    const { d, shots, deps } = made()
+    Object.assign(itemOf(d, shots[0]), { in_s: 2, out_s: 2 })
+    const { input } = await stitchInput(deps)
+    expect(input.clips![0]).toMatchObject({ inS: 2 })
+    expect('outS' in input.clips![0]).toBe(false)
+  })
+
+  it('keeps shot order whatever order the clips landed in: the cut is laid out in shot order', async () => {
+    const { d, deps } = made([2, 0, 1])
+    const byStart = cutOf(d).map((x) => x.follows?.shot_id)
+    const byShot = shotsOf(d).map((s) => s.id)
+    expect(byStart).toEqual(byShot)
+    const { input } = await stitchInput(deps)
+    expect(input.clips!.map((c) => c.asset.sha256)).toEqual([SHA('a'), SHA('b'), SHA('c')])
+  })
+})
+
+describe("the browser mock's stitch timeline (mockRender), like stitch.py", () => {
+  it('keeps every slot where the shots put it: a transition borrows the outgoing clip, not time', () => {
+    const slots = stitchTimeline([{ dur: 2.5 }, { dur: 3, transition: { kind: 'dissolve', s: 0.5 } }, { dur: 2, transition: { kind: 'dip' } }])
+    expect(slots).toEqual([
+      { start: 0, dur: 2.5, kind: 'cut', s: 0 },
+      { start: 2.5, dur: 3, kind: 'dissolve', s: 0.5 },
+      { start: 5.5, dur: 2, kind: 'dip', s: 0.5 },
+    ])
+    expect(stitchAt(slots, 1)).toEqual({ idx: 0 })
+    expect(stitchAt(slots, 2.75)).toEqual({ idx: 1, prev: 0, p: 0.5 })
+    expect(stitchAt(slots, 3.1)).toEqual({ idx: 1 })
+    expect(stitchAt(slots, 7.6)).toEqual({ idx: -1 }) // the end card
+  })
+
+  it("clamps like the stitch: a first clip's transition is a cut, and none is longer than its slot or 2 s", () => {
+    const slots = stitchTimeline([{ dur: 2, transition: { kind: 'dip' } }, { dur: 0.25, transition: { kind: 'dissolve', s: 1 } },
+      { dur: 4, transition: { kind: 'cut' } }, { dur: 9, transition: { kind: 'dip', s: 5 } }])
+    expect(slots.map((x) => [x.kind, x.s])).toEqual([['cut', 0], ['dissolve', 0.25], ['cut', 0], ['dip', 2]])
+  })
+})

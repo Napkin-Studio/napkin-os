@@ -1,25 +1,27 @@
-// Home (features/project-home.clan): where the app opens once signed in, and
-// where the Napkin mark in the bar comes back to. Make a new ad, open a file,
-// or pick up a saved project from its card. Everything here reads the project
-// index (projects/projectIndex.ts); no project is open while Home shows.
+// All projects (features/project-home.clan; owner 2026-11-18, features/production-new-ui.clan): the films in this
+// browser and on the server, in the new design language (the mock's Production home: the paper film cards with
+// their slate, the role spheres). Never shown on entry: entry is the blank canvas. It is reached from the film's
+// ▾ menu (All projects) and the medallion. Open a file, sort, search, open, rename, duplicate, export, delete.
+// Everything here reads the project index (projects/projectIndex.ts); no project is open while it shows.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useShell } from '../app/context'
 import { download } from '../export'
-import { BetaTag } from '../dogfood/Dogfood'
 import { errorShown, setScreen } from '../dogfood/recorder'
 import type { SavedProject } from '../contracts/types'
+import { TRASH_GO, TRASH_LABEL, trashHref, trashQuestion, TRASH_SUB } from '../projects/deleteWords'
 import { homeItems, itemId } from '../projects/homeList'
 import type { ProjectEntry } from '../projects/projectIndex'
 import type { ProjectSummary } from '../projects/summary'
-import { clock, displayName, edited, greeting, stageChip } from './homeWords'
+import { clock, edited, refusalNotice, stageChip } from './homeWords'
 import { AgentFigure } from './agents/AgentFigure'
-import { sayer, type CastKey } from './agents/cast'
+import { DataSharing } from './DataSharing'
+import { CAST, CREW_ORDER } from './agents/cast'
 import { useBlobUrl } from './hooks'
-import { StudioMark } from './Mark'
+import { Account } from './chrome/Bar'
+import { PlaceBar } from './shell/ShellBar'
+import { useLook } from './shell/lookContext'
 import './home.css'
-
-const CREW: CastKey[] = ['dex', 'ellis', 'jude']
 
 export function Home() {
   const shell = useShell()
@@ -27,6 +29,7 @@ export function Home() {
   const state = useSyncExternalStore(shell.subscribe, shell.get)
   const ui = useSyncExternalStore(app.subscribe, app.get)
   const projects = useSyncExternalStore(index.subscribe, index.all)
+  const look = useLook()
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -35,6 +38,13 @@ export function Home() {
   const [saved, setSaved] = useState<SavedProject[]>([])
   const [savedNote, setSavedNote] = useState<string | null>(null)
   const signedIn = ui.me?.participantId
+  // Films moved to the Trash from here: off the list at once, even from a server list asked before the move landed
+  // (UAT round 4 F13: the trashed film stayed as an "On the server · not in this browser yet" card until a reload).
+  const [trashed, setTrashed] = useState<ReadonlySet<string>>(() => new Set())
+  const [toast, setToast] = useState<{ id: string; name: string } | null>(null)
+  // Asked again when a film first saves to the server, so its card says so (UAT round 4 F17).
+  const [ask, setAsk] = useState(0)
+  const marks = projects.map((p) => (p.server ? p.id : '')).join(',')
   useEffect(() => {
     let live = true
     shell.serverProjects().then((rows) => {
@@ -45,11 +55,28 @@ export function Home() {
       if (live) setSavedNote('Could not list the projects you saved on the server. Those in this browser are below.')
     })
     return () => { live = false }
-  }, [shell, signedIn])
-  const all = homeItems(projects, saved)
-  const shown = homeItems(projects, saved, ui.homeSort, query)
-  const who = displayName(ui.me?.handle)
-  const first = all.length === 0
+  }, [shell, signedIn, marks, ask])
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 8000)
+    return () => clearTimeout(t)
+  }, [toast])
+  // A blank film that never got anything is not a project (owner 2026-11-18): drafts are not listed.
+  const own = projects.filter((p) => !p.draft && !trashed.has(p.id))
+  const there = saved.filter((r) => !trashed.has(r.id))
+  const all = homeItems(own, there)
+  const shown = homeItems(own, there, ui.homeSort, query)
+  const onTrashed = (id: string, name: string, restorable: boolean) => {
+    setTrashed((t) => new Set(t).add(id))
+    if (restorable) setToast({ id, name })
+  }
+  const undoTrash = (id: string) => {
+    setToast(null)
+    shell.restore(id).then(() => {
+      setTrashed((t) => { const n = new Set(t); n.delete(id); return n })
+      setAsk((n) => n + 1)
+    }, (e) => setError(`Could not restore it: ${e instanceof Error ? e.message : String(e)}`))
+  }
 
   const act = (what: string, p: Promise<unknown>) => {
     setError(null)
@@ -57,37 +84,31 @@ export function Home() {
   }
   useEffect(() => { setScreen({ stage: 'home' }) }, [])
   useEffect(() => { if (error) errorShown('home', error) }, [error])
-  const newProject = () => act('Could not start a new project', shell.newProject())
+  const newProject = () => act('Could not start a new film', shell.newProject())
   const chooseFile = () => fileRef.current?.click()
+  const agency = look.solo ? 'Napkin Studio' : look.name
 
   return (
-    <div className="home-view" data-dogfood-area="home">
+    <div className="home-view pp" data-dogfood-area="home">
       <HomeBar />
       <main className="hm-scroll">
-        <div className="hm-wrap">
-          <div className="hm-head">
+        <div className="pp-page">
+          <div className="pp-head">
             <div>
-              <div className="eyebrow">Home</div>
-              <h1>{first ? `Welcome, ${who}` : `${greeting()}, ${who}`}</h1>
-              <p>{first ? 'Your ads will live here.' : 'Start an ad from a picture or a script, or pick up where you left off.'}</p>
+              <div className="pp-eyebrow">{agency} · Production</div>
+              <h1 className="pp-title">All projects<span className="dot" /></h1>
+              <p className="pp-sub">Scripts, storyboards and films, made together on one canvas.</p>
             </div>
-            <span className="spacer" />
-            {!first && (
-              <label className="hm-search">
-                <span aria-hidden>⌕</span>
-                <input type="search" placeholder="Search projects" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search projects" />
-              </label>
-            )}
           </div>
 
           {state.notice && (
-            <div className="hm-notice" role="status">
-              <span>☁ {state.notice}. <span className="faint">Not you? Sign out and pick another name.</span></span>
-              <button className="btn xs ghost" onClick={() => shell.say(null)}>OK</button>
+            <div className="pp-notice" role="status">
+              <span>{refusalNotice(state.notice)} <span className="faint">It was left as it was.</span></span>
+              <button type="button" className="btn-rect" onClick={() => shell.say(null)}>OK</button>
             </div>
           )}
-          {error && <div className="hm-error" role="alert">{error} <button className="btn xs ghost" onClick={() => setError(null)}>OK</button></div>}
-          {savedNote && <div className="hm-notice" role="status"><span>{savedNote}</span></div>}
+          {error && <div className="pp-error" role="alert">{error} <button type="button" className="btn-rect" onClick={() => setError(null)}>OK</button></div>}
+          {savedNote && <div className="pp-notice" role="status"><span>{savedNote}</span></div>}
           {state.busy && <div className="hm-busy" role="status">{state.busy}</div>}
 
           <input ref={fileRef} type="file" accept=".zip,.clan,application/zip,application/vnd.clan+zip" hidden onChange={(e) => {
@@ -96,95 +117,96 @@ export function Home() {
             if (f) act('Could not open that file', shell.openFile(f, f.name))
           }} />
 
-          {first ? (
-            <div className="hm-empty">
-              <div className="hm-crew">{CREW.map((k) => <AgentFigure key={k} agent={k} size={46} />)}</div>
-              <span className="hm-sayer">{sayer('dex')}</span>
-              <b>Let's make your first ad</b>
-              <p>Draw or drop your characters and write a few lines of script. I plan the shots, draw the frames and make the clips; Ellis reads your notes back and Jude checks each result.</p>
-              <div className="row" style={{ marginTop: 6 }}>
-                <button className="btn primary" onClick={newProject} disabled={!!state.busy}>＋ New project</button>
-                <button className="btn" onClick={chooseFile} disabled={!!state.busy}>Open a file…</button>
+          <div className="pp-grid">
+            <div>
+              <div className="pp-sechead">
+                <h2>{all.length ? 'Pick one to open, or start a new film' : 'No films yet'}</h2>
+                <span className="pp-grow" />
+                {all.length > 0 && (
+                  <label className="pp-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
+                    <input type="search" placeholder="Search projects" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search projects" />
+                  </label>
+                )}
+                {all.length > 0 && (
+                  <div className="seg-row sm" role="tablist" aria-label="Order">
+                    {(['recent', 'name'] as const).map((s) => (
+                      <button key={s} type="button" role="tab" aria-selected={ui.homeSort === s} aria-pressed={ui.homeSort === s} onClick={() => app.update((a) => { a.homeSort = s })}>{s === 'recent' ? 'Recent' : 'Name'}</button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ) : (
-            <>
-              <div className="hm-starts">
-                <div className="hm-new" role="button" tabIndex={0} onClick={newProject} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), newProject())}>
-                  <span className="eyebrow">New project</span>
-                  <h2>Make a new ad</h2>
-                  <p>Draw or drop your characters on the canvas, write the script, and the crew plans the shots, draws the frames and makes the clips.</p>
-                  <button className="hm-go" tabIndex={-1} disabled={!!state.busy}>＋ New project</button>
-                  <div className="hm-say"><b>{sayer('dex')}</b>Bring a picture or a line of script. I'll take it from there.</div>
-                  <div className="hm-crewline" aria-hidden>{CREW.map((k) => <AgentFigure key={k} agent={k} size={48} decorative />)}</div>
-                </div>
-                <div className="hm-open" role="button" tabIndex={0} onClick={chooseFile} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), chooseFile())}>
-                  <span className="hm-ico" aria-hidden>⇪</span>
-                  <b>Open a file</b>
-                  <p>An Export zip or a .clan from this or another computer. It comes back as a project, with its pictures and canvas.</p>
-                  <button className="btn sm" tabIndex={-1} style={{ alignSelf: 'flex-start', marginTop: 4 }}>Choose a file…</button>
-                </div>
-              </div>
-
-              <div className="hm-sechead">
-                <h3>Your projects</h3><span className="faint">{all.length}</span>
-                <span className="spacer" />
-                <div className="hm-tabs" role="tablist" aria-label="Order">
-                  {(['recent', 'name'] as const).map((s) => (
-                    <button key={s} role="tab" aria-selected={ui.homeSort === s} className={ui.homeSort === s ? 'on' : ''} onClick={() => app.update((a) => { a.homeSort = s })}>{s === 'recent' ? 'Recent' : 'Name'}</button>
-                  ))}
-                </div>
-              </div>
-              {shown.length === 0 && <p className="faint">No project is called that.</p>}
-              <div className="hm-grid">
+              {all.length > 0 && shown.length === 0 && <p className="faint">No project is called that.</p>}
+              <div className="film-cards">
                 {shown.map((i) => i.kind === 'local' ? (
                   <ProjectCard key={i.p.id} p={i.p} server={i.server} newerThere={i.newerThere} menu={menuFor === i.p.id}
-                    onMenu={(open) => setMenuFor(open ? i.p.id : null)} onError={setError} />
+                    onMenu={(open) => setMenuFor(open ? i.p.id : null)} onError={setError}
+                    restorable={relay.kind === 'http' && !!signedIn} onTrashed={onTrashed} />
                 ) : (
                   <ServerCard key={itemId(i)} row={i.row} name={i.name} onError={setError} />
                 ))}
+                <div className="film-card new">
+                  <span className="lbl">New</span>
+                  <button type="button" className="side-link big" onClick={newProject} disabled={!!state.busy}>+ New film</button>
+                  <small className="muted">Opens a blank canvas</small>
+                  <span className="pp-grow" />
+                  <button type="button" className="side-link" onClick={chooseFile} disabled={!!state.busy}>Open a file…</button>
+                  <small className="faint">A Napkin file (.clan) or an export .zip</small>
+                </div>
               </div>
-            </>
-          )}
-
-          <div className="hm-foot">
-            {ui.savedAt && relay.kind === 'http' && <span className="hm-cloud">☁ Saved to the server · {clock(ui.savedAt)}</span>}
-            <span>{relay.kind === 'http'
-              ? 'Projects save to the server as you work. Sign in to Napkin Studio on any computer to open them there.'
-              : 'Projects live in this browser.'}</span>
+              {relay.kind === 'http' && <TrashLink clientId={shell.deps.clientId} />}
+              <p className="pp-foot">
+                {ui.savedAt && relay.kind === 'http' && <>Saved to the server · {clock(ui.savedAt)} · </>}
+                {all.length} {all.length === 1 ? 'film' : 'films'} · {relay.kind === 'http'
+                  ? 'Films save to the server as you work. Sign in to Napkin Studio on any computer to open them there.'
+                  : 'Films live in this browser.'}
+              </p>
+            </div>
+            <aside>
+              <h3 className="lbl pp-asidehead">The agents in Production</h3>
+              <div className="crewlist">
+                {CREW_ORDER.map((k) => (
+                  <div key={k} className="r"><AgentFigure agent={k} size={28} decorative /><span><b>{CAST[k].given}</b><small>{CAST[k].role}</small></span></div>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
       </main>
+      {toast && (
+        <div className="pp-toast" role="status" data-testid="toast">
+          <span>Moved to Trash</span>
+          <button type="button" onClick={() => undoTrash(toast.id)} aria-label={`Undo: bring “${toast.name}” back`}>Undo</button>
+        </div>
+      )}
     </div>
   )
 }
 
+/** Home's way to the Trash: the client's own page of it, or the agency's when no client opened this tool. */
+export function TrashLink({ clientId }: { clientId?: string }) {
+  return <p className="pp-trash"><a className="side-link" data-testid="home-trash" href={trashHref(clientId)}>Trash</a></p>
+}
+
+/** The bar where no film is open (ui/shell/ShellBar.tsx PlaceBar): no Beta tag, no thumbs (owner 2026-11-19). */
 function HomeBar() {
   const shell = useShell()
-  const { relay, app } = shell.deps
+  const { app } = shell.deps
   const ui = useSyncExternalStore(app.subscribe, app.get)
-  const [menu, setMenu] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const allow = ui.me?.allow
   return (
-    <header className="hm-bar">
-      <span className="hm-brand">
-        <StudioMark size={22} />
-        <span className="hm-studio">Napkin Studio</span>
-        <span className="hm-tool">Production</span>
-        <BetaTag screen={{ stage: 'home' }} />
-        {relay.kind === 'mock' && <span className="mockbadge" title="No relay set: every result is a mock">MOCK</span>}
-      </span>
-      <span />
-      <span className="hm-right">
-        <span className="topmenu">
-          <button className={`btn sm icon ${menu ? 'on' : ''}`} aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>
-          {menu && (
-            <span className="menu" role="menu">
-              <span className="handle menu-head">@{ui.me?.handle ?? 'guest'}</span>
-            </span>
-          )}
-        </span>
-      </span>
-    </header>
+    <>
+      <PlaceBar place="All projects"
+        account={(
+          // The account menu every bar has: who you are, the theme, Reduce motion, Sign out.
+          <Account>
+            {/* Who receives the agency's material (features/tenant-limits.clan). */}
+            {allow && <button type="button" className="pt-menurow" onClick={() => setSharing(true)}>Data sharing</button>}
+          </Account>
+        )} />
+      {sharing && allow && <DataSharing allow={allow} onClose={() => setSharing(false)} />}
+    </>
   )
 }
 
@@ -195,23 +217,21 @@ function ServerCard({ row, name, onError }: { row: SavedProject; name: string; o
     shell.openFromServer(row).catch((e) => onError(`Could not open “${name}”: ${e instanceof Error ? e.message : String(e)}`))
   }
   return (
-    <div className="hm-card" role="button" tabIndex={0} aria-label={`Open ${name} from the server`} onClick={open}
+    <div className="film-card" role="button" tabIndex={0} aria-label={`Open ${name} from the server`} onClick={open}
       onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && open()}>
-      <div className="hm-th">
-        <div className="hm-ph character" aria-hidden><span className="hm-ph-cloud">☁</span></div>
-        <span className="hm-badge">On the server</span>
-      </div>
-      <div className="hm-m">
-        <b title={name}>{name}</b>
-        <div className="row"><span className="hm-stage"><span className="dot" />Not in this browser yet</span></div>
-        <div className="row"><span>☁ saved {edited(row.savedAt).replace(/^edited /, '')}</span></div>
-      </div>
+      <span className="slate">On the server</span>
+      <div className="strip empty" aria-hidden><span>☁</span></div>
+      <div className="t"><b title={name}>{name}</b><div className="st">On the server · not in this browser yet</div></div>
+      <div className="kv"><span>Saved</span><span>{edited(row.savedAt).replace(/^edited /, '')}</span></div>
     </div>
   )
 }
 
-function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
+export function ProjectCard({ p, server, newerThere, menu, onMenu, onError, restorable = false, onTrashed }: {
   p: ProjectEntry; server?: SavedProject; newerThere: boolean; menu: boolean; onMenu: (open: boolean) => void; onError: (m: string) => void
+  /** The host keeps it in its Trash, so Undo can bring it back. */
+  restorable?: boolean
+  onTrashed?: (id: string, name: string, restorable: boolean) => void
 }) {
   const shell = useShell()
   const thumb = useBlobUrl(p.summary.thumb)
@@ -237,72 +257,64 @@ function ProjectCard({ p, server, newerThere, menu, onMenu, onError }: {
     shell.open(p.id).catch(fail('Could not open the project'))
   }
   const item = (label: string, fn: () => void, cls = '') => (
-    <button role="menuitem" className={cls} onClick={(e) => { e.stopPropagation(); onMenu(false); fn() }}>{label}</button>
+    <button type="button" role="menuitem" className={`pt-menurow ${cls}`} onClick={(e) => { e.stopPropagation(); onMenu(false); fn() }}>{label}</button>
   )
 
+  const chip = stageChip(p.summary)
+  const savedThere = server?.savedAt ?? p.server?.savedAt
   return (
-    <div ref={box} className={`hm-card ${menu ? 'menu-open' : ''}`} role="button" tabIndex={0} aria-label={`Open ${p.name}`} onClick={open}
+    <div ref={box} className={`film-card ${menu ? 'menu-open' : ''}`} role="button" tabIndex={0} aria-label={`Open ${p.name}`} onClick={open}
       onKeyDown={(e) => e.target === e.currentTarget && e.key === 'Enter' && open()}>
-      <div className="hm-th">
-        {thumb ? <img src={thumb} alt="" draggable={false} /> : <Placeholder stage={p.summary.stage} />}
-        {making && <span className="hm-badge live">Making</span>}
-        {p.summary.shots > 0 && <div className="hm-strip" aria-hidden>{Array.from({ length: Math.min(p.summary.shots, 6) }, (_, i) => <i key={i} />)}</div>}
-        <button className="hm-more" aria-label={`More for ${p.name}`} aria-haspopup="menu" aria-expanded={menu}
-          onClick={(e) => { e.stopPropagation(); onMenu(!menu) }}>⋯</button>
-      </div>
+      <span className="slate">{p.summary.shots > 0 ? `${p.summary.shots} ${p.summary.shots === 1 ? 'shot' : 'shots'}` : 'Film'}{p.summary.adSeconds !== null ? ` · ${p.summary.adSeconds} s` : ''}</span>
+      <button type="button" className="pp-more" aria-label={`More for ${p.name}`} aria-haspopup="menu" aria-expanded={menu}
+        onClick={(e) => { e.stopPropagation(); onMenu(!menu) }}>⋯</button>
+      <div className={`strip ${thumb ? '' : 'empty'}`} aria-hidden>{thumb ? <img src={thumb} alt="" draggable={false} /> : <Placeholder stage={p.summary.stage} />}</div>
       {menu && (
-        <div className="hm-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+        <div className="pt-menu nui-pop pp-menu" role="menu" onClick={(e) => e.stopPropagation()}>
           {item('Open', open)}
           {item('Rename', () => { setDraft(p.name); setRenaming(true) })}
           {item('Duplicate', () => void shell.duplicate(p.id).catch(fail('Could not duplicate it')))}
           {item('Export', () => void shell.exportProject(p.id).then(({ blob, name }) => download(blob, name)).catch(fail('Could not export it')))}
-          <hr />
-          {item('Delete…', () => setDeleting(true), 'del')}
+          <div className="pt-menusep" />
+          {item(TRASH_LABEL, () => setDeleting(true), 'del')}
         </div>
       )}
-      <div className="hm-m">
+      <div className="t">
         {renaming ? (
-          <form className="hm-rename" onClick={(e) => e.stopPropagation()} onSubmit={(e) => {
+          <form className="pp-rename" onClick={(e) => e.stopPropagation()} onSubmit={(e) => {
             e.preventDefault()
             setRenaming(false)
             void shell.rename(p.id, draft)
           }}>
-            <input className="input" value={draft} autoFocus aria-label="Project name" maxLength={80}
+            <input className="field" value={draft} autoFocus aria-label="Project name" maxLength={80}
               onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)} onBlur={() => setRenaming(false)} />
           </form>
         ) : <b title={p.name}>{p.name}</b>}
-        <div className="row"><StageChip s={p.summary} /><span>· {edited(p.updated)}</span></div>
-        {server && (
-          <div className="row">
-            <span title={`Saved to the server ${new Date(server.savedAt).toLocaleString()}`}>☁ saved {edited(server.savedAt).replace(/^edited /, '')}</span>
-            {newerThere && <span className="hm-newer" title="Saved from another browser since this one: when you save here you choose which to keep">· newer save from elsewhere</span>}
-          </div>
-        )}
-        {making && p.summary.making && <span className="hm-work"><AgentFigure agent="dex" state="working" size={19} decorative />{p.summary.making}</span>}
-        {deleting && (
-          <div className="hm-confirm" role="alertdialog" aria-label={`Delete ${p.name}?`} onClick={(e) => e.stopPropagation()}>
-            <span>Delete “{p.name}” from this browser? Its pictures and the server's copy are kept.</span>
-            <div className="row">
-              <span className="spacer" />
-              <button className="btn xs ghost" onClick={() => setDeleting(false)}>Keep</button>
-              <button className="btn xs danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).catch(fail('Could not delete it')) }}>Delete</button>
-            </div>
-          </div>
-        )}
+        <div className={`st ${making ? 'working' : chip.tone === 'warn' ? 'call' : ''}`}>{making ? (p.summary.making ?? 'Agents working') : chip.text}</div>
       </div>
+      <div className="kv">
+        <span>Updated</span><span>{edited(p.updated)}</span>
+        {/* The server's list, else this browser's own record of its last save there (UAT round 4 F17: a film the footer
+            said was saved to the server read "Kept · in this browser" because the list was asked before it saved). */}
+        {savedThere && <><span>Server</span><span title={`Saved to the server ${new Date(savedThere).toLocaleString()}`}>saved {edited(savedThere).replace(/^edited /, '')}{newerThere ? ' · a newer save from elsewhere' : ''}</span></>}
+        {!savedThere && restorable && <><span>Server</span><span>not saved there yet</span></>}
+        {!savedThere && !restorable && <><span>Kept</span><span>in this browser</span></>}
+      </div>
+      {deleting && (
+        <div className="pp-confirm" role="alertdialog" aria-label={trashQuestion(p.name)} onClick={(e) => e.stopPropagation()}>
+          <span><b>{trashQuestion(p.name)}</b> {TRASH_SUB}</span>
+          <div className="pp-acts">
+            <button type="button" className="btn-rect" onClick={() => setDeleting(false)}>Cancel</button>
+            <button type="button" className="btn-rect danger" autoFocus onClick={() => { setDeleting(false); shell.remove(p.id).then(() => onTrashed?.(p.id, p.name, restorable && !!savedThere), fail('Could not move it to the Trash')) }}>{TRASH_GO}</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function StageChip({ s }: { s: ProjectSummary }) {
-  const { tone, text } = stageChip(s)
-  return <span className={`hm-stage ${tone}`}><span className="dot" />{text}</span>
-}
-
-function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
-  return (
-    <div className={`hm-ph ${stage}`} aria-hidden>
-      <StudioMark size={28} />
-    </div>
-  )
+// The stage rides as data, never as a class: `.character` is the canvas page's own (position: absolute; inset: 0), and as a
+// class on this span it covered the whole card, Delete included (Tidewell UAT).
+export function Placeholder({ stage }: { stage: ProjectSummary['stage'] }) {
+  return <span className="pp-ph" data-stage={stage}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18M7 5l2 4M12 5l2 4M17 5l2 4" /></svg></span>
 }

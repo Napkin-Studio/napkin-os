@@ -297,7 +297,12 @@ module "services" {
   github_repository_ids    = var.github_repository_ids
   certificate_arn          = var.certificate_arn
   middleware_count         = var.middleware_count
-  middleware_env = {
+  # The Deck Maker engine as a second container of the middleware task (features/deck-cloud.clan): on here first;
+  # staging switches it on later, by the same module variable.
+  deck_enabled = var.deck_enabled
+  # The Territories store on EFS, so a deploy keeps each document's ledger, caps and stages (features/territories-cloud.clan).
+  territory_enabled = var.territory_enabled
+  middleware_env = merge({
     NAPKIN_RESEARCH_WEB = "tavily" # Tavily, Nova grounding when it fails (server/napkin/websearch.py)
     # Until the middleware takes its scope from the signed-in person's agency,
     # it works as our own test tenant, whose database exists (agencies.sandbox).
@@ -306,14 +311,35 @@ module "services" {
     # As the local stack runs it (napkin-os-wt/stack/start-integrate.sh)
     NAPKIN_BRIEF_JUDGE        = "jev"
     NAPKIN_BRIEF_RESEARCH_MAX = "6"
-  }
+    }, var.territory_images ? {
+    # Territories' pictures (features/territories-pictures-frames): Runway, from the middleware process, for the
+    # greenlit routes only, capped per document. Client material goes too (visuals.policy, 2026-11-26).
+    NAPKIN_TERRITORY_IMAGES         = "1"
+    NAPKIN_TERRITORY_IMAGES_MAX_USD = "2.00"
+  } : {})
   # The knowledge layers, in process (pg.py): the shared category database and each agency's own,
   # staging's while layers_from_staging is on (staging-layers.tf). Each secret is the JSON the database module wrote.
   middleware_secrets = merge({
     NAPKIN_TAVILY_API_KEY = aws_secretsmanager_secret.tavily.arn
     NAPKIN_JEV_API_KEY    = aws_secretsmanager_secret.jev.arn
-  }, local.layer_secrets)
+    }, local.layer_secrets,
+  var.territory_images ? { RUNWAYML_API_SECRET = data.aws_secretsmanager_secret.runway[0].arn } : {})
   extra_kms_key_arns = distinct([for s in data.aws_secretsmanager_secret.staging_db : s.kms_key_id])
+
+  # The Production Tool at /production, proxied to the hackathon stack's relay (features/uat-production-tool.clan).
+  production_relay_url        = var.production_relay_url
+  production_relay_secret_arn = var.production_relay_secret_arn
+  production_service_key_arn  = var.production_service_key_arn
+  production_upload_origin    = var.production_upload_origin
+  production_media_base       = var.production_media_base
+  # Daily AWS Backup of web's EFS, 35 days (features/production-in-library)
+  backup_enabled = true
+}
+
+# The Runway key Territories' pictures use: the relay's own secret, found by name (no second copy, no value to put).
+data "aws_secretsmanager_secret" "runway" {
+  count = var.territory_images ? 1 : 0
+  name  = var.runway_secret_name
 }
 
 # jev (TypeSafe), the checker research, asks and briefs rely on. Value put by hand:

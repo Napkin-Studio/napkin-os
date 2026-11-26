@@ -1,15 +1,47 @@
 # Production Tool relay
 
 Python 3.12 AWS Lambda behind a Function URL (CloudFront sends `/api/*` here).
-Implements `production-tool/contracts/relay-api.schema.json` (v1, locked).
+Implements `production-tool/contracts/relay-api.schema.json`, contract 3
+(features/contract-v3.clan).
+
+## Contract 3
+
+- A `JobRequest` or `JobAnswer` whose `contractVersion` is not "3" gets 400 `invalid_input`
+  "This build reads contract 3; reload the page." before anything else is read; nothing is written.
+- A job carries `tenantId`, `projectId`, `startedBy` (`human:<participantId>`), `crew` (dex plans,
+  wren (Fin) films, edie stitches, …), `node`, `nonce` and `purpose`. Any member of its agency may read
+  it, stop it and answer its question; its cost stays on its starter's budget.
+- Ops contract 3 names but the relay does not build yet (frame_edit, clip_patch, bridge, cutout,
+  transcribe, write, read, check, resize, cutdown, upscale) answer 422 `capability_missing`.
+- When the director asks (`question`), the job waits in `needs_input`: uncharged, holding no
+  in-flight place or provider slot, never timing out. `POST /jobs/{jobId}/answer` (`JobAnswer`)
+  records the first answer (`answeredBy`, `answer`) with the ledger's conditional write and re-runs
+  the director on the same job; a second answer is 409 `AnswerConflict` with the winner. Change is
+  a new job with `input.answer` and `parentIds: [jobId]`. Locally, words with `[ask]` make the
+  passthrough director ask (a Mock run of the whole flow). Skye (`write`, writer.py) never makes a
+  person answer a question that offers no choice: a nudge with one option ("Draft it") is answered
+  for them and she drafts (skye.v3); a real choice or a missing fact still waits in `needs_input`.
+- Stitch: a clip with `endCard` is left out of the stitch payload (stitch draws its own card).
+- Change this… (`remakeWith`, features/make-and-edit.clan): the parent job's held request (its full `_req`;
+  a patch's or feel's clip request is kept on it as `_clip`) is rebuilt with only the delta changed:
+  camera.movement and words as a clip (the parent's model and seed), a moment as a clip_patch snapped by
+  `time_rules.moment_window`, the feel as a clip_edit. `Job.remake` records the parent and the delta.
+- Render ad from a timeline (`input.timeline`): `timeline_layers.py` checks the plan and draws each text
+  and the person's end card into PNGs (typeset.py); stitch's timeline mode (`stitch/timeline.py`) renders it.
+- The library is shelved: `GET /library/{shelf}`, `GET|POST /library/{shelf}/{key}[/{ver}]`, at
+  `tenants/<tenantId>/library/<shelf>/…`; kinds key, brand_kit and format_pack.
+- The director runs its newest bundled prompt (`director/claude.py` PROMPT_VERSION, the newest `prompts/director.v*.md`)
+  unless config.json pins one (`director.promptVersion`, for a rollback); its role lines are written from
+  common.schema.json's `refRoleTable` at load. A prompt older than v6 in config.json fails the job loudly.
 
 | File | What |
 |---|---|
 | `service.py` | Routes, job ledger, quotas, fair-share queue, spend stop, the Runway floor, output copy |
-| `identity.py` | Who is asking: `who(headers) -> {"pid", "h", "t"}` or `None` (then 401) |
+| `identity.py` | Who is asking: `who(method, path_and_query, headers, body) -> {"pid", "h", "t", "name"?, "tenant"}` or `None` (then 401) |
+| `rank.py`, `time_rules.py` | Order keys and the note window, the twins of clan-store's (contracts/examples/ranks.json, windows.json) |
 | `store.py` | `MemoryStore` (tests, local) and `DynamoStore` (Lambda) |
 | `blobs.py` | `LocalBlobs` and `S3Blobs` (`in/`, `out/`, `ads/` keys) |
-| `runtime.py` | `config.json` cache (30 s, keeps the last good one), provider keys from Secrets Manager |
+| `runtime.py` | `config.json` cache (30 s, keeps the last good one), its defaults (`with_defaults`: routing, flags, from config.schema.json), provider keys from Secrets Manager |
 | `handler.py` | Lambda entry: HTTP and the one-minute EventBridge sweep |
 | `local.py` | The dev server |
 | `providers/base.py` | The adapter interface (harness lane writes `providers/<name>.py`) |
@@ -22,16 +54,18 @@ cd production-tool/relay
 uv run python -m local            # http://localhost:8787
 ```
 
-- Every request is the local person: `NAPKIN_LOCAL_USER="handle@agency"`, else
-  `local@napkin`. There is no sign-in; the startup line says who it runs as.
-  Each name is its own workspace: the same name on any browser finds its projects
-  and library.
+- Standalone (no `SERVICE_KEY`, no `TOKEN_SECRET`), every request is the local person:
+  `NAPKIN_LOCAL_USER="handle@agency"`, else `local@napkin`. The startup line says who it runs as.
+- Behind napkin-web (the full stack), set `SERVICE_KEY` to the same dev value (32 characters or more)
+  napkin-web holds: every request must then carry napkin-web's service credential
+  (`Authorization: Bearer` and a signed `X-Napkin-User`), as on AWS.
+- Tenants on: `NAPKIN_LOCAL_TENANTS="napkin,acme"`, else `napkin` and the local person's agency.
+  Everyone in an agency shares its projects and library; other agencies get "not on for your agency".
 - `--port` and `--data <dir>` (default `.local-data/`) choose where it listens and keeps files.
 - Routes answer both bare (`/jobs`) and under `/api` (`/api/jobs`). CORS is open.
 - `GET /me` says who the relay takes the caller to be (`relay-api.schema.json#/$defs/Me`):
   participant id, handle, team, workspace, today's remaining quotas and saved projects.
-- `POST /clan` takes the person's `.clan` bytes (`Content-Type: application/vnd.clan+zip`, `X-Clan-Reason: interval|accept|manual`, max 5 MiB). With `X-Project-Id: <project id>` it is a saved project (`projects.py`): kept under `clan/<participantId>/<projectId>/` (every save, plus `latest.clan`) and listed in `clan/<participantId>/projects.json`; it answers the save's ETag, and with `If-Match` a save someone else got in before is a 409. Without the header it keeps `clan/<participantId>/latest.clan` plus a timestamped copy and answers 204.
-- `GET /projects` lists the caller's saved projects; `GET /clan/<projectId>` answers the newest `.clan` with its `ETag`; `PUT`/`GET /clan/<projectId>/canvas` keep the canvas that goes with it.
+- `/clan*` and `/projects*` (any method) answer 410 `gone`, `{"error":{"code":"gone","message":"Reload the page: projects now live in the library."}}`, for one release (features/production-in-library.clan): documents live in the library of Napkin OS (napkin-web), not here. The code that stored them (`projects.py`, kept only for `GET /me`'s old `projects` count) is deleted in a follow-up. Old `tenants/<tenantId>/projects/` objects are left where they are: fresh start, nothing is imported into the library.
 - Pruning, once the data has been studied: `scripts/prune_workspaces.py` (dry run unless `--yes`; see its docstring).
 - Uploads: `putUrl` is `http://localhost:8787/_upload/in/sha256:…` (PUT the bytes).
   Files are served from `.local-data/` at `/in/`, `/out/` and `/ads/`.
@@ -42,20 +76,35 @@ uv run python -m local            # http://localhost:8787
 - Providers: whatever `providers/<name>.py` adapters exist. Without
   `providers/mock.py`, a stub stands in for mock: after 2 s it returns the
   job's first input asset as the output, labelled `kind: "mock"`.
-- Director: `director/claude.py` (`make()`) when it exists, otherwise the
-  passthrough (the shot list is split evenly from the script).
+- Director: `director/claude.py` (`make()`) when a model is configured, otherwise the
+  passthrough (the shot list is split evenly from the script). To run the real director, the
+  character cards and Skye on your own Claude Code login, start the relay under the one local
+  model backend: `../../scripts/model-local run uv run python -m local` (the anthropic wire with
+  `NAPKIN_MODEL_BASE_URL` on 127.0.0.1:8797, answered by `claude -p`; model.py refuses that URL
+  on Lambda). The config's Bedrock ids (`eu.anthropic.…`) are accepted there as they are.
 - Stitch runs in-process when `ffmpeg` is on the PATH (the end card's pieces are PNGs in
   `production-tool/stitch/endcard/`, so no font is needed).
 - Local mode accepts `http://localhost` asset URLs; AWS requires `https://`.
 
 ## Who is asking
 
-Every route but `GET /health` and `GET /config` takes its person from `identity.who(headers)`
-(features/drop-hackathon-extras.clan). It fails closed: with no identity source, every other
-route answers 401 `unauthorised`. Today the only source is the local person (`local.py`); on
-Lambda the relay refuses everyone until Napkin OS sign-in implements the seam. The person's
-team and handle make their workspace (`participant_id`); a blocked name or team/name is refused
-on every write ("This name has been blocked.").
+Every route but `GET /health` and `GET /config` takes its person from `identity.who(...)`
+(features/drop-hackathon-extras.clan, features/os-sign-in.clan). It fails closed: with no identity,
+every other route answers 401 `unauthorised`.
+
+- On Lambda the source is napkin-web's service credential
+  (`docs/contracts/production-tool-identity.md`): `Authorization: Bearer <SERVICE_KEY>` and an
+  `X-Napkin-User` claim signed with the same key (Secrets Manager, re-read at most every 5 minutes;
+  `new,old` during a rotation) and bound to the method, path, query and body. The only other
+  credential is the Deck's read-only assets pass (`X-Napkin-Identity`, `aud: "assets"`, `TOKEN_SECRET`).
+  Browsers never reach the relay: napkin-web calls it.
+- The person's agency is their tenant. Only agencies with `enabled: true` in the tenants table
+  (`TENANTS_TABLE`) may use the tool; anyone else gets 403 `flag_off`. Turn one on or off with
+  `scripts/tenants.py` (a person's credentials). Every job carries the internal `_tenant`, and
+  request logs carry `tenant`.
+- Projects and the library are the agency's (`tenants/<tenantId>/…`). Quotas and in-flight
+  limits stay per person (`participant_id` of agency and handle). A blocked name or team/name is
+  refused on every write ("This name has been blocked.").
 
 ## Tests
 

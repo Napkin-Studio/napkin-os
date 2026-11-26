@@ -6,7 +6,7 @@
 // §2, §10), rendered from data with no host: the greeting and the circles
 // with their needs badges and lines, Find a client, Archived and ⋯, Show all
 // past a page, Pick up (Everyone / Me) and Worth a look, the empty desk, the
-// add form, and the client page's groups, Needs you and Brand Clan card. What
+// add form, and the client page's groups, Needs you and Brand Clans. What
 // the old agency home and clients wheel said (counts, strips, state in words)
 // is checked where it lives now. Placeholder names.
 
@@ -38,6 +38,7 @@ const BRIEF = 'ie.napkin.brief-maker', RESEARCH = 'ie.napkin.campaign-research',
 const noop = () => {}
 const count = (html: string, re: RegExp) => (html.match(re) || []).length
 const LIVE = new Set(['brief', 'research', 'deck'])
+const LIVE_T = new Set(['brief', 'research', 'territories', 'prod', 'deck'])
 const data = (clients: ClientRecord[], items: LibraryItem[] = []): LandingData => ({
   clients, items, unassigned: items.filter(i => !i.client).length, person: { actor: 'human:sam@studio-a', id: 'sam@studio-a', name: 'Sam Test' }, apps: [BRIEF, RESEARCH, DECK],
 })
@@ -179,7 +180,8 @@ test('Archived · N is on the desk where the registry can be managed', () => {
 
 test('the add form: Client name and Sector, sixty characters each, Add client and Cancel', () => {
   const html = renderToStaticMarkup(createElement(AddForm, { onAdd: async () => null, onClose: noop }))
-  assert.match(html, /<label>Client name<input[^>]*placeholder="e\.g\. Kerrygold"/)
+  assert.match(html, /<label>Client name<input[^>]*placeholder="e\.g\. Larkfield Dairy"/)
+  assert.doesNotMatch(html, /Kerrygold|Tesco|Guinness|Aldi|Lidl/i, 'the example is an invented brand, never a real one')
   assert.match(html, /<label>Sector<input[^>]*placeholder="e\.g\. Dairy · Export"/)
   assert.equal(count(html, /maxLength="60"|maxlength="60"/gi), 2)
   assert.match(html, />Add client</)
@@ -241,12 +243,36 @@ test('the client page: since, the name, a line naming the work, Needs you, work 
   assert.match(html, /aria-label="New deck for Client A"/)
   assert.equal(count(html, /data-testid="work-item"/g), 5, 'each document in its group, the one that needs you also on top')
   // no wheel: each group's heading is its tool's door, one tab stop for them, named with its count
-  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 4\)"/)
+  assert.match(html, /aria-label="Brief Maker for Client A, 2 open, needs you \(1 of 5\)"/)
   assert.match(html, /data-testid="tool-brief"[^>]*tabindex="0"|tabindex="0"[^>]*data-testid="tool-brief"/)
   assert.match(html, /data-testid="tool-deck"[^>]*tabindex="-1"|tabindex="-1"[^>]*data-testid="tool-deck"/)
   assert.match(html, /role="group" aria-label="Tools for Client A"/)
-  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 4\)"/)
+  assert.match(html, /aria-label="Research Tool for Client A, none open, start one \(2 of 5\)"/)
   assert.match(html, /class="cp-st ">Draft</)
+})
+
+test('the client page lists Brief, Research, Territories, Production, Deck; Territories documents have their own section', () => {
+  const a = client(0)
+  const html = page([
+    item(a, BRIEF, { title: 'B' }), item(a, DECK, { title: 'D' }),
+    item(a, 'ie.napkin.territories', { title: 'Routes one' }), item(a, 'ie.napkin.territories', { title: 'Routes two' }),
+  ], { live: LIVE_T })
+  const ids = [...html.matchAll(/data-testid="group-(\w+)"/g)].map(m => m[1])
+  assert.deepEqual(ids, ['brief', 'research', 'territories', 'deck'], 'Production is not an installed app: its section appears with its documents, between Territories and Decks')
+  assert.doesNotMatch(html, /data-testid="group-other"/, 'Territories documents are not Other')
+  assert.match(html, /data-testid="group-territories".*?Routes one.*?Routes two.*?data-testid="group-deck"/s)
+  assert.match(html, /data-testid="tool-territories"[^>]*>.*?Territories<small>2<\/small>/s)
+  assert.match(html, /aria-label="Territories for Client A, 2 open \(3 of 5\)"/)
+})
+
+test('Territories with none: the group says Start from a brief, and its + starts from a brief, not an empty one', () => {
+  const html = page([], { live: LIVE_T })
+  assert.match(html, /data-testid="group-territories".*?Start from a brief\./s)
+  assert.match(html, /data-testid="new-territories"[^>]*title="Start from a brief"/)
+  assert.match(html, /aria-label="Territories for Client A, none open, start one \(3 of 5\)"/)
+  // its + says an exploration, not "a exploration" (acceptance A34)
+  assert.match(html, /data-testid="new-territories"[^>]*aria-label="Start an exploration for Client A from a brief"/)
+  assert.doesNotMatch(html, /\ba [aeiou]\w+ for Client A/i)
 })
 
 test('a new client: No work yet, Briefs and Research each say Nothing here yet', () => {
@@ -256,15 +282,15 @@ test('a new client: No work yet, Briefs and Research each say Nothing here yet',
   assert.match(html, /No work yet\. Start the first brief or research for Client A with its \+\./)
 })
 
-test('Brand Clan: nothing invented; Open kit kept, disabled, saying why; its document listed once there is one', () => {
+test('Brand Clans: the section and its + are there, nothing is invented, and a Brand Clan document is never listed as work', () => {
   const html = page([])
-  assert.match(html, /Brand Clan · not started/)
-  assert.match(html, /data-testid="brand-start"/)
-  assert.match(html, /aria-disabled="true"[^>]*aria-describedby="cp-clan-why"|aria-describedby="cp-clan-why"[^>]*data-testid="brand-start"/)
-  assert.match(html, /arrives with the Brand Clan app/)
+  assert.match(html, /aria-label="Brand Clans for Client A" data-testid="brand-clan"/)
+  assert.match(html, /data-testid="brand-new"/)
+  assert.match(html, /No Brand Clan yet<\/b> for Client A/)
+  assert.doesNotMatch(html, /not started|arrives with the Brand Clan app/)
   const withKit = page([item(client(0), 'ie.napkin.brand', { title: 'Client A brand' })])
-  assert.match(withKit, /data-testid="brand-clan".*Client A brand/s)
-  assert.doesNotMatch(withKit, /not started/)
+  assert.doesNotMatch(withKit, /Client A brand/, 'the Brand Clans are read from the host, not listed among the work')
+  assert.doesNotMatch(withKit, /data-testid="work-item"/)
 })
 
 test('Rename and Archive live in the ⋯ menu, only where the registry can be managed; Production says Soon', () => {
@@ -303,4 +329,10 @@ test('desk: its reads wait for the open document’s page', async () => {
   assert.match(rt, /onLoad=\{\(\) => \{[\s\S]*window\.dispatchEvent\(new Event\(DOC_LOADED\)\)/)
   assert.match(app, /const deskMayRead = !openDocPath \|\| docIn === openDocPath/)
   assert.match(app, /useDeskFacts\(landing\.data\?\.items \?\? null,\s*landing\.state === 'ready' && !\(device && !serverless\) && deskMayRead\)/)
+})
+
+test('with the Production Tool served the desk links to it, even with no clients; not otherwise', () => {
+  const on = desk(data([]), { productionHref: '/production/' })
+  assert.match(on, /<a class="side-link p33-prod" href="\/production\/"[^>]*data-testid="desk-production"/)
+  assert.doesNotMatch(desk(data([])), /desk-production/)
 })

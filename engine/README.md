@@ -23,7 +23,7 @@ no-loss guarantee on capture.
 git clone <repo> && cd briefing
 python3 -m venv .venv && source .venv/bin/activate   # or your env of choice (Python ≥3.11)
 pip install -e .            # core (.pdf/.docx ingestion)
-pip install -e ".[all]"     # + PyYAML, python-dotenv, PyMuPDF (vision), anthropic
+pip install -e ".[all]"     # + PyYAML, python-dotenv, pypdfium2 (vision), anthropic
 cp .env.example .env        # then add your keys (see table below)
 ```
 
@@ -36,7 +36,7 @@ cp .env.example .env        # then add your keys (see table below)
 napkin-brief samples/messy_brief_sample.txt                  # Loops 1–2 (works with zero keys)
 BRIEF_LOOPS37=1 napkin-brief <brief.pdf> --out outputs/x     # + RAG strategy (local index)
 RAG_STORE=qdrant BRIEF_LOOPS37=1 napkin-brief <brief.docx>   # + remote Qdrant RAG (shared DB)
-BRIEF_CLAUDE_TRANSPORT=cli napkin-brief <brief.docx>         # Claude calls on your Claude Code login, not the API key
+../scripts/model-local run napkin-brief <brief.docx>          # Claude calls on your Claude Code login, not an API key
 ```
 
 Outputs land in `outputs/<name>/`: `client_brief.md` (clean deliverable),
@@ -55,7 +55,7 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | File | What it owns |
 |---|---|
 | `parse_brief.py` | the pipeline: capture (Loop 1), golden extraction, the gates (`_judge_and_gate`), the zone-3 fill, Loops 3-7 retrieval and synthesis, provenance, `run()` and the CLI |
-| `brief_llm.py` | talking to models: providers, the Claude-only chain, model routes by job, the API and Claude Code transports, `_json_call`, the per-run call ledger, `NoClaudeAvailable` |
+| `brief_llm.py` | talking to models: providers, the Claude-only chain, model routes by job, the Messages API transport (`ANTHROPIC_BASE_URL` points it at the local model backend), `_json_call`, the per-run call ledger, `NoClaudeAvailable` |
 | `brief_ingest.py` | reading a brief: `.txt` / `.md` / `.docx` (document order, hyperlink addresses kept as `text <url>`, since research documents cite by link) / `.pdf` / `.eml` / images (vision model), and sentence segmentation |
 | `capture_fallback.py` | the Loop 1 capture when the model capture fails: the jev sentence sorter first (45% of the model's fields on 7 saved briefs), then a deterministic reader (sections from headings + per-field sentence cues, regex only, 37%); also the keyless demo's reader. The brief says which one ran |
 | `research_facts.py` | verified facts from the brand and category research (knowledge-layer fact rows): the current ones become cited `[F:id vN]` lines for every hero writer and count as allowed for the figure check; recorded in `meta.research_facts`; citations checked in the gate and moved into each field's `fact_refs`; never in the Loop 1 capture (ADR 0014) |
@@ -75,6 +75,9 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `NVIDIA_API_KEY` | NIM embeddings (RAG) + chat backstop |
 | `GROQ_API_KEY` / `CEREBRAS_API_KEY` | fast free-tier chat links (recommended) |
 | `QDRANT_CLUSTER_ENDPOINT` + `QDRANT_API_KEY` (+`QDRANT_COLLECTION`) | remote RAG (`RAG_STORE=qdrant`) |
+| `NAPKIN_DECK_IMAGES_MAX_USD` | the ceiling on one deck's picture spend over its whole life (default 2.50; the deck's own cap is lower or equal): the subject call, drafts, heroes, failures and unknowns all count (deck-image-gen) |
+| `NAPKIN_DECK_LEDGER` | the cross-cache spend ledger the Deck's picture step appends to, default `~/.napkin/deck-images/ledger.jsonl`, so the cap survives a deleted cache |
+| `RUNWAYML_API_SECRET` | the Runway key for pictures (Territory frames and the Deck); read from the environment only, at the first create, never from a file and never printed |
 | `BRIEF_MODEL_CHAIN` / `BRIEF_MODEL` | override the model fallback chain |
 | `BRIEF_ROUTES` | `1` (default): each call runs on its job's model (ADR 0011): extraction and insight/SMP drafts on Opus 4.6, RTB and desired response on Opus 5.5, insight/SMP judges and the territory map on Opus 5.5 (low effort), other judges, scorecard and how-to-win on Sonnet 5 (low effort), loop syntheses on Sonnet 5; a judge never runs on its writer's model. `0`, or setting `BRIEF_MODEL` / `BRIEF_MODEL_CHAIN`, restores one model for every call. The routes a run used are in `meta.model_routes` |
 | `BRIEF_ROUTE_<JOB>` | override one job's models, `model[,fallback]`; jobs: `EXTRACT`, `HERO`, `GROUNDED_WRITER`, `HERO_JUDGE`, `JUDGE`, `MECHANICAL`, `SYNTH` |
@@ -86,9 +89,11 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `BRIEF_JUDGE_FORMAT` | `full`: one `{"pass": bool, "why"}` object per test. `compact` (phase C change 2, tested 2026-09-29, off by default): each judge answers a draft with the numbers of the tests it passes and a reason of at most 12 words per failed test. It halved the hero judges' output (about 8 s and $0.02 a brief) but judged "ownable" harder. The reader accepts either shape, and a test with no clear verdict leaves the draft unjudged in both. |
 | `BRIEF_JUDGE_DUMP` | unset: a JSON-lines path; every judge call appends its inputs (field, drafts, context, territory) for the paired judge test `rag/judge_format_ab.py`. Diagnostic only. |
 | `BRIEF_ALLOW_NONCLAUDE` | unset (default): with Claude as the lead link the chain is Claude-only, and a run with no route to Claude stops with a clear error; `1`: non-Claude links stay as fallbacks (not for production; a brief they answer is named in `meta.fallback_links`). See [ADR 0006](rag/docs/adr/0006-cannot-fail-silently.md) |
-| `BRIEF_CLI_FALLBACK_TTL` | seconds an `auto` switch to the Claude Code login lasts before the API is tried again (600) |
+| `NAPKIN_MODEL_API` | unset (default): the Anthropic API key path; `bedrock`: `anthropic:` links go to Claude in Amazon Bedrock with the AWS credentials of the environment (the task role), no API key. Model ids map to inference profiles through `server/napkin/model_routes.py` (the middleware's table). Used by the deck engine in the cloud (features/deck-cloud.clan) |
+| `NAPKIN_MODEL_REGION` | the AWS region for `NAPKIN_MODEL_API=bedrock` (else the SDK's own region resolution) |
+| `NAPKIN_DECK_RENDER` | `web`: the deck build writes `deck.pptx` and `deck.html` and skips LibreOffice, pdftoppm, the PDF and the PDF-based visual QA (so no repair loop); the report says the PowerPoint was not visually checked. The PDF is printed from `deck.html` by napkin-web. Unset: the full render |
 | `ANTHROPIC_API_KEY` | Claude (the default lead link; also the independent critic) |
-| `BRIEF_CLAUDE_TRANSPORT` | how Claude links are sent: `api` (default, the key above), `cli` (your Claude Code login via `claude -p`, no API credit used), `auto` (the key, switching to the Claude Code login if it has no credit or is rejected). Also `serve.py --claude-code / --api / --auto` and `e2e_eval.py --transport`. See [ADR 0005](rag/docs/adr/0005-claude-transport.md) |
+| `ANTHROPIC_BASE_URL` | where Claude links are sent (the Anthropic SDK reads it). Unset: the API. Locally, the one local model backend on your Claude Code login: `scripts/model-local run …`, or source `scripts/model-local-env.sh` / `.fish`, sets it to `http://127.0.0.1:8797` with `ANTHROPIC_API_KEY=local` (`serve.py --claude-code` does this). The run records which in `meta.claude_transport` (`local` or `api`). Supersedes `BRIEF_CLAUDE_TRANSPORT` ([ADR 0005](rag/docs/adr/0005-claude-transport.md), features/model-mock.clan) |
 | `BRIEF_PROVIDER` | pin one provider as the lead link (the rest stay as fallback) |
 | `BRIEF_SMP_CANDIDATES` / `BRIEF_GOLDEN` | SMP draft count (default 4, one per angle seed, since 2026-09-29; was 6) / run the golden-brief pass |
 | (temperature) | not sent | Claude calls never send it: Opus 5.5 and Sonnet 5 reject it with a 400 (ADR 0011, 2026-09-29). Only the non-Claude fallback path sends 0.2. |
@@ -98,12 +103,13 @@ callers (`parse_brief._json_call`, `parse_brief.docx_text`, ...) keep working.
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` | optional further chat links, auto-detected |
 | `BRIEF_THINKING_HEADROOM` / `BRIEF_LINK_TIMEOUT` | extra output tokens for Claude models that think by default (2500) / per-request timeout for OpenAI-compatible links (90 s) |
 | `CRITIC_MODEL` / `CRITIC_SAMPLES` | the independent critic: model (default `claude-sonnet-5`) and samples per brief (default `1`); with more than one, each check keeps the majority verdict and an even split is REVIEW (`golden_critic.run_critic_sampled`). On mamaliga, three Fable 5.1 samples spread 2 health points against Sonnet's 5. `checkpoint_run.py --critic claude-fable-5-1x3` sets both for a run |
-| `BRIEF_CLI_TIMEOUT` / `BRIEF_CLI_EFFORT` | Claude Code login transport: seconds per `claude -p` call (240) / force one `--effort` for every thinking-model call (default: the job's effort, else the model's API default) |
 | `BRIEF_CORPUS` / `BRIEF_PACKS_LOCK` | pack sync: corpus root (default `engine/reference/rag` or `../reference/rag`) / path of `packs.lock` (default `engine/packs.lock`) |
 | `BRIEF_RESEARCH` / `RESEARCH_WEB` | agent server: `0` turns the research dossier off (default on; skipped when Loops 3–7 are on and the web track is off) / `claude` adds the web track through `claude -p` with WebSearch (default `off`) |
+| `NAPKIN_DECK_MAX_USD` | Deck Maker: the most one run may spend (default `2.00`). The server wraps every paid call in it, and the engine's repair loop reads it too, so a CLI run is capped as well (`deck/repair.py`) |
 | `NAPKIN_AGENT_PORT` | agent server port (8787, the same slot as the mock agent: run one) |
 | `LABELSET_BRIEF_MODEL` / `LABELSET_JUDGE_MODEL` | label tool (`rag/labelset.py`): brief-pair extraction model (`claude-haiku-4-5-20251001`) / pre-label judge (`claude-sonnet-5`) |
 | `RAG_EMBED_LOCAL_MODEL` / `RAG_EMBED_LOCAL_DEVICE` | the local copy of the query embedder used when the hosted one fails (`nvidia/Nemotron-3-Embed-1B-BF16`) / `mps` or `cpu` (default: mps when available) |
+| `NAPKIN_WEIGHTS_MANIFEST` | the weights manifest `rag/weights_guard.py` reads (default: the repo's `licences/weights.toml`); a local model whose id or weight-file hash is not listed there never loads |
 | `RAG_SPARSE_AVG_LEN` | Qdrant sparse vectors: the corpus's average document length for BM25 weighting (191.2) |
 | `TEMPLATE_STORE_URL` | connection string for `store_template.py`, the starting point for a new store backend |
 

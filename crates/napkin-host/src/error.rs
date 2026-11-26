@@ -15,6 +15,9 @@ use std::fmt;
 pub struct HostError {
     pub status: u16,
     pub message: String,
+    /// On a 409 from the version check: the version the document is at now,
+    /// so the writer can say which save won. `None` for every other error.
+    pub latest: Option<String>,
 }
 
 pub type HostResult<T> = Result<T, HostError>;
@@ -24,6 +27,7 @@ impl HostError {
         Self {
             status,
             message: message.into(),
+            latest: None,
         }
     }
     /// 400 — the request itself is malformed.
@@ -38,6 +42,14 @@ impl HostError {
     /// "no file open", or a write that would clobber an existing branch).
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(409, message)
+    }
+    /// 409 from the version check: the document is at `latest`, not at the
+    /// version the write started from.
+    pub fn conflict_with_latest(message: impl Into<String>, latest: impl Into<String>) -> Self {
+        Self {
+            latest: Some(latest.into()),
+            ..Self::new(409, message)
+        }
     }
     /// 500 — the host failed (storage, serialization).
     pub fn internal(message: impl Into<String>) -> Self {

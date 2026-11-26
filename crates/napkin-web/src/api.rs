@@ -79,9 +79,11 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/d/{doc}", get(open_document))
         .route("/t/{tenant}/d/{doc}/human-html", get(human_html))
         .route("/t/{tenant}/d/{doc}/entry/{which}", get(entry))
+        .route("/t/{tenant}/d/{doc}/data", get(document_data))
         .route("/t/{tenant}/d/{doc}/edit-mode", post(edit_mode))
         .route("/t/{tenant}/d/{doc}/preview-html", post(preview_html_gone))
         .route("/t/{tenant}/d/{doc}/patch", post(patch))
+        .route("/t/{tenant}/d/{doc}/title", post(set_title))
         .route("/t/{tenant}/d/{doc}/spinoff-targets", get(spinoff_targets))
         .route("/t/{tenant}/d/{doc}/spinoff", post(spinoff_document))
         .route("/t/{tenant}/d/{doc}/jobs/{job}/settle", post(settle_job))
@@ -93,6 +95,12 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/t/{tenant}/events", get(events))
         // The People page: who signs in, and their agencies (admin only; admin.rs)
         .merge(crate::admin::router())
+        // Production's calls to the relay, and its landing inbox (production.rs)
+        .merge(crate::production::api_router())
+        .merge(crate::blobs::router())
+        .merge(crate::brand_clan::router())
+        .merge(crate::save::router())
+        .merge(crate::trash::router())
 }
 
 /// An opened document, plus what the shell needs to render it: the capability
@@ -149,6 +157,12 @@ struct SessionInfo {
     /// whether this person has acknowledged that.
     dogfood: bool,
     consented: bool,
+    /// The Production Tool is at `/production` for this person: a relay is
+    /// configured and they are signed in (features/os-sign-in.clan).
+    production: bool,
+    /// Where Production's pictures live (`NAPKIN_PRODUCTION_MEDIA_BASE`), or
+    /// null. An address base only, never a secret (features/production-in-library).
+    media_base: Option<String>,
 }
 
 /// The shell's first call: who am I, and where do app frames live.
@@ -156,8 +170,10 @@ async fn session(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     user: Option<Extension<crate::auth::Account>>,
+    production: Option<Extension<crate::production::Enabled>>,
 ) -> Json<SessionInfo> {
     let user = user.map(|Extension(a)| a);
+    let production = production.is_some() && user.is_some();
     let dogfood = ctx.dogfood.is_some() && user.is_some();
     let consented = match (&ctx.dogfood, &user) {
         (Some(d), Some(a)) => d.consented(&a.username),
@@ -170,6 +186,8 @@ async fn session(
         user,
         dogfood,
         consented,
+        production,
+        media_base: ctx.media_base.clone(),
     })
 }
 
@@ -514,9 +532,10 @@ async fn upload_document(
     if let Err(e) = clan_sdk::ClanFile::from_bytes(body.to_vec()) {
         return Err(ApiError::new(400, format!("not a readable .clan: {e}")));
     }
-    // A fresh uuid: this is a new document, never a replacement.
-    ws.store
-        .apply(&Change::create(doc.clone(), body.to_vec()))?;
+    // A fresh uuid: this is a new document, never a replacement. A Production
+    // project also gets a new identity of its own (save.rs).
+    let bytes = crate::save::with_fresh_identity(&body);
+    ws.store.apply(&Change::create(doc.clone(), bytes))?;
     Ok(Json(open_view(&ctx, &tenant, &person, &ws, doc)?))
 }
 
@@ -533,7 +552,7 @@ async fn home(
 // ── One document ─────────────────────────────────────────────────────────────
 
 /// Resolve `{doc}` for this tenant, giving back its workspace and session.
-fn doc_session(
+pub(crate) fn doc_session(
     ctx: &AppCtx,
     tenant: &TenantId,
     doc: &str,
@@ -587,6 +606,43 @@ async fn entry(
     Ok(([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response())
 }
 
+/// One document's data as JSON, read as it stands now, with the hash the OS's
+/// links compare (`clan_sdk::Carried.data_sha256`: sha256 of its
+/// `shared/data.yaml`). Read-only. The Production Tool at `/production`, a
+/// page of this origin on the same session, reads a Brief Maker brief through
+/// it to freeze the brief's spine on a Brief node, and reads it again to say
+/// "Brief changed: update?" (features/brief-node.clan). The tool is not an OS
+/// document, so it keeps its own frozen copy rather than `data.upstream`.
+async fn document_data(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Path((_t, doc)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let ws = ctx.workspace(&tenant);
+    let (session, _) = crate::timing::phase("session", || ws.open(&DocId::new(doc.clone())))?;
+    let now = session
+        .document_now()
+        .ok_or_else(|| ApiError::new(404, "no such document"))?;
+    let yaml = session.entry_string("shared/data.yaml")?;
+    // The approvals count, as Brief Maker counts them for its "v2" (a person's
+    // version of the brief); `revision` is not that.
+    let approvals = session
+        .read(napkin_host::ops::decisions::decisions)
+        .map(|v| v.approvals())
+        .unwrap_or(0);
+    Ok(Json(serde_json::json!({
+        "document_id": now["id"],
+        "approvals": approvals,
+        "version": approvals.max(1),
+        "path": doc,
+        "app_id": session.app_id(),
+        "title": session.title()?,
+        "revision": now["revision"],
+        "data": now["data"],
+        "data_sha256": clan_sdk::hash::sha256_prefixed(yaml.as_bytes()),
+    })))
+}
+
 #[derive(Deserialize)]
 struct EditMode {
     active: bool,
@@ -634,6 +690,30 @@ async fn patch(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
+#[derive(Deserialize)]
+struct TitleBody {
+    title: String,
+}
+
+/// Rename a document the person may not have open (UAT round 4: Production's Home renamed a film only in the
+/// browser's own list, so the library and the Trash kept the old name). The same host operation as an open
+/// document's `/set-title`: the manifest's title, a decision recorded as the person. 400 for an empty title.
+async fn set_title(
+    State(ctx): Ctx,
+    Tenant(tenant): Tenant,
+    Acting(acting): Acting,
+    Path((_t, doc)): Path<(String, String)>,
+    Json(body): Json<TitleBody>,
+) -> ApiResult<Json<Value>> {
+    let title = body.title.trim();
+    if title.is_empty() {
+        return Err(ApiError::new(400, "missing title"));
+    }
+    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
+    let done = session.set_title_as(&acting, title)?;
+    Ok(Json(done.reply))
+}
+
 /// Poll one middleware job of a document the person may not have open, the
 /// way its page polls it (`clan://api-proxy`, task `job_status`), so a job
 /// that finished after the page closed still lands: the host applies its
@@ -646,6 +726,8 @@ async fn settle_job(
     State(ctx): Ctx,
     Tenant(tenant): Tenant,
     Extension(Person(person)): Extension<Person>,
+    account: Option<Extension<crate::auth::Account>>,
+    relay: Option<Extension<Arc<crate::production::Relay>>>,
     Path((_t, doc, job)): Path<(String, String, String)>,
 ) -> ApiResult<Response> {
     if job.is_empty()
@@ -657,6 +739,16 @@ async fn settle_job(
         return Err(ApiError::new(400, "not a job id"));
     }
     let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    // A Production document's jobs run in the relay, not the middleware: the host reads
+    // the job there and keeps a finished one's outcome in the document's inbox.
+    if session.app_id().as_deref() == Some(crate::save::PRODUCTION_APP_ID) {
+        return Ok(match (relay, account) {
+            (Some(Extension(relay)), Some(Extension(account))) => {
+                crate::production::settle(&ctx, &tenant, &relay, &account, &doc, &job).await
+            }
+            _ => ApiError::new(404, "Production is not set up on this server.").into_response(),
+        });
+    }
     let body = serde_json::json!({
         "request_kind": "middleware",
         "payload": { "task": "job_status", "input": { "job_id": job } },
@@ -691,13 +783,35 @@ async fn download(
     Tenant(tenant): Tenant,
     Path((_t, doc)): Path<(String, String)>,
 ) -> ApiResult<Response> {
-    let (_ws, session, _) = doc_session(&ctx, &tenant, &doc)?;
-    let bytes = session.raw_bytes()?;
+    let (ws, session, id) = doc_session(&ctx, &tenant, &doc)?;
+    // A Production project is handed out exactly as stored: the tool saves
+    // these bytes back, and the version it names is their hash.
+    let bytes = if session.app_id().as_deref() == Some(crate::save::PRODUCTION_APP_ID) {
+        session.stored_bytes()?
+    } else {
+        session.raw_bytes()?
+    };
     let name = format!(
         "{}.clan",
         filename_stem(&session.title().unwrap_or_default())
     );
-    Ok(attachment("application/zip", &name, bytes))
+    let mut resp = attachment("application/zip", &name, bytes);
+    // The version a save names in If-Match (contract 2.2): the stored one.
+    if let Some(v) = session.current_version() {
+        if let Ok(h) = header::HeaderValue::from_str(&format!("\"{v}\"")) {
+            resp.headers_mut().insert(header::ETAG, h);
+        }
+    }
+    if let Some(ms) = ws.tenant_store.as_ref().and_then(|t| t.saved_at_ms(&id)) {
+        if let Some(at) = chrono::DateTime::from_timestamp_millis(ms as i64) {
+            if let Ok(h) = header::HeaderValue::from_str(
+                &at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            ) {
+                resp.headers_mut().insert("x-saved-at", h);
+            }
+        }
+    }
+    Ok(resp)
 }
 
 #[derive(Deserialize)]
@@ -755,7 +869,12 @@ async fn export_download(
     Path((_t, handle)): Path<(String, String)>,
     Query(q): Query<ExportKind>,
 ) -> ApiResult<Response> {
-    let kind = if q.kind == "pdf" { "pdf" } else { "html" };
+    let kind = match q.kind.as_str() {
+        "pdf" => "pdf",
+        "pptx" => "pptx",
+        "json" => "json",
+        _ => "html",
+    };
     let (tmp, filename) = ctx
         .exports
         .take(&tenant, &handle, q.token.as_deref())
@@ -771,10 +890,11 @@ async fn export_download(
     let bytes = std::fs::read(&dest).map_err(|e| ApiError::new(500, e.to_string()))?;
     let _ = std::fs::remove_file(&dest);
 
-    let ct = if kind == "pdf" {
-        "application/pdf"
-    } else {
-        "text/html; charset=utf-8"
+    let ct = match kind {
+        "pdf" => "application/pdf",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "json" => "application/json",
+        _ => "text/html; charset=utf-8",
     };
     Ok(attachment(ct, &format!("{filename}.{kind}"), bytes))
 }

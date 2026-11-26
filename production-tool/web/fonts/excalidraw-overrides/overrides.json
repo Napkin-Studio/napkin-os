@@ -1,0 +1,28 @@
+{
+  "_comment": "Font files that replace Excalidraw 0.18.1's own in what we serve (owner's rulings, Shrey 2026-10-13; features/licence-gate.clan). excalidraw-fonts.ts copies Excalidraw's dist/prod/fonts into the build under excalidraw-assets/ and puts these in place of `target`, checking each sha256; licences/fonts.toml pins the same hashes and the licence gate checks both agree. The woff2 files are lossless container conversions (fontTools 4.60.1 + brotli 1.1.0, TTFont(...).flavor = 'woff2') of the upstream TTFs named in `source`.",
+  "excalidraw": "0.18.1",
+  "overrides": [
+    {
+      "family": "Liberation Sans",
+      "target": "fonts/Liberation/LiberationSans-Regular.woff2",
+      "file": "LiberationSans-Regular.woff2",
+      "sha256": "426f96004a277f70f696c8e16569022b4463ea3ecca89903bfd3c40e034b1879",
+      "replaces": "Liberation Sans 1.05 (Ascender, GPLv2 with a font exception)",
+      "version": "2.1.5",
+      "licence": "OFL-1.1",
+      "licence_file": "LICENSE-LiberationSans.txt",
+      "source": "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz (sha256 7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0), member liberation-fonts-ttf-2.1.5/LiberationSans-Regular.ttf (sha256 76d04c18ea243f426b7de1f3ad208e927008f961dc5945e5aad352d0dfde8ee8)"
+    },
+    {
+      "family": "Cascadia Code",
+      "target": "fonts/Cascadia/CascadiaCode-Regular.woff2",
+      "file": "CascadiaCode-Regular.woff2",
+      "sha256": "038e1f243f90420c02ad33d88782c2f7288bcc835e6ffc3c5726a80a9a1711d3",
+      "replaces": "Cascadia Code 2005.150 (a Windows-supplied build)",
+      "version": "2407.24",
+      "licence": "OFL-1.1",
+      "licence_file": "LICENSE-CascadiaCode.txt",
+      "source": "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip (sha256 e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474), member ttf/static/CascadiaCode-Regular.ttf (sha256 c33ef522cdfeff99907fb54f3e97152bb18bfb9b56ec2fef4d4ceec51c8974a4); LICENSE from the v2407.24 tag"
+    }
+  ]
+}

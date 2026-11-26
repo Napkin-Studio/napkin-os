@@ -3,31 +3,66 @@
 // from the project's own storage; closing saves them and stops the runner.
 // Jobs still being made when a project closes stay in its document and land
 // the next time it is opened (runner.resume, resumeChains): never in another.
+// A project made under another contract is refused (ProjectRefused): said,
+// never created over, its bytes left where they are.
 
-import type { Persistence } from '../../../clan-store/src'
+import { type Persistence, type Person } from '../../../clan-store/src'
 import type { ProjectHandle, Services } from '../app/context'
 import type { CanvasSnapshot } from '../canvas/controller'
-import type { Config } from '../contracts/types'
-import { ClanBackedStore } from '../doc/clan'
-import type { JobCtxOf } from '../doc/describe'
-import { openDocument } from '../doc/open'
+import type { Config, Me } from '../contracts/types'
+import { isRefused, openDocument } from '../doc/open'
 import { SnapshotStore, systemUpdate } from '../doc/store'
 import { initialProjectUi, type AppUi, type ProjectUi } from '../doc/ui'
-import { keepUndo } from '../doc/undo'
 import { JobRunner } from '../jobs/runner'
+import { CONFIGS } from '../contracts/load'
 import { resumeChains, wireJobs } from '../jobs/wire'
+import { ModelStore, type ModelStoreOptions } from '../model/store'
+import { pendingKey } from '../model/recover'
+import { browserClanStore } from '../store/browser'
 import type { Relay } from '../relay'
 import type { ProjectIndex } from './projectIndex'
 import type { ProjectServer } from './server'
-import { ServerCopy } from './serverCopy'
+import { readBase, ServerCopy } from './serverCopy'
 import { canvasKeyFor, clanDbFor, uiKeyFor, type ProjectStorage } from './storage'
-import { autoName, summarise } from './summary'
+import { UNTITLED, autoName, summarise } from './summary'
 import { ProjectUiStore } from './uiStore'
+import { FINAL_SAVE_MS, finalsKey, soonTimer } from './saveMoments'
 
-/** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory). */
-export type MakeClan = (persistence: Persistence, ctxOf: JobCtxOf) => ClanBackedStore
+/** How often the project is sent to the server when it changed. */
+export const MIRROR_EVERY_MS = 60_000
 
-export const browserClan: MakeClan = (persistence, ctxOf) => ClanBackedStore.inBrowser({ persistence, ctxOf })
+/** A .clan store over a project's own database (the browser's by default; tests pass the wasm and memory).
+ *  `person` is who writes (absent: only to read it); `undo` where its undo steps are kept. */
+export type MakeClan = (persistence: Persistence, opts?: { person?: Person; undo?: ModelStoreOptions['undo']; recover?: ModelStoreOptions['recover'] }) => ModelStore
+
+/** In the browser the .clan lives in the project's store Worker, the one writer (features/engine-store.clan). */
+export const browserClan: MakeClan = (persistence, opts = {}) => {
+  if (!persistence.idbName) throw new Error('the browser store needs an IndexedDB database')
+  return new ModelStore(browserClanStore(persistence.idbName, opts.person), { undo: opts.undo, recover: opts.recover })
+}
+
+/** Who writes when nobody is signed in (the in-browser mock, or a relay that cannot say who). */
+export const LOCAL_PERSON: Person = { id: 'p_local', handle: 'guest', tenant_id: '00000000-0000-0000-0000-000000000000' }
+
+/** Save moments (features/pt-film-r1.clan, B7): a landed generation is posted this long after it lands (several in a
+ *  row make one post), a project the server has never had this long after its first change. */
+export const LANDING_SAVE_MS = 10_000
+/** Closing a project waits this long, at most, for its last save to the library. */
+export const CLOSE_SAVE_WAIT_MS = 4_000
+export const CREATED_SAVE_MS = 1_500
+
+/** The person the app UI's `me` names, as the document records them. */
+export function personOf(me: Me | undefined): Person {
+  return me ? { id: me.participantId, handle: me.handle, tenant_id: me.tenant.id } : LOCAL_PERSON
+}
+
+/** A project this build cannot open (made under another contract): why, in words. Nothing was written. */
+export class ProjectRefused extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProjectRefused'
+  }
+}
 
 export interface SessionDeps {
   relay: Relay
@@ -38,6 +73,8 @@ export interface SessionDeps {
   makeClan: MakeClan
   /** The person's projects on the relay (projects/server.ts); absent on the in-browser mock. */
   server?: ProjectServer
+  /** The client a new project belongs to: the page was opened from that client's dial (/production/?client=). */
+  clientId?: string
   /** How long the summary waits after a change before it goes into the index. */
   summaryDelayMs?: number
 }
@@ -56,62 +93,113 @@ export function projectUiStore(storage: ProjectStorage, id: string): SnapshotSto
   return new SnapshotStore<ProjectUi>(initialProjectUi(), { load: () => storage.get<ProjectUi>(key), save: (v) => storage.put(key, v) })
 }
 
+/** Open project `id`. Throws ProjectRefused for a project made under another contract. */
 export async function openProjectSession(id: string, deps: SessionDeps): Promise<ProjectSession> {
   const { relay, app, index, storage } = deps
   const part = projectUiStore(storage, id)
   await part.restore((v) => ({ ...initialProjectUi(), ...v }))
   const ui = new ProjectUiStore(app, part)
 
-  const signedIn = app.get().me
-  const participant = signedIn ? { id: signedIn.participantId, handle: signedIn.handle } : { id: 'p_local', handle: 'guest' }
-  const ctxOf: JobCtxOf = (jobId) => ui.get().jobCtx[jobId]
-  const { doc, clan, storeNote } = await openDocument({
+  const person = personOf(app.get().me)
+  // Undo and redo steps live with the project's UI (LocalUndo, model/store.ts), so they survive a reload
+  // and stay its own.
+  const undo = { saved: ui.get().undo, save: (s: NonNullable<ProjectUi['undo']>) => ui.update((u) => { u.undo = s }) }
+  const opened = await openDocument({
     project: id,
-    participant,
-    ctxOf,
-    make: () => deps.makeClan(storage.clan(clanDbFor(id)), ctxOf),
+    person,
+    title: index.get(id)?.name,
+    undo,
+    make: () => deps.makeClan(storage.clan(clanDbFor(id)), { person, undo, recover: { key: pendingKey(id) } }),
     storage,
+    // A project the workspace holds (it has a server mark) is opened from there when this browser kept nothing.
+    ...(deps.server && index.get(id)?.server ? { stored: () => deps.server!.open(id).then((g) => g.bytes, () => null) } : {}),
   })
-  // A project made before signing in, or opened from a file: from now on it is the signed-in person's.
-  if (signedIn && doc.get().participant.id !== participant.id) {
-    await systemUpdate(doc, (d) => { d.participant = participant }, 'sign in')
+  if (isRefused(opened)) {
+    await ui.close()
+    throw new ProjectRefused(opened.refused)
   }
-  // Undo and redo steps live with the project's UI (doc/undo.ts), so they survive a reload and stay its own.
-  keepUndo(doc, { get: () => ui.get().undo ?? { done: [], undone: [] }, set: (s) => ui.update((u) => { u.undo = s }) })
+  const { doc, clan, storeNote } = opened
+  // An address a document carries (an older save: idb://, a CloudFront URL) is never read and is not kept: the next
+  // save is without it (S1-16). Quiet, no decision.
+  if (Object.values(doc.get().assets).some((a) => (a as { locations?: unknown }).locations !== undefined)) {
+    await systemUpdate(doc, (d) => { for (const a of Object.values(d.assets)) delete (a as { locations?: unknown }).locations }, 'drop stored addresses').catch((e) => console.warn('could not drop stored addresses', e))
+  }
 
   const runner = new JobRunner(relay, doc, ui)
-  runner.stage = () => doc.get().stage.current
+  // Never send past the relay's per-person limit: the rest wait here, "In the queue" (it answered 429 before).
+  runner.inFlightLimit = () => (deps.remoteConfig ?? CONFIGS.live).inFlightPerParticipant
   // Landed jobs, and the chains they move on: Draw the rest, Fix it in the shot, Update what follows.
-  const frameDeps = { relay, doc, ui, runner }
+  // The Film editor is the rooms (owner 2026-11-18): a new take lands beside the others, never in the cut.
+  // A landed generation is a save moment (B7, below): the server's copy is posted soon after.
+  let saveSoon: (ms: number) => void = () => {}
+  let saveTimer: ReturnType<typeof soonTimer> | null = null
+  const frameDeps = { relay, doc, ui, runner, rooms: () => true, landed: () => saveSoon(LANDING_SAVE_MS) }
   wireJobs(frameDeps)
   runner.resume()
   void resumeChains(frameDeps)
+  // What finished while the project was closed lands now, and when the host says another has (S3-3): its inbox,
+  // through the runner's own landing. Only the real relay has one. The host settles this document's unsettled jobs
+  // as it answers the read, so a film opened from a link lands them with no desk open since (owner, 2026-11-25).
+  void runner.landInbox()
+  const stopListening = relay.onSettled?.(id, () => { void runner.landInbox() })
 
   const canvasKey = canvasKeyFor(id)
 
-  // The project's copy on the relay (POST /clan with X-Project-Id), which the same name opens from
-  // any browser: every 5 minutes when something changed, on each lock, on export and on Save, each
-  // checked against the copy this browser last saved or opened (serverCopy.ts). Not on the mock.
+  // The project's copy in the library (PUT /api/t/{t}/d/{doc}/save), which any browser opens by its id: every minute
+  // when something changed, on each lock, on export and on Save, each checked against the version this tab's
+  // document is based on (serverCopy.ts). Not on the mock.
   let serverCopy: ServerCopy | null = null
   if (clan && relay.kind === 'http' && deps.server) {
     serverCopy = new ServerCopy({
-      id, server: deps.server, index, storage, canvasKey, doc: () => doc.get(),
+      id, server: deps.server, index, storage, doc: () => doc.get(),
       upload: (blob, mime) => relay.upload(blob, mime),
       onPosted: (at) => app.update((a) => { a.savedAt = at.toISOString() }),
+      base: await readBase(storage, index, id),
     })
-    clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: 300_000 })
+    // Every minute when something changed (clan-store startMirror posts nothing otherwise): every 5 minutes left
+    // "saved hh:mm" up to 5 minutes behind the work, and people pressed Ctrl+S to be sure (UAT round 1 IMG-22).
+    clan.clan.startMirror((bytes, meta) => serverCopy!.post(bytes, meta), { everyMs: MIRROR_EVERY_MS })
+    // A save the store could not make (this browser's copy, or the bytes for the server) shows as not saved, never
+    // an older "saved" (UAT acceptance A24 re-test: only the store Worker's console knew).
+    clan.clan.onSaveError((e, where) => serverCopy!.unsaved(e instanceof Error ? e.message : String(e), where))
+    // Save moments besides the minute tick, a lock and Save (UAT 2026-11-21, B7: a film started from "Continue in"
+    // was never on the server and closing the browser lost it): a project the server has never had, at its first
+    // change; and every landed generation. One post per moment, the last change in it included.
+    // One post per moment, at the earliest one asked for: a Final marked after a landing goes in seconds.
+    const mirror = clan.clan
+    saveTimer = soonTimer(() => { void mirror.mirrorNow('landing').catch(() => {}) })
+    saveSoon = saveTimer
   }
   const initialCanvas = (await storage.get<CanvasSnapshot>(canvasKey)) ?? null
 
   // Home's card follows the project: its stage, counts, picture and (until renamed) its name.
+  // The library's title follows the same name as Home's list, numbering included ("Copperell Refill 2" when another
+  // film named itself the same): UAT round 4, the trash dialog read the list and the Trash read the library.
+  let titled = index.serverName(id)
   const record = async (changed = true) => {
     const d = doc.get()
-    await index.touch(id, summarise(d, ui.get().jobCtx), { name: autoName(d), changed })
+    await index.touch(id, summarise(d, ui.get()), { name: autoName(d), changed })
+    const name = index.get(id)?.name?.trim()
+    if (clan && name && name !== UNTITLED && name !== titled && (titled !== undefined || index.get(id)?.server)) {
+      titled = name
+      await clan.setTitle(name).catch((e) => console.warn('could not name the library document', e))
+    }
   }
   let timer: ReturnType<typeof setTimeout> | null = null
   let changedSinceOpen = false
+  let savedOnce = false
+  let lastFinals = finalsKey(doc.get())
   const offChange = doc.onChange(() => {
     changedSinceOpen = true
+    // Something was added to a blank film: it is a project now (owner 2026-11-18).
+    if (index.get(id)?.draft) void index.keep(id)
+    // A project the server has never had (a new film, one started from "Continue in") goes there at once.
+    if (!index.get(id)?.server && !savedOnce) { savedOnce = true; saveSoon(CREATED_SAVE_MS) }
+    // A Final marked, unmarked or re-righted is what a deck made from this project reads: the library has it in
+    // seconds, so leaving at once (to the deck) still lets the deck offer "Update from Production" (UAT 5-tool run).
+    const finals = finalsKey(doc.get())
+    if (finals !== lastFinals) { lastFinals = finals; saveSoon(FINAL_SAVE_MS) }
+    serverCopy?.edited()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null
@@ -136,15 +224,26 @@ export async function openProjectSession(id: string, deps: SessionDeps): Promise
         console.warn('could not save before closing the project', e)
       }
     }
+    stopListening?.()
     runner.stop()
     offChange()
+    if (saveTimer?.cancel()) changedSinceOpen = true
     const pending = !!timer
     if (timer) clearTimeout(timer)
     timer = null
     await doc.flush()
     await record(pending)
     // The server's copy, once more, as it is now (when it changed, and only when it is being copied at all).
-    if (changedSinceOpen && clan && serverCopy) void clan.clan.mirrorNow('manual').catch(() => {})
+    // It is waited for (a few seconds at most): closing freed the host under a post still on its way, so a rename made
+    // just before leaving never reached the relay (Tidewell UAT: restored from Trash as "Untitled project").
+    if (changedSinceOpen && clan && serverCopy) {
+      let giveUp: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([
+        clan.clan.mirrorNow('manual').catch(() => {}),
+        new Promise<void>((r) => { giveUp = setTimeout(r, CLOSE_SAVE_WAIT_MS) }),
+      ])
+      clearTimeout(giveUp)
+    }
     if (clan) await clan.close()
     await ui.close()
   })())

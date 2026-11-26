@@ -1151,6 +1151,7 @@
   #structured .stab .lock.btn-primary:disabled{opacity:.5;cursor:not-allowed}
   #structured .stab .lock.btn-primary.locked{background:var(--nd-paper);color:var(--nd-ink);border-color:var(--nd-line)}
   .b-lockwhy{font-size:12px;color:var(--nd-muted);text-align:center}
+  .b-lockfirst{justify-self:center;margin-top:6px}
   .b-locked{font:600 13px var(--font-ui);color:var(--nd-ok)}
   #structured .b-lockacts{display:flex;flex-wrap:wrap;gap:6px}
   #structured .b-fold{display:block;padding:0;border:0}
@@ -1499,6 +1500,7 @@
 
   <!-- PHASE 1 — START: one sheet, one action (the mock's prompt: "Brief prompt: one sheet, one action") -->
   <section class="intake isheet" id="intake">
+    <div class="bcchip-wrap" id="bcChip" hidden data-bc-noun="brief" data-bc-drafted="objectives,audience,single_minded_proposition,background"></div>
     <h2 class="isec" id="introH">What’s the brief?</h2>
     <div class="paperc" id="paperc">
       <div class="fromup" id="fromUp" hidden></div>
@@ -1590,6 +1592,7 @@
           <div class="b-lockslot">
             <button class="lock btn-primary" id="lockBtn" data-act="lock">Lock the brief</button>
             <span class="b-lockwhy" id="lockWhy" hidden></span>
+            <button type="button" class="sp-btn b-lockfirst" id="lockFirst" hidden>Go to the first one</button>
             <span class="b-locked" id="lockedBadge" hidden>Locked for handoff</span>
             <div class="b-lockacts" id="lockActs" hidden>
               <button type="button" class="sp-btn b-crbtn" id="crOpen" aria-expanded="false" aria-controls="clientAnswer">Record the client’s answer</button>
@@ -1982,7 +1985,10 @@
     var fix=i>=0?a.slice(i+5).replace(ANSWER_TAIL,'').trim():'';
     var pre=(i>=0?a.slice(0,i):a.replace(ANSWER_TAIL,'')).trim();
     var bs=r?arr(r.because):[], rule=bs.filter(function(b){ return /^The rule: /.test(String(b.point||'')); })[0];
-    var reason=pre?pre.replace(/^[a-z_ ]+:\s*/,''):(bs[0]?String(bs[0].point||''):(d.rationale||''));
+    // "The Review agent suggests a change." says who, not what: the note's own words are the reason, so two notes on
+    // the same parts never read as one card twice (UAT round 4, The barrier).
+    if(/^The Review agent suggests a change\.?$/i.test(pre)) pre='';
+    var reason=pre?pre.replace(/^[a-z_ ]+:\s*/,''):(bs[0]?String(bs[0].point||''):(r&&r.decided?String(r.decided):(d.rationale||'')));
     // an older verdict's reason was cut mid-sentence: say so
     if(pre&&reason&&!/[.!?…)'"’”]$/.test(reason)) reason+='…';
     return {reason:reason, fix:fix, rule:rule?String(rule.point).replace(/^The rule: /,''):''};
@@ -2869,7 +2875,7 @@
   // ---------- the tool's header: where you are, and the three steps ----------
   // "CLIENT · PROJECT" over the tool's name; a brief nobody has named yet is a new brief.
   function renderHeadEye(){
-    var pn=String(get('project_name')||'').trim();
+    var pn=shortName(get('project_name'));
     $('headEye').textContent=[clientName(), pn||'New brief'].filter(Boolean).join(' · ');
   }
   // 1 Ask, 2 Agents, 3 Brief: the step you are on is current. Ask goes back from a crew that has
@@ -2957,7 +2963,10 @@
               if(!(res&&res.internal_path)){ failed.push(file.name+' ('+upWhy(res, file)+')'); return; }
               if(!READ_EXT.test(ext)) unread.push(file.name);
               var n=(data().reference_assets||[]).slice();n.push({type:type,name:name,path:res.internal_path,label:file.name,sha256:h,media_type:mediaTypeOf(file.name,file.type)});
-              return patch('reference_assets',n);
+              return Promise.resolve(patch('reference_assets',n)).then(function(){
+                // Tell the shell a file is stored (it asks, once, whether a brand bible is a Brand Clan): contract middleware-api.md, brand section.
+                try{ if(window.parent&&window.parent!==window) window.parent.postMessage({type:'clan:file-added',name:name,label:file.name},'*'); }catch(_){}
+              });
             });
         }); }).catch(function(e){ failed.push(file.name+' ('+(e&&e.message||e)+')'); });
     });},Promise.resolve()).then(function(){
@@ -3460,7 +3469,8 @@
     upMaterials().forEach(function(m){ if(names.indexOf(m.name)===-1) list.push(m); });
     return Promise.all(list.map(function(a){
       var hash=/^[0-9a-f]{64}$/.test(a.sha256||'')?Promise.resolve(a.sha256):fetch(assetUrl(a.name)).then(function(r){ return r.arrayBuffer(); }).then(sha256Hex);
-      return hash.then(function(h){ return {name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; });
+      // label: the file's own name ("copperell-brand-notes.txt"); name stays the stored one the host reads it by (A9)
+      return hash.then(function(h){ var o={name:a.name, sha256:h, media_type:mediaTypeOf(a.name, a.media_type), asset:a.path}; if(a.label&&a.label!==a.name) o.label=String(a.label); return o; });
     }));
   }
 
@@ -3653,7 +3663,7 @@
       +'<p class="note">'+esc(mats.length
         ?KNOW_+' reads the client’s own words that came with it ('+listWords(mats.map(function(m){ return m.label; }))+') and the ask that started the research. The research’s findings can back the insight and the proposition; they never stand in for what the client said.'
         :'None of the client’s files came with the research, so '+KNOW+' reads the ask that started it. Add the client’s words below if you have them.')+'</p>';
-    if(items.length) h+='<div class="locklist">'+lockListHtml(items, lockWhy(items.length)+'. Settle '+(items.length===1?'it':'them')+' now, or once the brief is drafted.')+'</div>';
+    if(items.length) h+='<div class="locklist">'+lockListHtml(items, lockWhy(items.length)+' Do it now, or once the brief is drafted.')+'</div>';
     var up=upNoteInner(); if(up) h+='<div class="upnote" role="status">'+up+'</div>';
     var open_=FU_OPEN===null?!!(items.length||up):FU_OPEN;
     el.innerHTML='<div id="fuCards"></div><div class="fu-body" id="fuBody"'+(open_?'':' hidden')+'>'
@@ -3808,6 +3818,13 @@
   var QA_RE=/^([\s\S]*?)\s+—\s+(Answer|Left open):\s*([\s\S]*)$/;
   function openQs(){ return arr(get('open_questions')).map(function(t,i){ var x=String(t==null?'':t), m=QA_RE.exec(x); return {i:i, raw:x, q:m?m[1]:x, kind:m?(m[2]==='Answer'?'answer':'left'):null, a:m?m[3]:''}; }).filter(function(o){ return o.q.trim(); }); }
   function openQsLeft(){ return openQs().filter(function(o){ return !o.kind; }); }
+  // Yes / No only fits a closed question ("Is the budget fixed?"). A what/which/when question, or one that offers
+  // alternatives ("…switch, or is the aim new buyers?"), is answered in words (UAT round 4: Yes/No on "What is the budget…?").
+  function closedQ(q){
+    var s=String(q||'').replace(/^\s*\[[^\]]*\]\s*/,'').split(' — ')[0].trim();
+    if(!/^(is|are|was|were|do|does|did|can|could|will|would|should|shall|has|have|had|may|must|might)\b/i.test(s)) return false;
+    return !/(,\s*or\b|\bor\s+(is|are|do|does|should|would|will|can|has|have)\b|\bwhich\b|\bwhat\b|\bwhen\b|\bwho\b|\bhow\b|\bwhere\b|\bwhy\b)/i.test(s);
+  }
   function answerQ(i, kind, words){
     var list=arr(get('open_questions')).slice(), cur=String(list[i]==null?'':list[i]), m=QA_RE.exec(cur), q=m?m[1]:cur;
     list[i]=q+' — '+(kind==='left'?'Left open':'Answer')+': '+String(words).trim();
@@ -3858,7 +3875,9 @@
   // The version and the date the sheet carries: the host's version, the latest change.
   // The version a person would say: one more than the times it was locked (the host's version is a hash).
   function docVersion(){ var n=arr((osView()||{}).decisions).filter(function(b){ return b&&b.decision&&b.decision.kind==='approve'&&arr(b.targets).some(function(t){ return t&&t.here!==false; }); }).length; return 'v'+Math.max(1,n); }
-  function lastWhen(){ var ds=CHAIN.decisions||[], t=ds.length?ds[ds.length-1].timestamp:''; var d=t?new Date(t):null; return d&&!isNaN(d)?d:null; }
+  // The latest write, whatever order the chain comes in (clan://chain is newest first, so its last item was the oldest:
+  // "v1 · edited 48m ago" right after a first draft finished, acceptance run A5).
+  function lastWhen(){ var best=null; arr(CHAIN.decisions).forEach(function(x){ var d=x&&x.timestamp?new Date(x.timestamp):null; if(d&&!isNaN(d)&&(!best||d>best)) best=d; }); return best; }
   function fmtDay(d){ return d?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):''; }
   function agoWords(d){ if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+'m ago'; var h=Math.round(m/60); if(h<24) return h+'h ago'; var dd=Math.round(h/24); return dd===1?'yesterday':dd+' days ago'; }
   function renderSheetHead(){
@@ -3876,7 +3895,7 @@
     try{ sideAgent(); }catch(e){}
     $('docIdent').innerHTML=IDENT;
     renderMadeFrom();
-    var pn=String(get('project_name')||'').trim(), dt=pn?'':derivedTitle();
+    var pn=shortName(get('project_name')), dt=pn?'':derivedTitle();
     $('hProj').textContent=pn||dt||'Untitled campaign';
     $('hProj').classList.toggle('derived', !pn&&!!dt);
     $('hDerived').hidden=!(!pn&&dt);
@@ -4072,7 +4091,7 @@
     var rationale=why||('Changed from "'+short(oldText)+'" to "'+short(newText)+'"');
     Promise.resolve(window.clan.patchData(f.key,value,{actor:'human',pinned:isLocked(f.key),action:'edit '+f.key,rationale:rationale})).then(function(res){
       if(res&&res.ok===false){ fail('That did not save. '+hostErrText(res)); return; }
-      if(f.key==='project_name'&&value) window.clan.setTitle(value);
+      if(f.key==='project_name'&&value&&shortName(value)) window.clan.setTitle(shortName(value));
       done();
     },function(){ fail('That did not go through. Check your connection and try again.'); });
     return true;
@@ -4205,7 +4224,7 @@
     }
     renderSideStop();
     // an agent waiting on the person while the sheet is open: the hidden Booth shows it, then comes in
-    boothAsk(phase==='doc'&&DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0);
+    boothAsk(boothWaiting());
     if(ROLES&&ROLES.sideSet){ ROLES.sideSet(el, job); return; }
     el.hidden=!job; el.innerHTML=job?'<span><b>'+esc(AGENT_NAME[job.role]||'An agent')+'</b> · '+esc(job.doing)+'</span>':'';
   }
@@ -4226,13 +4245,24 @@
     return '<div class="editrow"><button type="button" class="save act-fix" data-v="'+esc(d.id)+'"'+(FIX||DRAFT?' disabled':'')
       +' title="'+esc(STRAT_)+' looks up what it needs, '+esc(WRITER)+' rewrites the parts, '+esc(REV)+' checks them">Fix this with the agents</button></div>';
   }
+  // The middleware's refusals, in plain words (UAT 2026-11-22: a raw `invalid_input (400): input.verdict is not a bad
+  // verdict still standing...` stood in the booth). A note already answered is not a fault: the page re-reads the
+  // chain, the note goes away, and nothing is shown.
+  function plainFixError(msg){
+    var m=String(msg||'');
+    if(/not a bad verdict still standing|must be the id of a bad verdict/i.test(m)) return {text:'', stale:true};
+    if(/locked/i.test(m)) return {text:'The brief is locked. Reopen a part to have the agents fix it.', stale:false};
+    if(/^\s*invalid_input\b/i.test(m)||/\binput\.\w+/.test(m)) return {text:'The agents could not start that fix. Please try again.', stale:false};
+    return {text:m, stale:false};
+  }
   function fixParts(vid, resumeId){
     if(!window.clan||FIX) return;
     if(noMiddleware()){ setStatus(esc(NO_MW)); return; }
     var j=FIX={task:'fix_parts', verdict:vid, fields:{}, onUpdate:function(){ walk(); },
       onEnd:function(j){
         FIX=null; walk();
-        setStatus(j.error?esc(j.error):j.summary?esc(j.summary):'');
+        var pe=j.error?plainFixError(j.error):null;
+        setStatus(pe?esc(pe.text):j.summary?esc(j.summary):'');
         if(phase==='doc') renderStructured();
       }};
     setStatus(''); walk();
@@ -4629,8 +4659,8 @@
       if(F&&ref) F.open(ref, false, F.kindOf&&F.kindOf(ref)?'':b.getAttribute('data-note'));
     }); });
   }
-  // Why the lock waits, in plain words: "Settle 2 first".
-  function lockWhy(n){ return n>0?'Settle '+n+' first':'Everything listed has to be settled first'; }
+  // Why the lock waits, in plain words: what to do (answer or accept each flagged item, listed above the button).
+  function lockWhy(n){ return n>0?(n===1?'To lock the brief, answer or accept the flagged item above.':'To lock the brief, answer or accept each of the '+n+' flagged items above.'):'To lock the brief, answer or accept everything flagged.'; }
   // NEEDS YOU · n: the one settle-before-lock list. What the host's lock waits on, merged with the open
   // questions nobody has answered; each row names a part and its tag, never the part's words.
   function needsRows(){
@@ -4666,6 +4696,9 @@
     else if(L){ lb.hidden=false; lb.disabled=false; lb.textContent='Unlock'; lb.title='Unlock this brief'; }   // a brief locked before /approve
     else { lb.hidden=false; lb.disabled=wait; lb.textContent='Lock the brief'; lb.title=why; }
     var w=$('lockWhy'); if(w){ w.hidden=!(why&&!lb.hidden); w.textContent=why; }
+    // A way to the first flagged item: the same click as its row in the list above.
+    var lf=$('lockFirst'); if(lf){ lf.hidden=!(wait&&!busy&&n>0&&!lb.hidden); lf.onclick=function(){ var b=document.querySelector('#lockList .lkitem'); if(b) b.click(); }; }
+    boothAsk(boothWaiting());
     var lk=$('lockedBadge'); if(lk){ lk.hidden=!(A&&!again); lk.textContent='Locked for handoff'+(docVersion()?' · '+docVersion():''); }
     renderStateLine();
     var acts=$('lockActs'); if(acts) acts.hidden=!(A&&!again);
@@ -4720,7 +4753,18 @@
   // (untitled, the app's, the research's it was spun off from, or one set
   // here); a title the person gave it is left alone.
   var TITLE={done:'', last:''};
-  function workingTitle(){ return String(get('project_name')||'').trim()||derivedTitle(); }
+  // A short name: the words before any caveat, so "Proper Crunch (working name; needs a trademark check)" titles
+  // the document "Proper Crunch" (the engine writes the same rule: server/napkin/brief/fields.py short_name).
+  function shortName(v){
+    var s=String(v||'').split(/\s+/).join(' ').trim(), cut=new RegExp('\\s*[(\\[]|\\s+[-\u2013\u2014]\\s+|\\s*[:;]\\s+|,\\s+');
+    s=s.split(cut)[0].trim()||s.split('(').join('').split(')').join('').trim();
+    if(s.length>40){ var c=s.slice(0,40); s=c.indexOf(' ')>=0?c.slice(0,c.lastIndexOf(' ')):c; }
+    var EDGE=' \t"\'\u201c\u201d\u2018\u2019.,;:-';
+    while(s&&EDGE.indexOf(s.charAt(0))>=0) s=s.slice(1);
+    while(s&&EDGE.indexOf(s.charAt(s.length-1))>=0) s=s.slice(0,-1);
+    return s;
+  }
+  function workingTitle(){ return shortName(get('project_name'))||derivedTitle(); }
   function syncTitle(){
     var t=workingTitle(), m=(window.__CLAN__||{}).manifest||{};
     if(!t) return;
@@ -5210,7 +5254,7 @@
   function boothStep(s, ev, w){
     var n={open:s.open, ask:s.ask, later:0};
     if(ev.t==='ask'){ n.ask=Math.max(0, ev.n|0); if(!s.open&&n.ask>s.ask&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }
-    if(ev.t==='shell'){ n.open=ev.open!==false; return n; }
+    if(ev.t==='shell'){ n.open=ev.open!==false; if(!n.open&&s.ask>0&&boothCanHide(w)) n.later=BOOTH_ASK_MS; return n; }   // hidden on load with something waiting: it comes in
     if(ev.t==='show'||ev.t==='pick'||(ev.t==='arrive'&&s.ask>0)){ n.open=true; return n; }
     if(!boothCanHide(w)) return n;
     if(ev.t==='hide') n.open=false;
@@ -5228,7 +5272,7 @@
     if(e){
       var k=BOOTH.ask, ct=$('boothCt'); if(ct) ct.textContent=k?String(k):'';
       e.classList.toggle('has', !!k); e.tabIndex=hid?0:-1; e.setAttribute('aria-expanded', String(!hid));
-      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+(k===1?' question':' questions')+' waiting':''));
+      e.setAttribute('aria-label', 'Open the Booth'+(k?', '+k+' waiting for you':''));
     }
     if(instant){ void d.offsetWidth; requestAnimationFrame(function(){ requestAnimationFrame(function(){ d.classList.remove('booth-instant'); if(e) e.classList.remove('booth-instant'); }); }); }
   }
@@ -5252,6 +5296,18 @@
   // (Both may run before this block has: BOOTH is still undefined then, and the shell's word comes after.)
   function boothPick(){ if(BOOTH&&!BOOTH.open) boothSet({t:'pick'}); }
   function boothAsk(n){ if(BOOTH&&(n|0)!==BOOTH.ask) boothSet({t:'ask', n:n}); }
+  // What waits for the person in the Booth: an agent's question, or, on an unlocked brief, the Needs you items
+  // Lock waits on (1 when Lock is ready and nothing is). The Booth is the one place Lock lives, so a Booth the shell
+  // restored hidden shows the count on its edge and comes in (T10, 2026-11-24: hidden after a reload, the brief
+  // could not be locked and stayed a v1 draft). 0 when it is locked, drafting, or the lock is not known yet.
+  function boothWaiting(){
+    if(phase!=='doc') return 0;
+    var q=DRAFT&&DRAFT.inPlace&&DRAFT.state==='needs_input'?1:0;
+    if(q||draftLive()) return q;
+    var l=lockState(), A=approveLocked(), re=l?arr(l.reopened):[];
+    if(!l||(A&&!re.length)||get('locked')===true||!hasContent()) return 0;
+    var n=needsRows().length; return n>0?n:(l.can_lock?1:0);
+  }
   (function(){
     document.addEventListener('click', function(e){
       var t=e.target&&e.target.closest?e.target:null; if(!t) return;
@@ -5329,7 +5385,7 @@
       +((qs.length||notes)?'<div class="needs-box sp-call" data-needs="'+esc(f.key)+'"><div class="nb-h">Your call · '+nOpen+' open</div>'
         +qs.map(function(o){ return '<div class="nb-q'+(o.kind?' done':'')+'" data-q="'+o.i+'"><span class="nb-t">'+esc(o.q)+'</span>'
           +(o.kind?'<span class="nb-a'+(o.kind==='left'?' left':'')+'">'+esc((o.kind==='left'?'Left open: ':'')+o.a)+'</span>'
-            :(A&&!wr?'':'<span class="nb-act"><button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button><button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
+            :(A&&!wr?'':'<span class="nb-act">'+(closedQ(o.q)?'<button type="button" data-ans="'+o.i+'" data-v="Yes">Yes</button><button type="button" data-ans="'+o.i+'" data-v="No">No</button>':'')+'<button type="button" data-ans="'+o.i+'" data-v="?">Answer…</button><button type="button" class="nb-why" data-why="'+o.i+'">Leave it, say why</button></span>'))
           +'</div>'; }).join('')
         +'<div class="notes">'+notes+'</div></div>':'')
       +'<div class="sp-prov" id="spProv"></div>'
@@ -5560,11 +5616,13 @@
       // the mock's bar per step: the name alone at the ask; the name and the run's step while the crew work
       var j=DRAFT, at=j?Math.max(0,STAGES.indexOf(j.stage)):0;
       var mode=phase==='intake'?{kind:'mode', mode:'ask'}:{kind:'mode', mode:'working', label:!j?'Working':draftLive()?'Working · Step '+(at+1)+'/'+PLAN.length:j.state==='done'?'Done':'Stopped'};
-      return [mode, {kind:'status', label:'Draft', tone:null, locked:false}];
+      return [mode, {kind:'status', label:'Draft', tone:null, locked:false}, {kind:'run', working:draftLive()}];
     }
     var A=approveLocked(), l=lockState(), re=A&&arr(l&&l.reopened).length>0, L=docLocked();
-    var items=[{kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
-    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
+    // The sheet is on screen: the agents are idle unless Draft it again is running (the bar drops a stale "working" chip).
+    var items=[{kind:'run', working:draftLive()}, {kind:'button', id:'pdf', label:'Save · PDF', primary:true, title:'The page as it prints, on A4'}];
+    // stays: the first press only arms it, so a menu holding it stays open and shows 'Click again to redraft' (A7)
+    if(!A) items.push({kind:'button', id:'redraft', label:REDRAFT_ARMED?'Click again to redraft':'Draft it again', stays:!REDRAFT_ARMED, disabled:draftLive(), title:'Run every agent again on the same ask. Parts you wrote yourself are kept, with a suggestion beside them.'});
     if(A&&!re){ items.push({kind:'button', id:'unlock', label:'Unlock', title:'Unlock the brief to change it'}); items.push({kind:'button', id:'reopen', label:'Reopen a part…', title:'A part reopens for a change the client asked for'}); }
     items.push({kind:'button', id:'client', label:'Client copy · PDF', disabled:!L, title:L?'The locked sheet, every part in it, for the client':'Lock the brief first: the client sees the version you lock'});
     items.push({kind:'button', id:'html', label:'Save · HTML', title:'The sheet as a standalone web page'});
@@ -5686,7 +5744,7 @@
     var r=l.ref||{}; if(!r.asset) return '';
     if(!r.brand) return assetUrl(r.asset);
     var b=brandAttached(); if(!b||b.id!==r.brand) return '';
-    var lg=kitLogos(b.kit).filter(function(x){ return x.id===r.asset; })[0];
+    var lg=kitLogos(b.kit, b.id).filter(function(x){ return x.id===r.asset; })[0];
     return lg&&lg.asset?assetUrl(lg.asset):'';
   }
   // The Brand Clan attached to this brief, if one is: {id, kit} (feat/brand-clan's shape).
@@ -5696,17 +5754,18 @@
     var ids=Object.keys(u).filter(function(k){ return isBrandKit(u[k]); });
     return ids.length?{ id:ids[0], kit:u[ids[0]] }:null;
   }
-  function brandName(kit){ var n=kit&&kit.brand&&kit.brand.name; n=envVal(n); return typeof n==='string'&&n.trim()?n.trim():'attached'; }
-  // A kit's logos, each with the picture to print: a full-colour variant for light paper first, then any.
-  // -> [{id, name, asset}] with asset relative to this document's assets/.
-  function kitLogos(kit){
-    var m=kit&&kit.visual&&kit.visual.logos; if(!m||typeof m!=='object'||Array.isArray(m)) return [];
-    return Object.keys(m).map(function(id){
-      var lg=m[id]||{}, vs=items(lg.variants).filter(function(v){ return v&&typeof v.asset==='string'&&v.asset; });
-      var rank=function(v){ return (v.colour==='full'?0:2)+(v.on==='light'||v.on==='any'||!v.on?0:1); };
-      var v=vs.slice().sort(function(a,b){ return rank(a)-rank(b); })[0];
-      return {id:id, name:String(lg.name||id), asset:v?String(v.asset).replace(/^[.]?[/]?assets[/]/,''):''};
-    }).filter(function(x){ return x.asset&&/\.(svg|png|jpe?g|webp)$/i.test(x.asset)&&x.asset.indexOf('..')===-1; });
+  // A Brand Clan names its look at the top (name: "Original", app/templates/brand-clan/schema.json); a brand kit names its brand.
+  function brandName(kit){ var n=kit&&(typeof kit.name==='string'&&kit.name.trim()?kit.name:kit.brand&&kit.brand.name); n=envVal(n); return typeof n==='string'&&n.trim()?n.trim():'attached'; }
+  // A Brand Clan's logos, each with the picture to print: its list visual.logos[] of {id, label, variant, asset}
+  // (app/templates/brand-clan/schema.json), the one for light paper first, then any, then the mark, then the one
+  // for dark grounds. Attach copies each file to human/assets/brand/<brand id>/<file> here (napkin-host
+  // library::brand_logo_entry), so -> [{id, name, asset}] with asset relative to this document's assets/.
+  function kitLogos(kit, brandId){
+    var LOGO_RANK={light:0, other:1, mark:2, dark:3}, ls=kit&&kit.visual&&kit.visual.logos, bid=String(brandId||'');
+    if(!Array.isArray(ls)||!bid||/[/\\]|\.\./.test(bid)) return [];
+    return ls.filter(function(l){ return l&&typeof l==='object'&&typeof l.id==='string'&&l.id&&typeof l.asset==='string'&&/^human\/assets\/[^/\\]+\.(svg|png|jpe?g|webp)$/i.test(l.asset)&&l.asset.indexOf('..')===-1; })
+      .map(function(l, i){ return {i:i, r:LOGO_RANK.hasOwnProperty(l.variant)?LOGO_RANK[l.variant]:1, x:{id:l.id, name:String(l.label||l.id), asset:'brand/'+bid+'/'+l.asset.slice('human/assets/'.length)}}; })
+      .sort(function(a,b){ return a.r-b.r||a.i-b.i; }).map(function(o){ return o.x; });
   }
   function slotRank(s){ for(var i=0;i<LOGO_SLOTS.length;i++) if(LOGO_SLOTS[i][0]===s) return i; return LOGO_SLOTS.length; }
   function sheetLogos(){ return logosOf().map(function(l,i){ return {l:l, i:i}; }).sort(function(a,b){ return slotRank(a.l.slot)-slotRank(b.l.slot)||a.i-b.i; }).map(function(x){ return x.l; }); }
@@ -5748,7 +5807,7 @@
     sw.querySelectorAll('[data-c]').forEach(function(b){ b.addEventListener('click', function(){ var c=b.getAttribute('data-c'); patch('theme.accent', c||null, {actor:'human', pinned:false, action:'set the brief’s colour'}); }); });
     sw.querySelector('input').addEventListener('change', function(){ patch('theme.accent', this.value, {actor:'human', pinned:false, action:'set the brief’s colour'}); });
     renderLogos(); renderBrandLine();
-    var tab=$('sheetTab'), pn=String(get('project_name')||'').trim()||derivedTitle(); tab.textContent=pn;
+    var tab=$('sheetTab'), pn=shortName(get('project_name'))||derivedTitle(); tab.textContent=pn;
   }
   function renderLogos(){
     var ls=logosOf(), box=$('logoList'), sm=$('logoSum'), on=logosOnSheet();
@@ -5789,7 +5848,7 @@
   function kitOffers(){
     var b=brandAttached(); if(!b) return [];
     var on={}; logosOf().forEach(function(l){ if(l.ref.brand===b.id) on[l.ref.asset]=1; });
-    return kitLogos(b.kit).filter(function(x){ return !on[x.id]; }).map(function(x){ return {brandId:b.id, brand:brandName(b.kit), id:x.id, name:x.name, asset:x.asset}; });
+    return kitLogos(b.kit, b.id).filter(function(x){ return !on[x.id]; }).map(function(x){ return {brandId:b.id, brand:brandName(b.kit), id:x.id, name:x.name, asset:x.asset}; });
   }
   // The brand line: which Brand Clan the brief carries, and its version. Hidden with none attached.
   function renderBrandLine(){
@@ -5798,7 +5857,7 @@
     if(!b&&!cn){ el.hidden=true; el.innerHTML=''; return; }
     el.hidden=false;
     if(b){
-      var v=b.kit.kit&&b.kit.kit.version, n=kitLogos(b.kit).length;
+      var v=b.kit.kit&&b.kit.kit.version, n=kitLogos(b.kit, b.id).length;
       el.innerHTML='<span class="bl-dot" aria-hidden="true"></span><span><b>'+esc(brandName(b.kit))+'</b><small>Brand applied · Brand Clan'+(v!=null?' v'+esc(v):'')+' · '+(n?num(n)+' '+(n===1?'logo':'logos'):'no logos in its kit')+'</small></span>';
       return;
     }
@@ -5966,7 +6025,7 @@
   }
   // The context sheetDoc needs, from the brief as it is now. logos/boards are inlined by the caller.
   function sheetCtx(copy, extra){
-    var items=layoutItems(), pn=String(get('project_name')||'').trim(), l=layoutData(), cli=String(get('client')||'').trim();
+    var items=layoutItems(), pn=shortName(get('project_name')), l=layoutData(), cli=String(get('client')||'').trim();
     var ctx={css:pageCss(), get:get, fieldOf:fieldOf, styleOf:fieldStyle, conf:copy==='client'?[]:confList(), cells:layoutPack(items), items:items,
       client:cli, project:pn||derivedTitle()||'Untitled campaign', derived:!pn, ident:IDENT, copy:copy||'agency',
       look:{frame:l.frame, headings:l.headings, cover:l.cover, accent:get('theme.accent')}, marks:{}, sources:[], logos:[], boards:[],
@@ -6062,5 +6121,144 @@
   window.addEventListener('clan:colorscheme', function(){ setTimeout(askGlass, 0); });
 </script>
 <div class="walker" id="walker" role="status" aria-live="polite"></div>
+<!-- BRAND CLAN CHIP (Brand Clan phase 2, mocks c1 and c2; the same block in Brief Maker and Research).
+     Shows the Brand Clan this document holds, picks another (attach replaces), offers Update when the
+     Brand Clan published a newer version, and starts new work on the client's default. Reads only
+     /attach-targets; writes only /attach and /attach/update, as a person. -->
+<style>
+  .bcchip-wrap{position:relative;margin:0 0 10px}
+  .bcchip{display:inline-flex;align-items:center;gap:8px;font:600 12.5px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--text,var(--ink,#1a1a1a));background:var(--paper,var(--bg,#fff));border:1px solid var(--line,var(--border,#d8d3cc));border-radius:999px;padding:6px 12px 6px 10px;cursor:pointer}
+  .bcchip:disabled{cursor:default;opacity:.7}
+  .bcchip .dot{width:7px;height:7px;border-radius:50%;background:#2E9E6B;flex:none}
+  .bcchip .dot.off{background:var(--muted,#9a948c)}
+  .bcchip-upd{display:inline-flex;align-items:center;gap:6px;margin-left:8px;font:500 12px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--amber-ink,#7a5200);background:var(--amber-soft,#fff2d6);border:1px solid color-mix(in srgb,var(--amber-ink,#7a5200) 30%,transparent);border-radius:999px;padding:5px 6px 5px 10px}
+  .bcchip-upd button{font:600 12px/1 var(--font-ui,var(--font-sans,var(--sans,system-ui)));border:0;border-radius:999px;padding:4px 9px;background:var(--ag-act,#5865F2);color:var(--ag-act-ink,#fff);cursor:pointer}
+  .bcchip-upd button:disabled{opacity:.6;cursor:default}
+  .bcchip-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;width:250px;background:var(--paper,var(--bg,#fff));color:var(--text,var(--ink,#1a1a1a));border:1px solid var(--line,var(--border,#d8d3cc));border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:8px 0;font-family:var(--font-ui,var(--font-sans,var(--sans,system-ui)));text-align:left}
+  .bcchip-menu[hidden]{display:none}
+  .bcchip-menu h4{margin:6px 20px 8px;font-family:inherit;font-size:11.5px;font-weight:400;line-height:1.3;letter-spacing:0;text-transform:none;color:var(--muted,#6f6a63)}
+  .bcchip-menu button.it{display:grid;grid-template-columns:18px 1fr;gap:0 6px;width:100%;text-align:left;background:none;border:0;padding:8px 20px;cursor:pointer;color:inherit}
+  .bcchip-menu button.it:hover,.bcchip-menu button.it:focus-visible{background:color-mix(in srgb,var(--text,#1a1a1a) 6%,transparent)}
+  .bcchip-menu button.it:disabled{cursor:default}
+  .bcchip-menu .ck{color:var(--ag-act,#5865F2);font-weight:700}
+  .bcchip-menu .nm{font-family:inherit;font-size:13px;font-weight:600;line-height:1.3}
+  .bcchip-menu .nm small{font-weight:400;color:var(--muted,#6f6a63)}
+  .bcchip-menu .sub{grid-column:2;font-family:inherit;font-size:11px;font-weight:400;line-height:1.4;color:var(--muted,#6f6a63);margin-top:2px}
+  .bcchip-menu .foot{margin:6px 8px 0;padding:10px 12px 4px;border-top:1px solid var(--line,var(--border,#d8d3cc));font-family:inherit;font-size:11px;font-weight:400;line-height:1.6;letter-spacing:0;text-align:left;color:var(--muted,#6f6a63)}
+  .bcchip-menu .why{margin:4px 20px 6px;font-family:inherit;font-size:11px;font-weight:400;line-height:1.5;color:var(--amber-ink,#7a5200)}
+  .bcchip-say{display:block;font:400 11.5px/1.5 var(--font-ui,var(--font-sans,var(--sans,system-ui)));color:var(--muted,#6f6a63);margin-top:6px}
+  .bcchip-say.err{color:var(--red,#b3261e)}
+</style>
+<script>
+(function(){
+  var NOUN = (document.getElementById('bcChip') || { getAttribute: function(){ return null; } }).getAttribute('data-bc-noun') || 'document';
+  var SCHEME = navigator.userAgent.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost';
+  var BRAND = 'ie.napkin.brand';
+  var S = { list: [], open: false, busy: false, say: '', err: false, triedDefault: false };
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function day(iso){ var d = new Date(iso); return isNaN(d) ? '' : d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; }
+  function mount(){ return document.getElementById('bcChip'); }
+  function held(){ for (var i = 0; i < S.list.length; i++) if (S.list[i].attached) return S.list[i]; return null; }
+  function dflt(){ for (var i = 0; i < S.list.length; i++) if (S.list[i]['default']) return S.list[i]; return null; }
+  function client(){ var h = held() || dflt() || S.list[0]; return h && h.client ? h.client.name : ''; }
+  // A Brand Clan's title carries its client ("Tidewell · Zero"); the chip already says the client, so it shows the name.
+  function nameOf(t){ var c = t && t.client && t.client.name, n = (t && t.title) || ''; return c && n.indexOf(c + ' · ') === 0 ? n.slice(c.length + 3) : n; }
+  function newer(h){ return !!(h && h.version != null && h.held_version != null && h.version > h.held_version); }
+  function hostErr(r, fallback){ return (r && (r.error && (r.error.message || r.error)) || r && r.message) || fallback; }
+  function post(route, id){
+    return fetch(SCHEME + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ document_id: id }) })
+      .then(function(r){ return r.json().catch(function(){ return { error: 'the studio answered ' + r.status }; }).then(function(j){ if (!r.ok || (j && j.error)) throw new Error(hostErr(j, 'the studio answered ' + r.status)); return j; }); });
+  }
+  function load(){
+    if (typeof fetch !== 'function') return Promise.resolve();
+    return fetch(SCHEME + '/attach-targets').then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(all){ S.list = (Array.isArray(all) ? all : []).filter(function(t){ return t.app_id === BRAND; }); render(); startOnDefault(); })
+      .catch(function(){ S.list = []; render(); });
+  }
+  // New work starts on the client's default (BUILD-PLAN phase 2, C1): only while the document holds no
+  // Brand Clan and is still at its start (none of the keys the app names in data-bc-drafted holds anything yet), once per page.
+  function startOnDefault(){
+    var m = mount(); if (!m || S.triedDefault || held()) return;
+    var d = dflt(); if (!d || d.locked || !fresh(m)) return;
+    S.triedDefault = true; S.busy = true; S.say = 'Starting on ' + nameOf(d) + ', ' + client() + '’s default…'; S.err = false; render();
+    post('/attach', d.document_id).then(function(){ S.say = 'Started on ' + nameOf(d) + ', ' + client() + '’s default.'; S.err = false; S.busy = false; return load(); })
+      .catch(function(){ S.say = ''; /* a refusal leaves the chip offering it; nothing to say */ })
+      .then(function(){ S.busy = false; render(); });
+  }
+  function empty(v){ return v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length); }
+  function fresh(m){
+    var keys = (m.getAttribute('data-bc-drafted') || '').split(',').filter(Boolean); if (!keys.length) return false;
+    var d = (window.__CLAN__ && window.__CLAN__.data) || {};
+    return keys.every(function(k){ return empty(d[k]); });
+  }
+  function pick(id){
+    var h = held(); if (S.busy || (h && h.document_id === id)) { S.open = false; render(); return; }
+    var t = S.list.filter(function(x){ return x.document_id === id; })[0]; if (!t) return;
+    S.busy = true; S.open = false; S.say = 'Taking ' + nameOf(t) + '…'; S.err = false; render();
+    post('/attach', id).then(function(){ S.say = 'This ' + NOUN + ' now uses ' + nameOf(t) + (t.version ? ' v' + t.version : '') + '.'; })
+      .catch(function(e){ S.say = 'Could not take ' + nameOf(t) + ': ' + (e && e.message || e) + '. Nothing changed.'; S.err = true; })
+      .then(function(){ S.busy = false; return load(); });
+  }
+  function update(){
+    var h = held(); if (!newer(h) || S.busy) return;
+    S.busy = true; S.say = 'Taking ' + nameOf(h) + ' v' + h.version + '…'; S.err = false; render();
+    post('/attach/update', h.document_id).then(function(){ S.say = 'Updated to ' + nameOf(h) + ' v' + h.version + '.'; })
+      .catch(function(e){ S.say = 'Could not update: ' + (e && e.message || e) + '. This ' + NOUN + ' keeps v' + h.held_version + '.'; S.err = true; })
+      .then(function(){ S.busy = false; return load(); });
+  }
+  function render(){
+    var m = mount(); if (!m) return;
+    if (!S.list.length) { m.hidden = true; m.innerHTML = ''; return; }
+    m.hidden = false;
+    var h = held(), locked = S.list.some(function(t){ return t.locked; });
+    var label = (client() ? client() + ' · ' : '') + (h ? nameOf(h) : 'No Brand Clan');
+    var html = '<button type="button" class="bcchip" data-bc="toggle" aria-haspopup="true" aria-expanded="' + (S.open ? 'true' : 'false') + '"' + (S.busy ? ' disabled' : '') + '>' +
+      '<span class="dot' + (h ? '' : ' off') + '"></span><span>' + esc(label) + '</span><span aria-hidden="true">▾</span></button>';
+    if (newer(h)) html += '<span class="bcchip-upd" data-bc-upd>Brand Clan updated <button type="button" data-bc="update"' + (S.busy || locked ? ' disabled title="' + (locked ? 'The ' + NOUN + ' is locked' : 'Working') + '"' : '') + '>Update</button></span>';
+    html += '<div class="bcchip-menu" role="menu"' + (S.open ? '' : ' hidden') + '><h4>Brand Clan for this ' + esc(NOUN) + '</h4>';
+    if (locked) html += '<p class="why">The ' + esc(NOUN) + ' is locked, so its Brand Clan stays as it is.</p>';
+    S.list.forEach(function(t){
+      var on = h && h.document_id === t.document_id;
+      html += '<button type="button" class="it" role="menuitemradio" aria-checked="' + (on ? 'true' : 'false') + '" data-bc-pick="' + esc(t.document_id) + '"' + (locked ? ' disabled' : '') + '>' +
+        '<span class="ck">' + (on ? '✓' : '') + '</span><span class="nm">' + esc(nameOf(t)) + (t['default'] ? ' <small>· default</small>' : '') + '</span>' +
+        '<span class="sub">' + (t.version ? 'v' + t.version : 'v1') + (t.updated_at ? ' · Updated ' + esc(day(t.updated_at)) + '.' : '') + '</span></button>';
+    });
+    html += '<p class="foot">This ' + esc(NOUN) + ' keeps the version it has. A newer one shows an Update chip.</p></div>';
+    if (S.say) html += '<span class="bcchip-say' + (S.err ? ' err' : '') + '" role="status">' + esc(S.say) + '</span>';
+    m.innerHTML = html;
+  }
+  document.addEventListener('click', function(e){
+    var m = mount(); if (!m) return;
+    var t = e.target.closest ? e.target.closest('[data-bc],[data-bc-pick]') : null;
+    if (t && m.contains(t)) {
+      if (t.getAttribute('data-bc') === 'toggle') { S.open = !S.open; render(); }
+      else if (t.getAttribute('data-bc') === 'update') update();
+      else if (t.hasAttribute('data-bc-pick')) pick(t.getAttribute('data-bc-pick'));
+      return;
+    }
+    if (S.open && !m.contains(e.target)) { S.open = false; render(); }
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && S.open) { S.open = false; render(); } });
+  window.addEventListener('focus', function(){ if (!S.busy) load(); });
+  // A Brand Clan published while this document is open shows its Update chip without a reload (acceptance A33): the
+  // targets are read again every POLL_MS while the page is shown; the chip redraws only when what the host says changed.
+  var POLL_MS = 20000;
+  function poll(){
+    if (document.hidden || S.busy || S.open || typeof fetch !== 'function') return Promise.resolve(false);
+    return fetch(SCHEME + '/attach-targets').then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+      .then(function(all){
+        if (!Array.isArray(all)) return false;
+        var list = all.filter(function(t){ return t.app_id === BRAND; });
+        if (JSON.stringify(list) === JSON.stringify(S.list)) return false;
+        S.list = list; render(); return true;
+      });
+  }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) poll(); });
+  if (typeof setInterval === 'function') { var timer = setInterval(poll, POLL_MS); if (timer && timer.unref) timer.unref(); }
+  window.__bcChip = { reload: load, poll: poll, state: S };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load); else load();
+})();
+</script>
+
 </body>
 </html>

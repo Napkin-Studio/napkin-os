@@ -1,0 +1,5 @@
+{
+ "version": "director.v14",
+ "model": "eu.anthropic.claude-sonnet-5-5",
+ "reply": "{\"op\": \"clip\", \"question\": null, \"providerJob\": {\"provider\": \"runway\", \"model\": \"gemini_omni_flash_1.1\", \"prompt\": \"In a sunlit kitchen, @baby_front sits in a high chair and grabs a handful of cereal from the tray, then smiles. The baby is the same as in @baby_side. Medium shot, the camera holds still. No text, captions, subtitles or speech bubbles.\", \"refs\": [{\"sha256\": \"sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1\", \"name\": \"baby_front\", \"role\": \"character\"}, {\"sha256\": \"sha256:b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2\", \"name\": \"baby_side\", \"role\": \"character\"}], \"durationS\": 5, \"ratio\": \"1280:720\", \"audio\": false}, \"rationale\": \"No first frame and the model takes refs without one, so both baby views go as character refs and the shot is described in words with a static camera.\", \"confidence\": 0.9}"
+}

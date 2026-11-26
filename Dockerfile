@@ -31,6 +31,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY spec/ ./spec/
 COPY app/templates/ ./app/templates/
+# The Production Tool's document template (make_production reads it: its schema is the tool's own).
+COPY production-tool/clan-store/src/app-template.gen.ts ./production-tool/clan-store/src/app-template.gen.ts
 # The frame scripts napkin-host compiles in (crates/napkin-host/src/frame.rs).
 COPY app/src/shell/bridge/ ./app/src/shell/bridge/
 RUN sed -i 's#, "app/src-tauri"##' Cargo.toml
@@ -45,7 +47,17 @@ RUN mkdir -p /out/apps \
  && cargo run --release -p clan-sdk --example make_brief_maker \
  && mv brief-maker.app.clan /out/apps/ \
  && cargo run --release -p clan-sdk --example make_campaign_research -- \
-      /out/apps/campaign-research.app.clan /out/apps/campaign-research.example.clan
+      /out/apps/campaign-research.app.clan /out/apps/campaign-research.example.clan \
+ && cargo run --release -p clan-sdk --example make_deck_maker -- \
+      /out/apps/deck-maker.app.clan /out/apps/deck-maker.example.clan \
+ && cargo run --release -p clan-sdk --example make_territories -- \
+      /out/apps/territories.app.clan /out/apps/territories.example.clan \
+ && cargo run --release -p clan-sdk --example make_brand_clan -- \
+      /out/apps/brand-clan.app.clan /tmp/brand-clan.example.clan
+# Production takes part in spin-offs as an app (features/production-spinoff.clan); its documents
+# stay in the relay and open at /production.
+RUN cargo run --release -p clan-sdk --example make_production -- \
+      /out/apps/production.app.clan /tmp/production.example.clan
 
 # ── the shell ────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS shell
@@ -57,6 +69,43 @@ COPY app/ ./
 COPY --from=device /out/wasm/ ./src/wasm/
 COPY --from=device /out/apps/ ./public/apps/
 RUN npm run build
+
+# ── the Production Tool ──────────────────────────────────────────────────────
+# The tool's web app (production-tool/web), served by napkin-web at /production
+# and talking to the relay through napkin-web's own routes (/api/t/{tenant}/.../production)
+# (features/os-sign-in.clan). It bundles the CLAN store
+# (production-tool/clan-store), which loads napkin-wasm: the device stage's
+# bindings, so there is no second Rust build. It also bundles our own canvas
+# engine (production-tool/canvas-engine, features/canvas-engine.clan), which
+# the app's src/canvas/adapter/own imports. Each package resolves its own
+# node_modules, and the app imports ../contracts. canvas-engine installs its dev
+# dependencies too: the app's `tsc -b` type-checks the engine's sources, which
+# need its @types (rbush). The new UI's shared pieces come from the shell's own
+# source, imported as @napkin/app (features/production-new-ui.clan): the agency
+# looks, the new-UI tokens, the Deep O mark and the agent spheres; only those
+# folders are copied (../app from /src/production-tool). Only web/dist leaves this stage.
+FROM node:20-bookworm-slim AS production
+WORKDIR /src/production-tool
+COPY production-tool/clan-store/package.json production-tool/clan-store/package-lock.json ./clan-store/
+COPY production-tool/canvas-engine/package.json production-tool/canvas-engine/package-lock.json ./canvas-engine/
+COPY production-tool/web/package.json production-tool/web/package-lock.json ./web/
+RUN cd clan-store && npm ci --no-audit --no-fund \
+ && cd ../canvas-engine && npm ci --no-audit --no-fund \
+ && cd ../web && npm ci --no-audit --no-fund
+COPY production-tool/contracts/ ./contracts/
+COPY production-tool/clan-store/ ./clan-store/
+COPY production-tool/canvas-engine/ ./canvas-engine/
+COPY production-tool/web/ ./web/
+COPY app/src/shell/agency/ ../app/src/shell/agency/
+COPY app/src/shell/agents/ ../app/src/shell/agents/
+COPY app/src/shell/nui/tokens.css ../app/src/shell/nui/tokens.css
+COPY app/src/brand/ ../app/src/brand/
+COPY app/src/components/medallionMotion.ts app/src/components/medallionLook.ts ../app/src/components/
+COPY app/templates/shared/agent-sphere/ ../app/templates/shared/agent-sphere/
+COPY --from=device /out/wasm/ ./clan-store/src/wasm/
+WORKDIR /src/production-tool/web
+RUN VITE_RELAY_URL=/production/api VITE_BASE=/production/ npm run build:web \
+ && test -f dist/index.html
 
 # ── the host, and the seed template ──────────────────────────────────────────
 FROM rust:1-slim-bookworm AS host
@@ -94,6 +143,8 @@ COPY --from=host /src/target/release/napkin-web /usr/local/bin/napkin-web
 COPY --from=device /out/apps/ /srv/napkin/seed/
 RUN rm -f /srv/napkin/seed/*.example.clan
 COPY --from=shell /src/app/dist/ /srv/napkin/dist/
+# The Production Tool at /production (served only when NAPKIN_PRODUCTION_RELAY_URL is set).
+COPY --from=production /src/production-tool/web/dist/ /srv/napkin/production/
 # Who may sign in when NAPKIN_AUTH=roster (staging): user@agency<TAB>Display name.
 # UAT's deploy passes ROSTER=accounts.uat.tsv: the studio's accounts and a mock sign-in per agency.
 ARG ROSTER=accounts.napkin.tsv
@@ -102,6 +153,7 @@ COPY infra/scripts/${ROSTER} /srv/napkin/accounts.tsv
 ENV NAPKIN_WEB_DATA=/data \
     NAPKIN_WEB_STATIC=/srv/napkin/dist \
     NAPKIN_WEB_SEED=/srv/napkin/seed \
+    NAPKIN_PRODUCTION_STATIC=/srv/napkin/production \
     PORT=8080
 # Unprivileged, and the uid the EFS access point writes as (infra/modules/services).
 # With a home: tools it runs (Chromium, for PDF export) expect one, though the

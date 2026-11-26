@@ -1,0 +1,29 @@
+{
+ "version": "2026-11-19",
+ "about": "The one price table of every Napkin tool. USD per million tokens: [input, output, cache read]. A cache write is cache_write_mult x the input price (the 5-minute cache). A model id matches its longest listed prefix, after any wire or Bedrock prefix (bedrock/global.anthropic.claude-opus-5-5 is claude-opus-5-5). Read by engine/price_table.py (the Deck, Territory, the bench, the rag evals) and by server/napkin/runlog.py and server/tools/run_report.py. Anthropic list prices as of 3 Nov 2026 (Fable 5.1's cache read as read from the pricing page on 30 Sep 2026); a cache read is listed per model because it is not one share of the input price (0.05x on Opus 5.5 and Sonnet 5.5, 0.1x on the older models). Change a price here and only here.",
+ "cache_write_mult": 1.25,
+ "search": {"tavily_credit_usd": 0.008, "tavily_credits_per_search": 2, "note": "Tavily pay-as-you-go, an advanced search is 2 credits; server/napkin/websearch.py reports the same figure in a search's trace."},
+ "unlisted_as": "claude-opus-5-5",
+ "unlisted_note": "An id that matches nothing is priced as Opus 5.5, the dearest model the tools route to by default, so a new model never looks free. The run log instead reports an unlisted model as unpriced (None).",
+ "models": {
+  "claude-fable-5-2": [8.0, 40.0, 0.20],
+  "claude-mythos-5-2": [8.0, 40.0, 0.20],
+  "claude-fable-5-1": [10.0, 50.0, 0.25],
+  "claude-mythos-5-1": [10.0, 50.0, 0.25],
+  "claude-fable-5": [10.0, 50.0, 1.00],
+  "claude-opus-5-5": [4.0, 20.0, 0.20],
+  "claude-opus-5": [5.0, 25.0, 0.50],
+  "claude-opus-4-8": [5.0, 25.0, 0.50],
+  "claude-opus-4-7": [5.0, 25.0, 0.50],
+  "claude-opus-4-6": [5.0, 25.0, 0.50],
+  "claude-opus-4-5": [5.0, 25.0, 0.50],
+  "claude-opus-4-2": [15.0, 75.0, 1.50],
+  "claude-opus-4-1": [15.0, 75.0, 1.50],
+  "claude-opus-4-0": [15.0, 75.0, 1.50],
+  "claude-sonnet-5-5": [2.0, 10.0, 0.10],
+  "claude-sonnet-5": [2.0, 10.0, 0.20],
+  "claude-sonnet-4": [3.0, 15.0, 0.30],
+  "claude-haiku-5-5": [0.10, 0.50, 0.01],
+  "claude-haiku-4-5": [1.0, 5.0, 0.10]
+ }
+}

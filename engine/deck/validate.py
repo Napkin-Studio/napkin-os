@@ -27,6 +27,14 @@ repeated_line     the same sentence on two presented slides (say it once)
 copy_number       a number (10 or more) in creative copy that appears nowhere in the inputs: ad copy that
                   states a figure must take it from the brief or the research
 pitch_length      a pitch whose presented story (before the Appendix divider) runs past spec.PITCH_MAX
+pitch_cap         (spec.LOOK_V3) a pitch with no stated limit presenting more than spec.PITCH_CAP slides: ADVISORY, a warning
+                  that never withholds a deck (its target is spec.PITCH_TARGET). With spec.RECIPES on, the deck type's own
+                  cap and target (profiles.recipe: none for a tender), on spine types too
+role_words        (spec.LOOK_V3) a presented slide's on-screen words outside its role's window (spec.ROLE_WINDOWS: statement
+                  10-35, argument 35-70): ADVISORY, a warning; a shortfall is met by a brief field, never by a repeated line. With
+                  spec.RECIPES on, the type's own roles and windows (profiles.recipe density), and none at density detailed
+notes_unread      (spec.RECIPES, format full: 'Sent to be read') a slide whose points the plan moved to the speaker notes, which
+                  nobody reads in a leave-behind: ADVISORY, a warning naming the slide and the count
 rule_broken       a brief rule's quoted phrase ("Avoid 'the Netflix of X' framing") appears in the deck
 source_required   a block or item marked "sourced" that cites nothing: information from outside the
                   three inputs (the user's prompt, the research CLAN, the brief) never reaches a slide
@@ -35,6 +43,11 @@ internal_leak     agency-only text on screen: pipeline ids, stand-in or gate lab
                   labelled placeholders and blocks marked internal are expected and skipped)
 quote_source      a quote with no ref that is not marked creative (it would read as a verbatim)
 criteria_map      a scored criterion's concept no slide answers (assemble.criteria_coverage)
+image_unapproved  (client render) a picture not approved by the deck's approver for its own asset (an error: it is not drawn)
+image_flagged     a picture the guard flagged (a warning in a review, where it is drawn marked)
+image_rights      a reference-only picture in a slot (an error), or a territory run not checked against the brief (a warning)
+style_pack_held  the Style Pack could not be read (a StyleError): the build went on (a warning, a major issue: the pictures were not restyled)
+image_missing     an image slot that names an asset the deck does not hold (an error)
 imagery           an image prompt names a pack's banned imagery (method or location, in pictures too)
 copy_spec         execution copy over its channel's limit (spec.COPY_LIMITS: search characters,
                   poster words, audio words for the spot length)
@@ -97,7 +110,10 @@ def _texts(sl, with_notes=False, internal=True, human=True):
     """(text, basis) pairs of everything shown on a slide; ``internal``/``human``: include blocks
     marked internal, and labelled placeholders."""
     out = [(sl.get("title", ""), None)]
-    for bl in sl.get("blocks", []):
+    moved = spec.moved_map(sl) if sl.get("layout") else {}   # points the layout plan moved to the notes are not on the slide
+    for bi, bl in enumerate(sl.get("blocks", [])):
+        if bi in moved and moved[bi] is None:
+            continue
         if (bl.get("internal") and not internal) or (bl.get("human") and not human):
             continue
         basis = bl.get("basis")
@@ -106,7 +122,9 @@ def _texts(sl, with_notes=False, internal=True, human=True):
                 out.append((bl[k], basis))
         for ln in bl.get("lines", []) or []:
             out.append((ln, basis))
-        for it in bl.get("items", []) or []:
+        for ii, it in enumerate(bl.get("items", []) or []):
+            if ii in (moved.get(bi) or ()):
+                continue
             if isinstance(it, dict):
                 if it.get("human") and not human:
                     continue
@@ -119,6 +137,9 @@ def _texts(sl, with_notes=False, internal=True, human=True):
             out.append((s.get("label", ""), basis))
     if with_notes:
         out.append((sl.get("notes", ""), None))
+        if moved:   # the moved points are delivered in the notes: checks that read the notes read them
+            from . import layouts
+            out += [(t, None) for t, _ in layouts.moved_texts(sl)]
     return out
 
 
@@ -291,6 +312,7 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
         corpus |= numbers_in(d["text"])
     corpus |= numbers_in(f"{deck['meta'].get('client', '')} {deck['meta'].get('project', '')}")   # the prompt is an input
     corpus |= numbers_in(inp.prompt_text)
+    corpus |= numbers_in(getattr(inp, "carried_text", "") or "")   # routes carried from Territories are the person's input
     for qid in inp.answers:
         corpus |= numbers_in(answer_text(inp, qid))
     for sid in deck["order"]:
@@ -386,7 +408,10 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
                         if n >= 10 and n not in corpus and round(n / 100, 4) not in corpus:
                             add("copy_number", "warn", sid, f"'{n:g}' in copy \"{str(t)[:60]}\" is in none of the inputs")
         # image prompts: method and location are banned in pictures as in words
-        prompt = str((sl.get("visual") or {}).get("prompt") or "").lower()
+        prompt = " ".join([str((sl.get("visual") or {}).get("prompt") or "")] + [
+            str(v["image"].get(k) or "") for v in (sl.get("slots") or {}).values() if isinstance(v, dict) and v.get("kind") == "image"
+            for k in ("prompt", "subject")]).lower().strip()   # an image slot's prompt and subject are read as well as slide.visual
+        _images(sl, sid, deck, audience, add)
         for p in packs:
             for bi in p.get("banned_imagery", []):
                 if re.search(rf"\b{re.escape(bi['text'])}\b", prompt):
@@ -403,6 +428,10 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
             for ww in p.get("watch_words", []):
                 if ww["text"] in alltext and sl["type"] != "guardrails":
                     add("watch_word", "warn", sid, f"'{ww['text']}': {ww['why']} ({p['id']})")
+    sp = (deck["meta"].get("preferences") or {}).get("style_pack") or {}
+    mh = deck["meta"].get("style_hold") or {}   # the one hold: set by a failed pack load or by the frames plan; preferences.style_pack.hold mirrors it
+    if sp.get("hold") or mh:
+        add("style_pack_held", "warn", None, f"the Style Pack could not be read ({str(sp.get('hold_reason') or mh.get('reason', ''))[:120]}): the build went on and the pictures keep the style they were made in")
     # requirements (a rule is kept across the deck, not answered by a slide: its quoted phrase must not appear)
     mapped = {r for sl in deck["slides"].values() for r in sl.get("requirements", [])}
     deck_text = " ".join(str(t) for x in deck["order"] if deck["slides"][x]["type"] != "requirement_trace"   # the trace quotes the rules
@@ -421,6 +450,37 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
     if deck["meta"].get("format", "pitch") == "pitch" and len(story) > length.get("max_slides", spec.PITCH_MAX):
         what = f"a {profile['label'].lower() if profile else 'deck'} presents at most {length['max_slides']} ({length['source']})" if length else f"an agency pitch presents at most {spec.PITCH_MAX}"
         add("pitch_length", "warn", None, f"{len(story)} presented slides; {what} (move the rest behind the Appendix divider)")
+    if profiles.recipes_on():   # deck-types: the type's own target and cap (a spine type records its profile length: only a stated one silences the cap)
+        rl = profiles.recipe(profile, deck["meta"].get("format", "pitch"))["length"]
+        stated = bool(length) and length.get("source") != "profile"
+        if deck["meta"].get("format", "pitch") == "pitch" and not stated and rl["cap"] is not None and len(story) > rl["cap"]:   # ADVISORY only
+            aim = f"aims at {rl['target']} and " if rl["target"] is not None else ""
+            add("pitch_cap", "warn", None, f"{len(story)} presented slides; a {profile['label'].lower() if profile else 'pitch'} {aim}is usually at most {rl['cap']} "
+                f"(advisory: asked-for routes and executions may rightly run longer; nothing is withheld for length)")
+    elif spec.LOOK_V3 and deck["meta"].get("format", "pitch") == "pitch" and not length and len(story) > spec.PITCH_CAP:   # deck-look: ADVISORY only
+        add("pitch_cap", "warn", None, f"{len(story)} presented slides; a pitch aims at {spec.PITCH_TARGET} and is usually at most {spec.PITCH_CAP} "
+            f"(advisory: asked-for routes and executions may rightly run longer; nothing is withheld for length)")
+    fmt_ = deck["meta"].get("format", "pitch")
+    rd = profiles.recipe(profile, fmt_)["density"] if profiles.recipes_on() else None   # deck-types slice 4: the type's roles and windows
+    lvl = ((deck["meta"].get("preferences") or {}).get("density") or {}).get("level") if rd else None
+    lvl = lvl or (rd or {}).get("level")
+    if spec.LOOK_V3 and not (rd and lvl == "detailed"):   # deck-look step 6 (Q13): the word windows by role, ADVISORY; never met by repeating a sentence or by words a layout asks for
+        roles_, wins_ = (rd["roles"], rd["windows"]) if rd else (spec.ROLE_OF_TYPE, spec.ROLE_WINDOWS)   # with a recipe at detailed (a tender, the read format): no windows
+        for x in story:
+            role = roles_.get(deck["slides"][x]["type"])
+            if not role:
+                continue
+            lo, hi = wins_[role]
+            n = words(deck["slides"][x]) + len(str(deck["slides"][x].get("title") or "").split())   # the window counts the title: a statement is often its title
+            if not lo <= n <= hi:
+                add("role_words", "warn", x, f"{n} words on screen; {'an' if role[0] in 'aeiou' else 'a'} {role} slide carries {lo}-{hi} (advisory: "
+                    + ("add a brief field that says more, never a repeated line)" if n < lo else "the plan moves the rest to the notes)"))
+    if rd and fmt_ == "full":   # deck-types slice 8: nobody presents a leave-behind, so a point the plan moved to the notes is unread (ADVISORY)
+        for x in deck["order"]:
+            n = len((((deck["slides"][x].get("layout") or {}).get("fit") or {}).get("moved")) or [])
+            if n >= spec.NOTES_UNREAD_MIN:
+                add("notes_unread", "warn", x, f"{n} point{'s' if n != 1 else ''} moved to the speaker notes: a deck sent to be read is not presented, so "
+                    f"{'they go' if n != 1 else 'it goes'} unread (choose a roomier layout or a denser level; the A4 export prints notes under each slide once slide size lands)")
     if deck["meta"].get("format", "pitch") == "pitch" and length.get("min_slides") and len(story) < length["min_slides"]:
         add("pitch_length", "warn", None, f"{len(story)} presented slides; a {profile['label'].lower() if profile else 'deck'} presents at least {length['min_slides']}: "
             f"give the stages more to work from (a brief, documents or answers)")
@@ -451,20 +511,23 @@ def run(deck: dict, inp, audience: str = "review", profile: dict | None = None) 
         elif not any(x and x in flat for x in parts):
             add("message_carried", "error", None, f"{rid}: its line \"{ln[:50]}\" is on no presented slide")
     # titles are takeaways; a sentence is said once
-    seen = {}
+    seen, said_by = {}, {}
+    v3 = bool(spec.LOOK_V3)   # deck-look (fix 2, Q13): a sentence is said once, the titles and the campaign line included, from four words
+    labels = profiles.label_titles(profile, fmt_)   # deck-types slice 4: a type whose titles are labels (title form label) is not held to claims
     for x in story:
         sl = deck["slides"][x]
-        if sl["type"] not in spec.LABEL_TITLE_TYPES and len(sl["title"].split()) < 5:
+        if not labels and sl["type"] not in spec.LABEL_TITLE_TYPES and len(sl["title"].split()) < 5:
             add("action_title", "warn", x, f"title \"{sl['title']}\" is a label: write the takeaway as a full sentence")
-        for t, basis in _texts(sl, internal=False, human=False)[1:]:
-            if basis == "creative":   # copy repeats its sign-off by design (the helpline on every piece)
+        for t, basis in (_texts(sl, internal=False, human=False) if v3 else _texts(sl, internal=False, human=False)[1:]):
+            if basis == "creative" and not v3:   # copy repeats its sign-off by design (the helpline on every piece)
                 continue
             for sent in re.split(r"(?<=[.!?])\s+", str(t)):
                 key = re.sub(r"\W+", " ", sent.lower()).strip()
-                if len(key.split()) >= 6:
-                    if key in seen and seen[key] != x:
+                if len(key.split()) >= (4 if v3 else 6):
+                    if key in seen and seen[key] != x and not (basis == "creative" and said_by.get(key) == "creative"):   # one piece's sign-off on another
                         add("repeated_line", "warn", x, f"said on slide {deck['order'].index(seen[key]) + 1} too: \"{sent[:60]}\"")
                     seen.setdefault(key, x)
+                    said_by.setdefault(key, basis)
     # budget spread
     budget = re.search(r"€\s?([\d,]{4,})", _brief_text(inp, "budget_scope", ""))
     cr = next((x for x in deck["order"] if deck["slides"][x]["type"] == "channel_roles"), None)
@@ -576,6 +639,42 @@ def _copy_spec(sl, add):
         n = sum(len(ln.split()) for ln in lines)
         if secs and n > secs * L["audio_words_per_sec"]:
             add("warn", f"{n} spoken words for a {secs}-second spot (rule of thumb: {int(secs * L['audio_words_per_sec'])})")
+
+
+def _images(sl: dict, sid: str, deck: dict, audience: str, add) -> None:
+    """The picture checks for one slide's image slots (contract section 4.3). ``image_unapproved``: on a client render any picture
+    not approved by the deck's approver for its own asset (an error: it is not drawn); ``image_flagged``: a picture the guard flagged
+    (a warning in a review, which draws it marked); ``image_rights``: a ``reference_only`` asset in a slot, and a territory run whose
+    brief was never checked against this deck's; ``image_missing``: a slot that names an asset the deck does not hold."""
+    assets = deck.get("assets") or {}
+    for name, v in (sl.get("slots") or {}).items():
+        if not (isinstance(v, dict) and v.get("kind") == "image" and isinstance(v.get("image"), dict)):
+            continue
+        im = v["image"]
+        if im.get("status") == "empty" and (im.get("from") or {}).get("kind") == "production":   # deck-prod-assets: never held back silently
+            add("image_rights", "warn", sid, f"{name}: {(im.get('reason') or spec.RIGHTS_TO_SUPPLY)[:200]}")
+            continue
+        if im.get("status") in ("empty", "planned", "failed", "rejected"):
+            continue
+        aid = im.get("asset")
+        if aid not in assets:
+            add("image_missing", "error", sid, f"{name} names the picture {aid} and the deck holds no such asset")
+            continue
+        if assets[aid].get("rights") == "reference_only":
+            add("image_rights", "error", sid, f"{name} holds a reference-only picture: it may never fill a slot")
+        g = assets[aid].get("guard") or {}
+        if im.get("status") == "approved" and (g.get("flagged") or (not g.get("checked") and (im.get("from") or {}).get("kind") == "territory_frame")):
+            add("image_flagged", "warn", sid, f"{name} was approved by a person although " + ("the guard flagged it" if g.get("flagged") else "no guard looked at it") +
+                ": look at it again before a client sees it")
+        elif im.get("status") == "flagged" or g.get("flagged"):
+            add("image_flagged", "warn", sid, f"{name} was flagged by the guard ({(im.get('reason') or 'needs a person')[:80]}) and waits for a person")
+        a = im.get("approval")
+        approved = im.get("status") == "approved" and isinstance(a, dict) and a.get("decision") == "approve" and a.get("asset") == aid and a.get("by")
+        if audience == "client" and not approved:
+            add("image_unapproved", "error", sid, f"{name} is not approved by the deck's approver, so a client render does not draw it")
+    tr = (deck.get("meta", {}).get("built_from") or {}).get("territory_run") or {}
+    if tr.get("same_brief") == "unverified" and sl.get("type") == "territory" and sid == next((x for x in deck["order"] if deck["slides"][x]["type"] == "territory"), None):
+        add("image_rights", "warn", sid, "the territory run was not checked against this deck's brief (give --brief to from_territory)")
 
 
 def summary(F: list) -> dict:

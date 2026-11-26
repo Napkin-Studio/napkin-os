@@ -1,0 +1,52 @@
+id: grid_points
+version: 1
+group: content
+purpose: list
+description: Three to six headed points in a grid of columns, an icon above each heading when every point has one.
+slot_summary: title, points (3-6, each headed)
+for_types:
+- objective
+- insight
+- audience
+- proposition
+- solution
+- problem
+- why_now
+- product
+- credentials
+- innovation
+- guardrails
+- what_we_know
+when:
+  test: points_3_6
+priority: 91
+alternatives:
+- cards
+- text_columns
+roomier: cards
+density: standard
+pick: rule
+family: grid_points
+renderer: grid_points
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  points:
+    kind: group
+    role: body
+    from_blocks:
+    - kv
+    - card
+    - bullets
+    - text
+    - statement
+    - quote
+    - small
+    - callout
+    dominant: true
+    min_items: 3
+    max_items: 6

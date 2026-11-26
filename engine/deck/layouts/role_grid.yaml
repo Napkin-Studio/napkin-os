@@ -1,0 +1,86 @@
+id: role_grid
+version: 1
+group: content
+purpose: people
+description: 'Roles as rows: the role on the left, the job on the right.'
+slot_summary: title, roles
+for_types:
+- title
+- objective
+- brief_restated
+- scoring
+- criterion_answer
+- real_question
+- chart
+- insight
+- audience
+- proposition
+- territory
+- territory_choice
+- idea
+- execution
+- channel_roles
+- innovation
+- guardrails
+- process
+- measurement
+- measurement_plan
+- timeline
+- investment
+- team
+- credentials
+- next_step
+- appendix
+- problem
+- why_now
+- solution
+- product
+- market
+- business_model
+- traction
+- what_we_know
+- competition
+- gtm
+- financials
+- upside
+- founders
+- ask
+- risks
+- close
+- conflicts
+- questions
+- person_beat
+- requirement_trace
+- appendix_sources
+when:
+  test: role_rows
+priority: 42
+alternatives:
+- native_table
+- timeline_rows
+- people_cards
+roomier: native_table
+density: standard
+pick: rule
+family: role_grid
+renderer: role_grid
+slots:
+  title:
+    kind: text
+    role: title
+    required: true
+    min_chars: 3
+    max_lines: 3
+  roles:
+    kind: group
+    role: body
+    from_blocks:
+    - steps
+    - table
+    - kv
+    - card
+    min_items: 1
+    max_items: 7
+    item:
+      heading_max_chars: 40
+      body_max_chars: 200

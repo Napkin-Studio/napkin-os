@@ -905,11 +905,60 @@ mod upstream {
     }
 
     #[test]
+    fn a_deck_spun_off_a_brief_is_sent_the_brief_whole_beside_the_index() {
+        // UAT round 4 L2: Continue in -> Deck from a brief built from an empty brief, because the middleware only saw the index.
+        let (store, research, brief) = setup();
+        brief.post(
+            "/patch-data",
+            r#"{"patch":{"objectives":"Sell the starter bottle","mandatories":["End line: 'Refill. Not landfill.' (word for word)"]},"agent":"human"}"#,
+        );
+        install(
+            &*store,
+            "Deck Maker",
+            "ie.napkin.deck-maker",
+            Some(carries(BRIEF)),
+        );
+        let deck = spin(&store, &brief, "ie.napkin.deck-maker");
+        let clan = deck.session.clan_context_for_agent();
+        let index = &clan["data"]["upstream"][&brief.doc];
+        assert!(
+            index.get("objectives").is_none(),
+            "the index stays an index: {index}"
+        );
+        let carried = &clan["brief_upstream"];
+        assert_eq!(carried["id"], brief.doc.as_str(), "{clan}");
+        assert_eq!(carried["data"]["objectives"], "Sell the starter bottle");
+        assert_eq!(
+            carried["data"]["mandatories"][0],
+            "End line: 'Refill. Not landfill.' (word for word)"
+        );
+        // 5-tool run 2026-11-26: the brief's research travels with it, whole, under its own
+        // upstream, so a Confidential mark the brief's chain holds on the research is found.
+        let research_copy = &carried["data"]["upstream"][research.doc.as_str()];
+        assert!(
+            research_copy.is_object() && research_copy.get("direct").is_none(),
+            "the research whole, not its index entry: {carried}"
+        );
+        assert!(
+            brief
+                .session
+                .clan_context_for_agent()
+                .get("brief_upstream")
+                .is_none(),
+            "only a Deck is sent its brief whole"
+        );
+    }
+
+    #[test]
     fn the_agent_is_sent_an_index_of_upstream_not_the_frozen_copy() {
         let (_store, research, brief) = setup();
         let clan = brief.session.clan_context_for_agent();
         let index = &clan["data"]["upstream"][&research.doc];
         assert_eq!(index["direct"], true);
+        assert!(
+            clan.get("production_upstream").is_none(),
+            "only a Production project travels whole"
+        );
         let keys: Vec<&str> = index["keys"]
             .as_array()
             .unwrap()
@@ -1107,6 +1156,38 @@ mod upstream {
         resolve(&brief, "f_01JA0B9Z9Z");
         let up = brief.get("/upstream");
         assert_eq!(up["upstream"][0]["contests"][0]["resolved_here"], true);
+    }
+
+    #[test]
+    fn an_ancestor_further_up_tells_its_own_lock() {
+        // Research locked, then Brief, then Territories (or a deck) from the brief: the research is not
+        // the direct parent, and its lock must still read as locked (acceptance A11, 2026-11-25).
+        let store = Arc::new(MemStore::default());
+        let research = research(&store);
+        resolve(&research, "f_01JA0B3P4Q");
+        reject_findings(&research);
+        research.post("/approve", "{}");
+        install(&*store, "Brief Maker", BRIEF, Some(carries(RESEARCH)));
+        let brief = spin(&store, &research, BRIEF);
+        install(&*store, "Deck", DECK, Some(carries(BRIEF)));
+        let deck = spin(&store, &brief, DECK);
+        let up = deck.get("/upstream");
+        let entries = up["upstream"].as_array().unwrap();
+        assert_eq!(entries[0]["document_id"], brief.doc);
+        assert_eq!(
+            entries[0]["locked"], false,
+            "the brief was not locked: {up}"
+        );
+        assert_eq!(entries[1]["document_id"], research.doc);
+        assert_eq!(entries[1]["direct"], false);
+        assert_eq!(entries[1]["locked"], true, "{up}");
+        assert!(entries[1]["version"].is_string(), "{up}");
+
+        // Not locked, it says so (never missing, never guessed).
+        let (_store, _research, brief) = setup();
+        install(&*_store, "Deck", DECK, Some(carries(BRIEF)));
+        let deck = spin(&_store, &brief, DECK);
+        assert_eq!(deck.get("/upstream")["upstream"][1]["locked"], false);
     }
 
     #[test]
@@ -1340,6 +1421,64 @@ mod upstream {
         assert_eq!(refused(&brief, "/upstream/update").0, 409);
     }
 
+    // Owner 2026-11-26 ("Update refreshes the parent"): a document made with
+    // Continue in holds its parent as what it was made from, not as a link.
+    // The tools' Update buttons call `/attach/update` with the parent's id
+    // (Deck Maker's "Update from Production"); it takes the parent's newer
+    // version the same way `/upstream/update` does, instead of `409 not
+    // linked` (5-tool run, 2026-11-26). An id that is neither the parent nor
+    // linked stays refused.
+    #[test]
+    fn attach_update_takes_the_direct_parent_of_a_continue_in_document() {
+        let (store, research, brief) = setup();
+        let body = json!({ "document_id": research.doc }).to_string();
+        // Nothing moved yet: refused as not changed, not as not linked.
+        let (status, msg) = post_err(&brief, "/attach/update", &body);
+        assert_eq!(status, 409, "{msg}");
+        assert!(msg.contains("has not changed"), "{msg}");
+
+        resolve(&research, "f_01JA0B9Z9Z");
+        assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "changed");
+        let reply = brief.post("/attach/update", &body);
+        assert_eq!(reply["action"], "update_from_campaign_research", "{reply}");
+        assert_eq!(reply["document_id"], research.doc);
+        let up = brief.get("/upstream");
+        assert_eq!(up["upstream"][0]["how"], "made_from", "{up}");
+        assert_eq!(up["upstream"][0]["status"], "current");
+        let data = brief
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
+        assert_eq!(
+            data["upstream"][&research.doc]["selection"]["contested"][0]["status"],
+            "resolved"
+        );
+        // A parent is not turned into a link: no `linked` backref is written.
+        assert!(
+            reply["backrefs"].as_array().is_none_or(|b| b.is_empty()),
+            "{reply}"
+        );
+        let rel = research.get("/related");
+        assert!(
+            rel["downstream"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|d| d["how"] != "linked_in"),
+            "{rel}"
+        );
+
+        // Neither the parent nor linked: still refused.
+        let other = Doc::open(
+            &store,
+            library::create_instance(&*store, RESEARCH, Some("Other study".into())).unwrap(),
+        );
+        let body = json!({ "document_id": other.doc }).to_string();
+        let (status, msg) = post_err(&brief, "/attach/update", &body);
+        assert_eq!(status, 409, "{msg}");
+        assert!(msg.contains("not linked"), "{msg}");
+    }
+
     #[test]
     fn a_locked_brief_or_one_made_from_nothing_takes_no_update() {
         let (_store, research, brief) = setup();
@@ -1395,6 +1534,112 @@ mod upstream {
         )
         .unwrap();
         library::install_app(store, tpl).unwrap();
+    }
+
+    /// An app that takes `accepts` by attach (and, with `spinoff`, by spin-off).
+    fn install_accepting(
+        store: &dyn DocStore,
+        name: &str,
+        app_id: &str,
+        spinoff: Option<SpinoffSpec>,
+        accepts: &[&str],
+    ) {
+        let base = ClanFile::from_bytes(
+            clan_sdk::create(clan_sdk::CreateOptions {
+                title: name.into(),
+                brief: "fixture".into(),
+                document_type: None,
+                no_render: false,
+                schema: None,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let tpl = clan_sdk::make_template(
+            &base,
+            clan_sdk::AppInfo {
+                home: None,
+                name: name.into(),
+                app_id: app_id.into(),
+                version: "0.6.0".into(),
+                icon: None,
+                entry: "human/index.html".into(),
+                schema: Some("agent/output-schema.json".into()),
+                prompt_templates: vec![],
+                data_seed: None,
+                spinoff,
+                attach: Some(clan_sdk::AttachSpec {
+                    accepts: accepts.iter().map(|a| a.to_string()).collect(),
+                    ..Default::default()
+                }),
+            },
+            clan_sdk::MakeTemplateOptions::default(),
+        )
+        .unwrap();
+        library::install_app(store, tpl).unwrap();
+    }
+
+    // Brand Clan phase 2 (d): a Territories document's engine is sent the client's Brand Clan it
+    // holds, attached on the document or carried down from the brief by spin-off; none, nothing.
+    #[test]
+    fn a_territories_document_is_sent_the_brand_clan_it_holds() {
+        const BRAND: &str = "ie.napkin.brand";
+        const TERRITORIES: &str = "ie.napkin.territories";
+        let store = Arc::new(MemStore::default());
+        install(&*store, "Brand Clan", BRAND, None);
+        let id = library::create_instance(&*store, BRAND, Some("Original".into())).unwrap();
+        let brand = Doc::open(&store, id);
+        brand.post(
+            "/patch-data",
+            r##"{"patch":{"name":"Original","kit":{"version":2},"visual":{"colours":[{"id":"c1","name":"Red","hex":"#E30613","role":"accent"}]},"imagery":{"style":"warm daylight","bans":["mascots"]}},"agent":"human"}"##,
+        );
+
+        // attached on the Territories document itself (the client's default, started on)
+        install_accepting(&*store, "Territories", TERRITORIES, None, &[BRAND]);
+        let id = library::create_instance(&*store, TERRITORIES, Some("Routes".into())).unwrap();
+        let terr = Doc::open(&store, id);
+        assert!(terr
+            .session
+            .clan_context_for_agent()
+            .get("brand_clan")
+            .is_none());
+        terr.post("/attach", &json!({ "document_id": brand.doc }).to_string());
+        let ctx = terr.session.clan_context_for_agent();
+        let b = &ctx["brand_clan"];
+        assert_eq!(b["document_id"], brand.doc, "{ctx}");
+        assert_eq!(b["version"], 2);
+        assert_eq!(b["data"]["imagery"]["bans"][0], "mascots");
+        // The linked chip says the version held (v2), not how many times it was taken (UAT 5-tool run, 2026-11-26).
+        let rel = terr.get("/related");
+        assert_eq!(rel["upstream"][0]["kit_version"], 2, "{rel}");
+        assert_eq!(rel["upstream"][0]["taken"], 1, "{rel}");
+        assert!(
+            ctx.get("carried_upstream")
+                .map_or(true, |c| c.get(&brand.doc).is_none()),
+            "a kit still stays out of carried_upstream"
+        );
+
+        // carried down from the brief that held it
+        install_accepting(&*store, "Brief Maker", BRIEF, None, &[BRAND]);
+        let id = library::create_instance(&*store, BRIEF, Some("Spring brief".into())).unwrap();
+        let brief = Doc::open(&store, id);
+        brief.post(
+            "/patch-data",
+            r#"{"patch":{"background":"Sales are flat."},"agent":"human"}"#,
+        );
+        brief.post("/attach", &json!({ "document_id": brand.doc }).to_string());
+        install_accepting(
+            &*store,
+            "Territories",
+            TERRITORIES,
+            Some(carries(BRIEF)),
+            &[BRAND],
+        );
+        let terr = spin(&store, &brief, TERRITORIES);
+        assert_eq!(
+            terr.session.clan_context_for_agent()["brand_clan"]["document_id"],
+            brand.doc
+        );
     }
 
     fn post_err(d: &Doc, path: &str, body: &str) -> (u16, String) {

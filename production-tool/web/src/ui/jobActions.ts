@@ -6,8 +6,10 @@
 
 import type { ContractError } from '../contracts/types'
 
-/** The tool's limits and who is signed in: nothing a model or a report can change. */
-const NOT_THE_MODEL = new Set(['quota_exhausted', 'spend_stop', 'flag_off', 'unauthorised', 'blocked'])
+/** The tool's limits and who is signed in: nothing a model or a report can change. limit_reached is
+ *  the agency's own monthly limit; not_allowed a model or step its allowlist turned off, which the menus
+ *  already leave out (features/tenant-limits.clan). */
+const NOT_THE_MODEL = new Set(['quota_exhausted', 'spend_stop', 'limit_reached', 'not_allowed', 'flag_off', 'unauthorised', 'blocked'])
 
 export interface FailedActions {
   otherModel: boolean
@@ -24,4 +26,9 @@ export function failedActions(err: Pick<ContractError, 'code'> | undefined): Fai
     return { otherModel: false, report: false, ...(note ? { note } : {}) }
   }
   return { otherModel: true, report: true }
+}
+
+/** A job made in several provider calls (a stepped extend, pt-canvas-r4): " · step 2 of 3"; nothing for one call. */
+export function stepWords(p: { step: number; steps: number } | undefined): string {
+  return p && p.steps > 1 ? ` · step ${Math.min(p.step, p.steps)} of ${p.steps}` : ''
 }

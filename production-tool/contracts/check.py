@@ -1,7 +1,10 @@
 """Check the Production Tool contracts: every schema is valid, the capability
-sheets and examples match their schemas, and the $refs between files resolve.
+sheets and examples match their schemas, the $refs between files resolve,
+every examples/invalid/ case is refused, and the document rules a schema
+cannot say (a key is its entity's id, a note window is 2 s or more and inside
+its shot, every link is in common linkRule) hold.
 
-    uv run --no-project --with jsonschema python production-tool/contracts/check.py
+    uv run --no-project --with jsonschema --with rfc3339-validator python production-tool/contracts/check.py
 """
 
 import json
@@ -19,6 +22,8 @@ schemas = {p.name: json.loads(p.read_text()) for p in HERE.glob("*.schema.json")
 registry = Registry().with_resources(
     (BASE + name, Resource.from_contents(s)) for name, s in schemas.items()
 )
+COMMON = schemas["common.schema.json"]["$defs"]
+LINK_RULE = COMMON["linkRule"]["const"]
 
 
 def validator(name, pointer=""):
@@ -26,69 +31,530 @@ def validator(name, pointer=""):
     return Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
 
 
-# What each instance file must match: (glob, schema file, $defs pointer).
+# ── the rules JSON Schema cannot say ────────────────────────────────────────
+# clan-store/src/integrity.ts checks these and more on every write; this is the
+# same subset for the examples, so a bad example is caught without a browser.
+def link_problem(link: dict, kinds_of_board: dict) -> str | None:
+    """None when common linkRule allows the link, else why not (canLink's words)."""
+    fk, tk, role = link["from"]["kind"], link["to"]["kind"], link["role"]
+    for rule in LINK_RULE["rules"]:
+        if fk in rule["from"] and tk in rule["to"] and role in rule["roles"]:
+            purpose = rule.get("board_purpose")
+            if purpose and kinds_of_board.get(link["from"]["id"]) != purpose:
+                continue
+            return None
+    return f"no link rule lets a {fk} feed a {tk} as {role}"
+
+
+def document_rules(doc: dict) -> list[str]:
+    problems = []
+    if not isinstance(doc, dict):
+        return problems
+    for name, value in doc.items():
+        if not isinstance(value, dict) or name in ("project", "upstream"):
+            continue
+        for key, item in value.items():
+            if any(c in key for c in ".[]#"):
+                problems.append(f"{name}: the key {key!r} holds '.', '[', ']' or '#'")
+            if name != "assets" and isinstance(item, dict) and item.get("id") != key:
+                problems.append(f"{name}[{key}]: its id is {item.get('id')!r}, not its key")
+            if name == "assets" and isinstance(item, dict) and item.get("sha256") != key:
+                problems.append(f"assets[{key}]: its sha256 is not its key")
+    shots = doc.get("shots") or {}
+    for rid, r in (doc.get("reviews") or {}).items():
+        w = r.get("window") if isinstance(r, dict) else None
+        if not w:
+            continue
+        if w["to_s"] - w["from_s"] < 2:
+            problems.append(f"reviews[{rid}].window: {w['to_s'] - w['from_s']} s is under the 2 s a fix needs")
+        shot = shots.get(r.get("shot_id"))
+        if shot and w["to_s"] > shot["duration_s"]:
+            problems.append(f"reviews[{rid}].window ends at {w['to_s']} s, past its {shot['duration_s']} s shot (across a cut)")
+    boards = {k: b.get("purpose") for k, b in (doc.get("boards") or {}).items() if isinstance(b, dict)}
+    for lid, link in (doc.get("links") or {}).items():
+        if isinstance(link, dict) and "from" in link:
+            why = link_problem(link, boards)
+            if why:
+                problems.append(f"links[{lid}]: {why}")
+    for qid, ask in (doc.get("asks") or {}).items():
+        if isinstance(ask, dict) and ask.get("question", {}).get("id") != qid:
+            problems.append(f"asks[{qid}]: its question's id is not its key")
+    problems += timeline_rules(doc)
+    return problems
+
+
+def item_length(item: dict) -> float:
+    """How long a timeline item lasts (clan-store integrity.ts itemLength): (out_s - in_s) / speed + hold_s."""
+    if item.get("track") == "text":
+        return max(0.0, item.get("to_s", 0) - item.get("from_s", 0))
+    src = item.get("source") or {}
+    return max(0.0, src.get("out_s", 0) - src.get("in_s", 0)) / item.get("speed", 1) + item.get("hold_s", 0)
+
+
+def timeline_rules(doc: dict) -> list[str]:
+    """Generations and timelines (features/make-and-edit.clan): parents exist, V1 never overlaps, a clip's
+    generation exists and has the footage it shows, a text ends after it starts."""
+    problems = []
+    gens = doc.get("generations") or {}
+    for gid, g in gens.items():
+        if isinstance(g, dict) and g.get("parent_id") and g["parent_id"] not in gens:
+            problems.append(f"generations[{gid}]: its parent {g['parent_id']} is not in the document")
+    for vid, v in (doc.get("videos") or {}).items():
+        v1 = []
+        for iid, item in ((v or {}).get("timeline") or {}).items():
+            if item.get("track") == "text":
+                if item.get("to_s", 0) <= item.get("from_s", 0):
+                    problems.append(f"videos[{vid}].timeline[{iid}]: the text ends before it starts")
+                continue
+            src = item.get("source") or {}
+            g = gens.get(src.get("generation_id")) if src.get("generation_id") else None
+            if src.get("generation_id") and g is None:
+                problems.append(f"videos[{vid}].timeline[{iid}]: its generation {src['generation_id']} is not in the document")
+            if g and g.get("duration_s") is not None and src.get("out_s", 0) > g["duration_s"] + 1e-3:
+                problems.append(f"videos[{vid}].timeline[{iid}]: its source runs past the generation's {g['duration_s']} s")
+            if item.get("track") == "V1":
+                v1.append((item.get("start_s", 0), item.get("start_s", 0) + item_length(item), iid))
+        v1.sort()
+        for (_, end, a), (start, _, b) in zip(v1, v1[1:]):
+            if start < end - 1e-3:
+                problems.append(f"videos[{vid}].timeline: {b} starts inside {a} (V1 never overlaps)")
+    return problems
+
+
+sys.path.insert(0, str(HERE))
+import pricing  # noqa: E402  (contracts/pricing.py, standard library only)
+
+
+def sheet_rules(sheet: dict) -> list[str]:
+    """A capability sheet's rules a schema cannot say (features/runway-sheet-sync.clan): every op and
+    alternate model is in the catalogue, at the model's endpoint, within its durations, outputs and
+    ratios, and has a price at its defaults."""
+    problems = []
+    if not isinstance(sheet, dict):
+        return problems
+    models = sheet.get("models") or {}
+    for op, spec in (sheet.get("ops") or {}).items():
+        for s in [spec, *spec.get("alternates", [])]:
+            name = s["model"]
+            m = models.get(name)
+            if m is None:
+                problems.append(f"ops.{op}: {name} is not in models")
+                continue
+            # A clip model edits clips on video_to_video when the catalogue says how (models[m].v2v).
+            v2v = s["endpoint"] == "POST /v1/video_to_video" and "v2v" in m
+            if m.get("endpoint") and m["endpoint"] != s["endpoint"] and not v2v:
+                problems.append(f"ops.{op}: {name} is at {m['endpoint']}, not {s['endpoint']}")
+            durations = s.get("durationsS", spec.get("durationsS") if s is not spec else None)
+            if durations and m.get("durationsS") and not set(durations) <= set(m["durationsS"]):
+                problems.append(f"ops.{op}: {name} durations {durations} are not all in the model's {m['durationsS']}")
+            if s.get("outputs") and m.get("outputs") and not set(s["outputs"]) <= set(m["outputs"]):
+                problems.append(f"ops.{op}: {name} outputs {s['outputs']} are not all in the model's {m['outputs']}")
+            ratio = (s.get("defaults") or {}).get("ratio")
+            if ratio and m.get("ratios") and ratio not in {r["ratio"] for r in m["ratios"]}:
+                problems.append(f"ops.{op}: {name}'s default ratio {ratio} is not one the model takes")
+            if pricing.op_usd(sheet, op, None if s is spec else name) is None:
+                problems.append(f"ops.{op}: {name} has no price at its defaults {s.get('defaults')}")
+            problems += quality_rules(sheet, op, spec, s, m)
+        region = spec.get("regionModel")
+        if region and region not in models:
+            problems.append(f"ops.{op}: regionModel {region} is not in models")
+    return problems
+
+
+LEVELS = ("draft", "standard", "final")
+
+
+def quality_rules(sheet: dict, op: str, spec: dict, s: dict, m: dict) -> list[str]:
+    """Clip quality (features/clip-quality.clan): each level is a size the model makes (a tier of its
+    ratios, or its resolution) and has a price there; a family's members are sizes of one model, in one
+    op, that together make every level; keepsSize is an edit's."""
+    out, name = [], s["model"]
+    q = s.get("quality") or {}
+    if (q or s.get("family")) and op not in ("clip", "clip_edit"):
+        out.append(f"ops.{op}: {name} has a quality, but only clips and clip edits do")
+    tiers = {r.get("tier") for r in m.get("ratios") or [] if r.get("tier")}
+    for level, e in q.items():
+        if e.get("resolution"):
+            if e["resolution"] not in (m.get("resolutions") or []) or e["tier"] != e["resolution"]:
+                out.append(f"ops.{op}: {name} {level} resolution {e['resolution']} is not one the model takes (tier {e['tier']})")
+        elif tiers and e["tier"] not in tiers:
+            out.append(f"ops.{op}: {name} {level} is {e['tier']}, which is not one of the model's tiers {sorted(tiers)}")
+        if op == "clip_edit" and not s.get("keepsSize") and not (m.get("v2v") or {}).get("ratio") and not s.get("family") \
+                and len({x["tier"] for x in q.values()}) > 1:
+            out.append(f"ops.{op}: {name} gives sizes by level but its edit takes no ratio (v2v.ratio) and is no family")
+        if pricing.op_usd(sheet, op, None if s is spec else name, {"resolution": e["tier"]}) is None:
+            out.append(f"ops.{op}: {name} has no price at {level} ({e['tier']})")
+        if e.get("draft") and not m.get("draftPromote"):
+            out.append(f"ops.{op}: {name} drafts, but the catalogue says no draftPromote")
+    if s.get("keepsSize") and op != "clip_edit":
+        out.append(f"ops.{op}: {name} keepsSize, which only an edit can")
+    family = s.get("family")
+    if family:
+        members = [x for x in [spec, *spec.get("alternates", [])] if x.get("family") == family]
+        made = [lvl for x in members for lvl in (x.get("quality") or {})]
+        if sorted(made) != sorted(LEVELS):
+            out.append(f"ops.{op}: family {family} makes {sorted(made)}, not each of {list(LEVELS)} once")
+        if len({x.get("familyLabel") for x in members}) != 1 or not s.get("familyLabel"):
+            out.append(f"ops.{op}: family {family} needs one familyLabel")
+    return out
+
+
+# What each instance file must match: (glob, schema file, $defs pointer, extra rules).
 CASES = [
-    ("capabilities/*.json", "capabilities.schema.json", ""),
-    ("examples/config.*.json", "config.schema.json", ""),
-    ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest"),
-    ("examples/job.response.json", "relay-api.schema.json", "#/$defs/Job"),
-    ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me"),
-    ("examples/projects.response.json", "relay-api.schema.json", "#/$defs/ProjectList"),
-    ("examples/director.*.json", "director.schema.json", ""),
-    ("examples/customdata.*.json", "customdata.schema.json", ""),
-    ("examples/document*.json", "document.schema.json", "")  # document.hackathon.json: fal and HeyGen outputs still open,
+    ("capabilities/*.json", "capabilities.schema.json", "", sheet_rules),
+    ("cost-model.json", "cost-model.schema.json", "", None),
+    ("spend-policy.json", "spend-policy.schema.json", "", None),
+    ("subprocessors.json", "subprocessors.schema.json", "", None),
+    ("examples/pricing-cases.json", "pricing-cases.schema.json", "", None),
+    ("examples/config.*.json", "config.schema.json", "", None),
+    ("examples/job-request.*.json", "relay-api.schema.json", "#/$defs/JobRequest", None),
+    ("examples/job.*.json", "relay-api.schema.json", "#/$defs/Job", None),
+    ("examples/job-answer.json", "relay-api.schema.json", "#/$defs/JobAnswer", None),
+    ("examples/answer-conflict.json", "relay-api.schema.json", "#/$defs/AnswerConflict", None),
+    ("examples/library-entry.*.json", "relay-api.schema.json", "#/$defs/LibraryEntry", None),
+    ("examples/library-index.json", "relay-api.schema.json", "#/$defs/LibraryIndex", None),
+    ("examples/library-publish.*.json", "relay-api.schema.json", "#/$defs/LibraryPublish", None),
+    ("examples/me.response.json", "relay-api.schema.json", "#/$defs/Me", None),
+    ("examples/director.*.json", "director.schema.json", "", None),
+    ("examples/customdata.*.json", "customdata.schema.json", "", None),
+    ("examples/document*.json", "document.schema.json", "", document_rules),
+    ("examples/patch-batch.*.json", "patch.schema.json", "#/$defs/PatchBatch", None),
+    ("examples/patch-result.*.json", "patch.schema.json", "#/$defs/PatchResult", None),
+    ("format-packs.json", "format-packs.schema.json", "", None),
 ]
+# Each examples/invalid/<schema stem>.<case>.json must be refused by that schema (or its rules).
+INVALID_TARGETS = {
+    "capabilities": ("capabilities.schema.json", "", sheet_rules),
+    "document": ("document.schema.json", "", document_rules),
+    "job-request": ("relay-api.schema.json", "#/$defs/JobRequest", None),
+    "job-answer": ("relay-api.schema.json", "#/$defs/JobAnswer", None),
+    "patch-batch": ("patch.schema.json", "#/$defs/PatchBatch", None),
+    "customdata": ("customdata.schema.json", "", None),
+    "question": ("common.schema.json", "#/$defs/question", None),
+    "director": ("director.schema.json", "", None),
+    "config": ("config.schema.json", "", None),
+}
 
 failures = 0
+
+
+def fail(msg: str):
+    global failures
+    failures += 1
+    print(msg)
+
+
+def problems_of(name, pointer, rules, data):
+    errors = sorted(validator(name, pointer).iter_errors(data), key=str)
+    out = [f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message[:200]}" for e in errors]
+    if rules and not errors:
+        out += rules(data)
+    return out
+
+
 for name, schema in schemas.items():
     Draft202012Validator.check_schema(schema)
-for pattern, name, pointer in CASES:
+for pattern, name, pointer, rules in CASES:
     files = sorted(HERE.glob(pattern))
     if not files:
-        print(f"✗ {pattern}: no files")
-        failures += 1
+        fail(f"✗ {pattern}: no files")
     for f in files:
-        errors = sorted(validator(name, pointer).iter_errors(json.loads(f.read_text())), key=str)
         rel = f.relative_to(HERE)
-        if errors:
-            failures += 1
-            print(f"✗ {rel}")
-            for e in errors[:5]:
-                print(f"    {'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message[:200]}")
+        found = problems_of(name, pointer, rules, json.loads(f.read_text()))
+        if found:
+            fail(f"✗ {rel}")
+            for p in found[:5]:
+                print(f"    {p}")
         else:
             print(f"✓ {rel}")
 
-# Every op a sheet claims must be routable, and config must name only known providers.
+# The invalid cases: each must be refused, or the contract lets through what it promised to stop.
+invalid = sorted((HERE / "examples" / "invalid").glob("*.json"))
+if not invalid:
+    fail("✗ examples/invalid/: no cases")
+for f in invalid:
+    stem = f.name.split(".")[0]
+    if stem not in INVALID_TARGETS:
+        fail(f"✗ {f.relative_to(HERE)}: no schema for '{stem}' cases")
+        continue
+    name, pointer, rules = INVALID_TARGETS[stem]
+    if problems_of(name, pointer, rules, json.loads(f.read_text())):
+        print(f"✓ {f.relative_to(HERE)} (refused)")
+    else:
+        fail(f"✗ {f.relative_to(HERE)}: was accepted; it must be refused")
+
+# links.json: what canLink() says for each pair, from linkRule (vitest asserts the same file).
+for case in json.loads((HERE / "examples" / "links.json").read_text())["cases"]:
+    link = {"from": {"kind": case["from"], "id": "x"}, "to": {"kind": case["to"], "id": "y"}, "role": case["role"]}
+    allowed = link_problem(link, {"x": case.get("board_purpose")}) is None
+    if allowed != case["ok"]:
+        fail(f"✗ examples/links.json: {case['from']} → {case['to']} as {case['role']} is {'allowed' if allowed else 'refused'}; the case says {case['ok']}")
+print("✓ examples/links.json")
+
+# No price reaches the editor (features/make-and-edit.clan; owner 2026-10-13: costs only in History): the
+# generation record, the timeline and what a remake or a timeline render carries name no cost, usd, credit
+# or price.
+PRICEY = re.compile(r"cost|usd|credit|price", re.I)
+
+
+def priced(node, where: str) -> list[str]:
+    out = []
+    if isinstance(node, dict):
+        for k, v in node.get("properties", {}).items():
+            if PRICEY.search(k):
+                out.append(f"{where}.{k}")
+            out += priced(v, f"{where}.{k}")
+        for k in ("items", "additionalProperties"):
+            if isinstance(node.get(k), dict):
+                out += priced(node[k], where)
+    return out
+
+
+_doc_defs = schemas["document.schema.json"]["$defs"]
+_api_defs = schemas["relay-api.schema.json"]["$defs"]
+for where, node in [*((f"document {k}", _doc_defs[k]) for k in ("generation", "generationDelta", "timelineItem", "endCard", "transitionIn")),
+                    ("relay-api RemakeDelta", _api_defs["RemakeDelta"]), ("relay-api TimelinePlan", _api_defs["TimelinePlan"]),
+                    ("relay-api Job.remake", _api_defs["Job"]["properties"]["remake"]),
+                    ("relay-api JobRequest.remakeWith", _api_defs["JobRequest"]["properties"]["remakeWith"])]:
+    for leak in priced(node, where):
+        fail(f"✗ {leak}: a price field in what the editor shows; costs stay in History")
+print("✓ no price in generations, the timeline, remakes or timeline renders")
+
+# Every op has a quota class; the role table has a line for every role.
+ops = set(COMMON["op"]["enum"])
+if ops != set(COMMON["opQuotaClass"]["const"]):
+    fail(f"✗ common opQuotaClass does not cover exactly the ops: {sorted(ops ^ set(COMMON['opQuotaClass']['const']))}")
+roles = set(COMMON["refRole"]["enum"])
+if roles != set(COMMON["refRoleTable"]["const"]):
+    fail(f"✗ common refRoleTable does not cover exactly the roles: {sorted(roles ^ set(COMMON['refRoleTable']['const']))}")
+
+# Every camera value has its words (features/frame-change-edit.clan): the web's labels, director.v7's
+# camera lines and the passthrough's lexicon read the one table.
+camera_words = COMMON["cameraWords"]["const"]
+for field, enum in (("size", "cameraSize"), ("angle", "cameraAngle"), ("movement", "cameraMovement"),
+                    ("movement_speed", "movementSpeed")):
+    missing = set(COMMON[enum]["enum"]) ^ set(camera_words.get(field, {}))
+    if missing:
+        fail(f"✗ common cameraWords.{field} does not cover exactly {enum}: {sorted(missing)}")
+    for value, row in camera_words.get(field, {}).items():
+        if not row.get("label") or not row.get("words"):
+            fail(f"✗ common cameraWords.{field}.{value} needs a label and words")
+if set(COMMON["cameraPatch"]["properties"]) != set(COMMON["camera"]["properties"]):
+    fail("✗ common cameraPatch must have exactly camera's leaves")
+
+# Every op a sheet claims must be routable, and config must name only known providers. An op a config
+# does not name takes the schema's default routing (features/config-defaults.clan), checked here too.
 sheets = {json.loads(p.read_text())["provider"]: json.loads(p.read_text()) for p in (HERE / "capabilities").glob("*.json")}
+DEFAULT_ROUTING = json.loads((HERE / "config.schema.json").read_text())["properties"]["routing"]["default"]
+for op, providers in DEFAULT_ROUTING.items():
+    for p in providers:
+        if op not in sheets.get(p, {}).get("ops", {}):
+            fail(f"✗ config.schema.json: the default routing sends {op} to {p}, whose sheet does not support it")
 for f in sorted(HERE.glob("examples/config.*.json")):
-    for op, providers in json.loads(f.read_text())["routing"].items():
+    cfg = json.loads(f.read_text())
+    for op, providers in cfg.get("routing", {}).items():
         for p in providers:
             if op not in sheets.get(p, {}).get("ops", {}):
-                failures += 1
-                print(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
-    if "fallbackOnly" in json.loads(f.read_text()):  # no longer read (features/runway-fallback.clan)
-        failures += 1
-        print(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
+                fail(f"✗ {f.relative_to(HERE)}: routes {op} to {p}, whose sheet does not support it")
+    if "fallbackOnly" in cfg:  # no longer read (features/runway-fallback.clan)
+        fail(f"✗ {f.relative_to(HERE)}: fallbackOnly is no longer read; drop it")
+    # Contract 3 needs the director that asks (director.v6): v5 against v3 is refused by the relay.
+    # director.v6.1 (features/frame-aspect.clan) adds the true-shape crop; director.v7
+    # (features/frame-change-edit.clan) adds Change this frame; director.v8 (features/canvas-nodes.clan)
+    # holds a shot's required references and lists Dex's additions. v6, v6.1 and v7 stay bundled for a rollback.
+    # director.v9 (features/runway-video-models.clan) says which pictures each clip model carries; v10 adds
+    # the finished-artwork lines for a layout drawing; v11 (features/join-or-cut-shots.clan) ties each line
+    # of a take to the frame it follows ("Shot k [a-b s] ..., follows image k"); v15 (features/pt-dex-context.clan)
+    # numbers that image by its place in the refs and sends an unnamed canvas picture as an object. Absent, the relay runs its newest
+    # bundled prompt (relay/director/claude.py PROMPT_VERSION); rolling back is naming one.
+    if "promptVersion" in cfg.get("director", {}) and cfg["director"]["promptVersion"] not in ("director.v6", "director.v6.1", "director.v7", "director.v8", "director.v9", "director.v10", "director.v11", "director.v9.1", "director.v12", "director.v13", "director.v14", "director.v15", "director.v16", "director.v17", "director.v18"):
+        fail(f"✗ {f.relative_to(HERE)}: promptVersion is {cfg['director']['promptVersion']}; contract 3 runs director.v6, v6.1, v7, v8, v9, v10 or v11")
 
 # Runway is the only paid provider (features/drop-hackathon-extras.clan): the live config routes
 # every op to ['runway'] (or nothing), and no sheet or example names a provider that is gone.
 live = json.loads((HERE / "examples" / "config.live.json").read_text())
-for op, providers in live["routing"].items():
+for op, providers in {**DEFAULT_ROUTING, **live.get("routing", {})}.items():
     if providers not in ([], ["runway"]):
-        failures += 1
-        print(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
+        fail(f"✗ examples/config.live.json: routes {op} to {providers}; the live config routes every op to ['runway']")
 GONE = re.compile(r"\b(fal|heygen)\b|fal-ai/", re.I)
 for f in sorted([*HERE.glob("capabilities/*.json"), *HERE.glob("examples/config.*.json"), *HERE.glob("examples/director.*.json")]):
     if GONE.search(f.read_text()):
-        failures += 1
-        print(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
+        fail(f"✗ {f.relative_to(HERE)}: names fal or HeyGen, which were removed after the hackathon")
+
+# An op that runs as one of others once the director has read the words reserves the dearest of them,
+# at its defaults, on the model the first of them runs on (features/frame-change-edit.clan: Change
+# this frame). Its price is derived from the models catalogue through pricing.py (features/
+# runway-sheet-sync.clan), never typed apart from it. clip_patch joins this table when it lands.
+RUNS_AS = {"frame_edit": ("frame", "region_edit")}
+for provider, sheet in sheets.items():
+    o = sheet["ops"]
+    for op, runs_as in RUNS_AS.items():
+        if op not in o:
+            continue
+        options = [k for k in runs_as if k in o]
+        want = max(pricing.op_usd(sheet, k) or 0 for k in options)
+        got = pricing.op_usd(sheet, op)
+        if got != want:
+            fail(f"✗ capabilities/{provider}.json: {op} prices at {got} at its defaults; "
+                 f"it is the dearest of {', '.join(options)} ({want})")
+        if o[op]["model"] != o[runs_as[0]]["model"]:
+            fail(f"✗ capabilities/{provider}.json: {op} runs on {runs_as[0]}'s model ({o[runs_as[0]]['model']})")
+
+# Fix this moment is billed by the second of what it sends (features/clip-moment-edit.clan): the relay
+# prices max(minS, ceil(seconds)) through pricing.py on the op's model (an edit's inputS; a first/last
+# alternate's durationS), so the op needs a minS and a model the catalogue prices by the second.
+for provider, sheet in sheets.items():
+    spec = sheet["ops"].get("clip_patch")
+    if not spec:
+        continue
+    if "minS" not in spec:
+        fail(f"✗ capabilities/{provider}.json: clip_patch needs minS (it is billed by the second)")
+    for alt in spec.get("alternates", []):
+        if alt.get("mode") != "first_last" and pricing.op_usd(sheet, "clip_patch", alt["model"], {"inputS": spec.get("minS", 2)}) is None:
+            fail(f"✗ capabilities/{provider}.json: clip_patch alternate {alt['model']} has no price by the second")
+
+# The clip_patch reservations in examples/patches.json are the runway sheet's arithmetic.
+import math  # noqa: E402
+_cp = sheets["runway"]["ops"]["clip_patch"]
+for case in json.loads((HERE / "examples" / "patches.json").read_text())["estimates"]["cases"]:
+    billed = max(_cp["minS"], math.ceil(case["seconds"] - 1e-9))
+    got = pricing.op_usd(sheets["runway"], "clip_patch", None, {"inputS": billed})
+    if got != case["usd"]:
+        fail(f"✗ examples/patches.json: a {case['seconds']} s cut reserves {got}, not {case['usd']}")
+print("✓ examples/patches.json estimates")
 
 # A pick names a model by provider and model id, so an op's models must be distinct.
 for provider, sheet in sheets.items():
     for op, spec in sheet["ops"].items():
         models = [spec["model"]] + [a["model"] for a in spec.get("alternates", [])]
         if len(set(models)) != len(models):
-            failures += 1
-            print(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
+            fail(f"✗ capabilities/{provider}.json: {op} names a model twice in {models}")
+
+# The price vectors: pricing.py gives exactly each case's credits, or refuses (the relay's pytest asserts the same file).
+for case in json.loads((HERE / "examples" / "pricing-cases.json").read_text())["cases"]:
+    sheet = sheets[case["sheet"]]
+    try:
+        got = pricing.credits(sheet, case["model"], case["settings"])
+    except pricing.PriceError as e:
+        got = f"refused ({e})"
+    want = "refused" if case.get("refused") else case["credits"]
+    if (want == "refused") != isinstance(got, str) or (want != "refused" and got != want):
+        fail(f"✗ examples/pricing-cases.json: {case['model']} {case['settings']} is {got}; the case says {want}")
+print("✓ examples/pricing-cases.json (vectors)")
+
+# The cost model: each scenario's credits, from the sheet, equal its expected total (a price change shows here).
+cost_model = json.loads((HERE / "cost-model.json").read_text())
+for sc in cost_model["scenarios"]:
+    try:
+        total = sum(pricing.credits(sheets[cost_model["provider"]], ln["model"], ln["settings"]) * ln["count"] for ln in sc["lines"])
+    except pricing.PriceError as e:
+        fail(f"✗ cost-model.json: {sc['id']}: {e}")
+        continue
+    if total != cost_model["expected"].get(sc["id"]):
+        fail(f"✗ cost-model.json: {sc['id']} is {total} credits at today's sheet; expected says {cost_model['expected'].get(sc['id'])}")
+print("✓ cost-model.json (totals)")
+
+# Every maker a sheet names is in the notice, and the default allowlist names only makers the notice
+# covers (features/tenant-limits.clan); subprocessors.md is what subprocessors.py renders.
+import subprocessors  # noqa: E402  (contracts/subprocessors.py, standard library only)
+
+policy = json.loads((HERE / "spend-policy.json").read_text())
+notice = json.loads((HERE / "subprocessors.json").read_text())
+noticed = {e["id"] for e in notice["entries"] if e["control"] == "maker"}
+for provider, sheet in sheets.items():
+    for name, model in sheet["models"].items():
+        if model["maker"] not in noticed and model["maker"] not in policy["alwaysAllowed"]:
+            fail(f"✗ capabilities/{provider}.json: {name}'s maker {model['maker']!r} is not in subprocessors.json")
+for maker in policy["allow"]["makers"]:
+    if maker not in noticed:
+        fail(f"✗ spend-policy.json: allows {maker!r}, which subprocessors.json does not list")
+for e in notice["entries"]:
+    if e.get("via") and e["via"] not in {x["id"] for x in notice["entries"]}:
+        fail(f"✗ subprocessors.json: {e['id']} goes via {e['via']!r}, which is not an entry")
+if (HERE / "subprocessors.md").read_text() != subprocessors.rendered():
+    fail("✗ subprocessors.md: not what subprocessors.json renders; run python production-tool/contracts/subprocessors.py --write")
+print("✓ subprocessors.json, subprocessors.md and the makers")
+
+# Tenant data never goes in config.json, which is public three ways (features/os-sign-in.clan).
+for f in sorted(HERE.glob("examples/config.*.json")):
+    if "tenants" in json.loads(f.read_text()):
+        fail(f"✗ {f.relative_to(HERE)}: carries tenants; tenant items live in the private tenants table")
+
+# Format ids never contain '/' and are unique across the file.
+packs = json.loads((HERE / "format-packs.json").read_text())
+ids = [fmt["id"] for pack in packs["packs"] for fmt in pack["formats"]]
+if len(set(ids)) != len(ids):
+    fail("✗ format-packs.json: a format id is used twice")
+# A campaign plan picks formats that exist, by pack (features/campaign-formats.clan); only a film is cut to
+# lengths; every format in our file names its Campaign board lane.
+by_pack = {pack["id"]: {fmt["id"]: fmt for fmt in pack["formats"]} for pack in packs["packs"]}
+for pack in packs["packs"]:
+    for fmt in pack["formats"]:
+        if "channel" not in fmt:
+            fail(f"✗ format-packs.json: {fmt['id']} has no channel (its Campaign board lane)")
+for plan in packs.get("plans", []):
+    if plan["id"] in by_pack:
+        fail(f"✗ format-packs.json: plan {plan['id']} has a pack's id")
+    seen = set()
+    for item in plan["items"]:
+        fmt = by_pack.get(item["pack_id"], {}).get(item["format_id"])
+        if fmt is None:
+            fail(f"✗ format-packs.json: plan {plan['id']} names {item['pack_id']}/{item['format_id']}, which is not a format of that pack")
+            continue
+        if item.get("lengths_s") and fmt["kind"] != "video":
+            fail(f"✗ format-packs.json: plan {plan['id']} gives {item['format_id']} lengths, but it is not a film")
+        if item["format_id"] in seen:
+            fail(f"✗ format-packs.json: plan {plan['id']} names {item['format_id']} twice")
+        seen.add(item["format_id"])
+# Make all sizes reads the method each resize and cutdown model serves from the sheet (the method table).
+for provider, sheet in sheets.items():
+    for op in ("resize", "cutdown"):
+        spec = sheet["ops"].get(op)
+        for s in ([spec, *spec.get("alternates", [])] if spec else []):
+            if "method" not in s:
+                fail(f"✗ capabilities/{provider}.json: {op} model {s['model']} names no method")
+
+# The X-Napkin-Identity v1 vector (docs/contracts/production-tool-identity.md): the claims, key and body
+# give exactly the assertion, which napkin-web's cargo test and the relay's pytest also check.
+import base64, hashlib, hmac, uuid  # noqa: E401,E402
+
+vec = json.loads((HERE / "examples" / "identity-assertion.vector.json").read_text())
+claims_json = json.dumps(vec["claims"], separators=(",", ":"), ensure_ascii=False)
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+head = "v1." + b64(claims_json.encode())
+want = head + "." + b64(hmac.new(vec["key"].encode(), head.encode(), hashlib.sha256).digest())
+c = vec["claims"]
+problems = [
+    claims_json != vec["claimsJson"] and "claimsJson is not the compact claims",
+    want != vec["assertion"] and "the assertion does not match its claims and key",
+    c["bh"] != hashlib.sha256(vec["body"].encode()).hexdigest() and "bh is not the body's SHA-256",
+    c["t"] != str(uuid.uuid5(uuid.NAMESPACE_URL, "napkin:agency:" + c["a"])) and "t is not the agency's tenant id",
+    (c["m"], c["p"]) != (vec["method"], vec["pathAndQuery"]) and "m and p do not name the request",
+]
+for p in filter(None, problems):
+    fail(f"✗ examples/identity-assertion.vector.json: {p}")
+if not any(problems):
+    print("✓ examples/identity-assertion.vector.json")
+
+# The service-credential vector (docs/contracts/production-tool-identity.md): recomputed here without the relay's
+# code, so the contract and the verifier cannot drift together.
+sv = json.loads((HERE / "examples" / "service-credential.vector.json").read_text())
+sc_json = json.dumps(sv["claims"], separators=(",", ":"), ensure_ascii=False)
+sc_b64 = b64(sc_json.encode())
+sc_msg = "\n".join(["napkin-user-v1", sv["method"], sv["pathAndQuery"], hashlib.sha256(sv["body"].encode()).hexdigest(), sc_b64])
+sc_user = sc_b64 + "." + b64(hmac.new(sv["key"].encode(), sc_msg.encode(), hashlib.sha256).digest())
+sc = sv["claims"]
+sc_problems = [
+    sc_json != sv["claimsJson"] and "claimsJson is not the compact claims",
+    sc_user != sv["userHeader"] and "userHeader does not match its claims, key and request",
+    sv["authorization"] != "Bearer " + sv["key"] and "authorization is not the bearer of the key",
+    len(sv["key"]) < 32 and "the key is shorter than the relay's 32-character minimum",
+    sc["t"] != str(uuid.uuid5(uuid.NAMESPACE_URL, "napkin:agency:" + sc["a"])) and "t is not the agency's tenant id",
+    sc["exp"] - sc["iat"] > 120 and "the claim lives longer than the relay allows",
+]
+for p in filter(None, sc_problems):
+    fail(f"✗ examples/service-credential.vector.json: {p}")
+if not any(sc_problems):
+    print("✓ examples/service-credential.vector.json")
 
 sys.exit(1 if failures else 0)

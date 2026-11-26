@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "@sai_front drags a roller of bright blue paint down a white wall in one stripe, backs away, and cocks his head."
+     },
+     {
+      "type": "direction",
+      "text": "Static frame; he exits the shot."
+     }
+    ],
+    "note": "I rephrased the action and the direction, keeping the same events, order and @name."
+   }
+  ],
+  "rationale": "Rephrase keeps the same facts, order and @sai_front, with the direction last, at about the same length."
+ }
+}

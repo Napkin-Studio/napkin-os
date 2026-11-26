@@ -73,6 +73,10 @@ class FakeModel:
 
     # -- responders -------------------------------------------------------------
     @staticmethod
+    def r_discover_players(p):
+        return {"players": []}  # research finds no players unless a test says otherwise (UAT round 4 F11)
+
+    @staticmethod
     def r_tie_claims(p):
         return {"ties": []}  # the tie call names nothing unless a test says otherwise
 
@@ -129,7 +133,8 @@ class FakeModel:
             if (x := re.search(r"Director, (.+)", t)):
                 client = {"name": x.group(1).strip(), "quote": x.group(1).strip(), "material_id": mid}
             for rx, leaf in ((r"\b[Tt]onic\b|soft drink", "soft_drinks.carbonates"),
-                             (r"\b(?:EV|Ev|electric)\b", "automotive.ev_charging"), (r"\bhybrid\b", "automotive.hybrid")):
+                             (r"\b(?:EV|Ev|electric)\b", "automotive.ev_charging"), (r"\bhybrid\b", "automotive.hybrid"),
+                             (r"\bcleaning\b", "household.laundry_cleaning"), (r"\bgreen claims\b", "energy.green_claims")):
                 if (x := re.search(rx, t)) and leaf not in [c["leaf"] for c in cats]:
                     cats.append({"leaf": leaf, "quote": x.group(0), "material_id": mid})
         mids = [m["material_id"] for m in p["materials"]]

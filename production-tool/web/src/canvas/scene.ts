@@ -1,69 +1,26 @@
-// Helpers over the Excalidraw scene: reading our customData, making the tool's
+// Helpers over the canvas scene: reading our customData, making the tool's
 // own elements (drawn frames, gen placeholders, curved provenance arrows) and
-// image files. Every element the tool owns carries customData per
+// pictures' bytes. Every element the tool owns carries customData per
 // customdata.schema.json; elements without it are the user's own drawing.
+// The engine's calls go through CanvasAdapter v2 over the engine-neutral
+// CanvasElement (features/canvas-core.clan, features/engine-adapter.clan);
+// the pure readers live in sceneRead.ts and are re-exported here.
 
-import { convertToExcalidrawElements, exportToBlob, getCommonBounds, newElementWith } from '@excalidraw/excalidraw'
-import type { BinaryFileData, BinaryFiles } from '@excalidraw/excalidraw/types'
-import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types'
-import type { CustomData, GenOp, Sha256, View } from '../contracts/types'
-import { hexOf } from '../lib/hash'
+import type { CustomData, GenOp, View } from '../contracts/types'
+import type { CanvasAdapter, CanvasAsset, CanvasElement } from './core/canvasAdapter'
+import { elementBounds } from './core/geometry'
 import { bendAway, curvePoints } from './curve'
+import { alive, cd } from './sceneRead'
 
-export type El = ExcalidrawElement
+export { alive, byOwnId, cd, childrenOf, idOf, imageOf, isText, isUserDrawing, textOf } from './sceneRead'
+
+export type El = CanvasElement
+/** The canvas as the tool uses it: whichever engine is mounted, behind CanvasAdapter v2. */
+export type Canvas = CanvasAdapter
 export const ACCENT = '#FF4F2E'
 
-export function cd(el: El | undefined): CustomData | undefined {
-  const c = el?.customData as CustomData | undefined
-  return c && typeof c === 'object' && 'kind' in c ? c : undefined
-}
-
-export function idOf(el: El): string | undefined {
-  const c = cd(el)
-  if (!c || c.kind === 'provenance') return undefined
-  return c.id
-}
-
-export const alive = (els: readonly El[]) => els.filter((e) => !e.isDeleted)
-
-export function byOwnId(els: readonly El[], id: string): El | undefined {
-  return els.find((e) => !e.isDeleted && (e.id === id || idOf(e) === id))
-}
-
-/** An image node (picture, drawing frame or generated image) and its picture, when it has one yet. */
-export function imageOf(el: El | undefined): { id: string; asset?: Sha256; kind: 'pic' | 'drawn' | 'gen' } | undefined {
-  const c = cd(el)
-  if (c?.kind === 'pic' || c?.kind === 'drawn') return { id: c.id, asset: c.asset, kind: c.kind }
-  if (c?.kind === 'gen') return { id: c.id, asset: c.asset, kind: 'gen' }
-  return undefined
-}
-
-export function childrenOf(els: readonly El[], frameId: string): El[] {
-  return els.filter((e) => !e.isDeleted && e.frameId === frameId)
-}
-
-/** The user's own marks (not the tool's, not text): strokes and shapes. */
-export function isUserDrawing(e: El): boolean {
-  return !e.isDeleted && !cd(e) && e.type !== 'image' && e.type !== 'frame' && e.type !== 'magicframe' && e.type !== 'text' && e.type !== 'arrow'
-}
-
-/** Words on the canvas: a text element, loose or used as a note. */
-export function isText(e: El): boolean {
-  return !e.isDeleted && e.type === 'text' && (!cd(e) || cd(e)?.kind === 'note')
-}
-
-export function textOf(e: El): string {
-  const t = e as El & { originalText?: string; text?: string }
-  return (t.originalText ?? t.text ?? '').trim()
-}
-
 export function bounds(els: readonly El[]) {
-  const [minX, minY, maxX, maxY] = getCommonBounds(els)
-  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY }
-}
-
-export function fileIdFor(sha: string): FileId {
-  return hexOf(sha).slice(0, 40) as FileId
+  return elementBounds(els)
 }
 
 export function blobToDataURL(blob: Blob): Promise<string> {
@@ -80,37 +37,25 @@ export async function dataURLToBlob(dataURL: string): Promise<Blob> {
   return await res.blob()
 }
 
-export async function fileData(sha: string, blob: Blob): Promise<BinaryFileData> {
-  return {
-    id: fileIdFor(sha),
-    dataURL: (await blobToDataURL(blob)) as BinaryFileData['dataURL'],
-    mimeType: (blob.type || 'image/png') as BinaryFileData['mimeType'],
-    created: Date.now(),
-  }
+/** A picture's bytes for the canvas, keyed by its sha256. */
+export async function assetData(sha: string, blob: Blob): Promise<CanvasAsset> {
+  return { sha256: sha, dataURL: await blobToDataURL(blob), mimeType: blob.type || 'image/png' }
 }
 
 export { downscale } from '../lib/fitImage'
 
 /** Export some elements to a PNG, without the tool's labels and arrows. */
-export async function exportElements(els: readonly El[], files: BinaryFiles): Promise<Blob> {
+export async function exportElements(canvas: Canvas, els: readonly El[]): Promise<Blob> {
   const drawn = els.filter((e) => !e.isDeleted && e.type !== 'arrow' && e.type !== 'text' && cd(e)?.kind !== 'provenance')
-  return await exportToBlob({
-    elements: drawn,
-    files,
-    mimeType: 'image/png',
-    exportPadding: 24,
-    appState: { exportBackground: true, viewBackgroundColor: '#ffffff', exportWithDarkMode: false },
-  })
+  return await canvas.exportPng(drawn, { padding: 24, background: '#ffffff' })
 }
 
-export function makeGenPlaceholder(jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View): El {
+/** `shape`: a resize's shape chip ("9:16"), shown on the result (features/resize-selection.clan). */
+export function makeGenPlaceholder(canvas: Canvas, jobId: string, op: GenOp, parentIds: string[], at: { x: number; y: number }, size = { w: 300, h: 400 }, view?: View, shape?: string): El {
   const customData: CustomData = { kind: 'gen', id: jobId, op, parentIds, state: 'queued' }
   if (view) customData.view = view
-  const [el] = convertToExcalidrawElements(
-    [{ type: 'image', id: jobId, x: at.x, y: at.y, width: size.w, height: size.h, fileId: null as unknown as FileId, customData }],
-    { regenerateIds: false },
-  )
-  return newElementWith(el as ExcalidrawImageElement, { status: 'pending', fileId: null })
+  if (shape) customData.shape = shape
+  return canvas.imageNode({ id: jobId, x: at.x, y: at.y, width: size.w, height: size.h, assetSha: null, customData, status: 'pending', keepIds: true })
 }
 
 /**
@@ -118,7 +63,7 @@ export function makeGenPlaceholder(jobId: string, op: GenOp, parentIds: string[]
  * `over`: leave and arrive on the top edges and arc above, for a row of results made from one
  * source (the views), so the arrow never crosses the nodes between them.
  */
-export function makeArrow(from: El, to: El, fromId: string, toId: string, index = 0, over = false): El {
+export function makeArrow(canvas: Canvas, from: El, to: El, fromId: string, toId: string, index = 0, over = false): El {
   const fb = bounds([from])
   const tb = bounds([to])
   let start: { x: number; y: number }
@@ -135,33 +80,44 @@ export function makeArrow(from: El, to: El, fromId: string, toId: string, index 
     end = { x: rightward ? tb.minX - 8 : tb.maxX + 8, y: tb.minY + tb.h / 2 }
     bend = bendAway(end.x - start.x, fb.minY + fb.h / 2 - (tb.minY + tb.h / 2), index)
   }
-  const points = curvePoints(start, end, bend)
-  const xs = points.map((p) => p[0])
-  const ys = points.map((p) => p[1])
-  const [arrow] = convertToExcalidrawElements(
-    [{
-      type: 'arrow', x: start.x, y: start.y, width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys),
-      points: points as never, roundness: { type: 2 },
-      strokeColor: ACCENT, strokeWidth: 2, strokeStyle: 'dashed', roughness: 0, endArrowhead: 'arrow',
-      customData: { kind: 'provenance', from: fromId, to: toId },
-    } as never],
-  )
-  return newElementWith(arrow, {
-    startBinding: { elementId: from.id, focus: 0, gap: 8 },
-    endBinding: { elementId: to.id, focus: 0, gap: 8 },
-  } as never)
-}
-
-/** Add an arrow to its endpoints' boundElements so Excalidraw moves it with them. */
-export function bindArrow(els: El[], arrow: El): El[] {
-  const a = arrow as El & { startBinding?: { elementId: string }; endBinding?: { elementId: string } }
-  const ids = [a.startBinding?.elementId, a.endBinding?.elementId]
-  return els.map((e) =>
-    ids.includes(e.id) ? newElementWith(e, { boundElements: [...(e.boundElements ?? []), { id: arrow.id, type: 'arrow' }] }) : e,
-  )
+  return canvas.provenanceArrow({
+    origin: start, points: curvePoints(start, end, bend), fromElId: from.id, toElId: to.id, color: ACCENT,
+    customData: { kind: 'provenance', from: fromId, to: toId },
+  })
 }
 
 /** Where the next output beside `anchor` goes: right of anything already in that row. */
+/**
+ * A clear place for a row of new nodes beside `anchor`: right of it when nothing is there, else under it, else past
+ * everything on its row (nextSlot). Views of a front went past the whole row, so their key group's outline spanned
+ * the pictures between them and covered them (UAT round 1 IMG-22). Boards (frames) and arrows do not block.
+ */
+export function slotNear(els: readonly El[], anchor: { minX: number; minY: number; maxX: number; maxY: number }, size: { w: number; h: number }, gap = 80) {
+  const solid = alive(els).filter((e) => e.type !== 'arrow' && e.type !== 'frame')
+  const clear = (b: { x: number; y: number; w: number; h: number }) => !solid.some((e) => e.x < b.x + b.w && b.x < e.x + e.width && e.y < b.y + b.h && b.y < e.y + e.height)
+  const right = { x: anchor.maxX + gap, y: anchor.minY, ...size }
+  if (clear(right)) return right
+  const below = { x: anchor.minX, y: anchor.maxY + gap, ...size }
+  if (clear(below)) return below
+  return nextSlot(els, anchor, size, gap)
+}
+
+/** Room under a key group's views for its label ("Marco · 4 views") and their name chips. */
+const KEY_ROW_LABEL = 48
+
+/**
+ * Where a result made from `sources` goes: beside them (nextSlot), unless one of them is a key's view in its group
+ * (`key:<key>`, canvas/nodes/keyGroups.ts); then on a row of its own under the whole group, so the group's outline
+ * never runs under results made from it (UAT round 2, IMG-22 leftover).
+ */
+export function slotFrom(els: readonly El[], sources: readonly El[], size: { w: number; h: number }, gap = 80) {
+  const keys = new Set(sources.flatMap((e) => ((e as El & { groupIds?: readonly string[] }).groupIds ?? []).filter((g) => g.startsWith('key:'))))
+  if (!keys.size) return nextSlot(els, bounds(sources), size, gap)
+  const group = alive(els).filter((e) => ((e as El & { groupIds?: readonly string[] }).groupIds ?? []).some((g) => keys.has(g)))
+  const box = bounds([...group, ...sources])
+  return nextSlot(els, { maxX: box.minX - gap, minY: box.maxY + gap + KEY_ROW_LABEL }, size, gap)
+}
+
 export function nextSlot(els: readonly El[], anchor: { maxX: number; minY: number }, size: { w: number; h: number }, gap = 80) {
   const y = anchor.minY
   const inRow = alive(els).filter((e) => e.type !== 'arrow' && e.y < y + size.h && e.y + e.height > y && e.x + e.width > anchor.maxX)

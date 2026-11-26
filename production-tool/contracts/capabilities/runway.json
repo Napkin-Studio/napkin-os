@@ -1,136 +1,1026 @@
 {
-  "contractVersion": "2",
+  "contractVersion": "3",
   "provider": "runway",
-  "checked": "2026-10-08",
+  "checked": "2026-10-15",
+  "usdPerCredit": 0.01,
+  "sources": [
+    {"url": "https://docs.dev.runwayml.com/openapi.json", "fetched": "2026-10-15"},
+    {"url": "https://docs.dev.runwayml.com/guides/pricing.md", "fetched": "2026-10-15"}
+  ],
   "ops": {
     "generate": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "896:1152"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro",
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "896:1152"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "view": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "896:1152"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro",
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "896:1152"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "frame": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "1344:768"},
       "label": "Gemini 3 Pro",
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "alternates": [
         {
           "model": "gemini_image3.1_flash",
           "endpoint": "POST /v1/text_to_image",
-          "estimateUsd": 0.07,
+          "defaults": {"outputs": 1, "ratio": "1344:768"},
           "label": "Gemini 3.1 Flash",
           "note": "Faster and cheaper; the previous default",
           "seed": false,
-          "outputs": [
-            1,
-            4
-          ]
+          "outputs": [1, 4]
         }
       ]
     },
     "region_edit": {
+      "model": "ideogram_4_5",
+      "endpoint": "POST /v1/text_to_image",
+      "defaults": {"outputs": 1, "refs": 1},
+      "seed": false,
+      "outputs": [1, 4],
+      "label": "Ideogram 4.5",
+      "note": "Changes the masked area, or the whole frame keeping its composition",
+      "mask": "png_black_edit",
+      "preciseEdit": true,
+      "refs": {"max": 5, "maxCharacter": 5},
+      "alternates": [
+        {
+          "model": "gemini_image3_pro",
+          "endpoint": "POST /v1/text_to_image",
+          "defaults": {"outputs": 1, "ratio": "1344:768"},
+          "label": "Gemini 3 Pro",
+          "note": "Redraws a boxed area; the previous default",
+          "seed": false,
+          "outputs": [1, 4],
+          "mask": "none"
+        }
+      ]
+    },
+    "frame_edit": {
       "model": "gemini_image3_pro",
       "endpoint": "POST /v1/text_to_image",
-      "estimateUsd": 0.2,
+      "defaults": {"outputs": 1, "ratio": "1344:768"},
       "seed": false,
-      "outputs": [
-        1,
-        4
-      ],
+      "outputs": [1, 4],
       "label": "Gemini 3 Pro"
     },
     "clip": {
       "model": "veo3.1",
       "endpoint": "POST /v1/image_to_video",
-      "estimateUsd": 1.2,
+      "textEndpoint": "POST /v1/text_to_video",
+      "defaults": {"durationS": 6, "audio": false},
       "label": "Veo 3.1",
-      "durationsS": [
-        4,
-        6,
-        8
-      ],
+      "quality": {"draft": {"tier": "720p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+      "durationsS": [4, 6, 8],
       "seed": true,
       "alternates": [
         {
           "model": "veo3.1_fast",
           "endpoint": "POST /v1/image_to_video",
-          "estimateUsd": 0.6,
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false},
           "label": "Veo 3.1 Fast",
+          "quality": {"draft": {"tier": "720p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
           "note": "Faster and cheaper; the previous default",
-          "durationsS": [
-            4,
-            6,
-            8
-          ],
-          "seed": true
+          "durationsS": [4, 6, 8],
+          "seed": true,
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "tight",
+            "take": {"ok": false},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "klingO3_pro",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false},
+          "label": "Kling O3 Pro",
+          "family": "klingO3",
+          "familyLabel": "Kling O3",
+          "quality": {"final": {"tier": "1080p"}},
+          "note": "Holds a character: the frame plus up to 6 pictures",
+          "minS": 3,
+          "maxS": 15,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 6, "maxCharacter": 6},
+          "video": {
+            "firstFrameWithRefs": true,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": null, "field": "multiPrompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "klingO3_standard",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false},
+          "label": "Kling O3 Standard",
+          "family": "klingO3",
+          "familyLabel": "Kling O3",
+          "quality": {"draft": {"tier": "720p"}, "standard": {"tier": "720p"}},
+          "note": "Holds a character: the frame plus up to 6 pictures",
+          "minS": 3,
+          "maxS": 15,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 6, "maxCharacter": 6},
+          "video": {
+            "firstFrameWithRefs": true,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": null, "field": "multiPrompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "kling3.0_pro",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false},
+          "label": "Kling 3.0 Pro",
+          "family": "kling3.0",
+          "familyLabel": "Kling 3.0",
+          "quality": {"final": {"tier": "1080p"}},
+          "note": "From the frame (and a last frame), 3-15 s",
+          "minS": 3,
+          "maxS": 15,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 0, "maxCharacter": 0},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": null, "field": "multiPrompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "kling3.0_standard",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false},
+          "label": "Kling 3.0 Standard",
+          "family": "kling3.0",
+          "familyLabel": "Kling 3.0",
+          "quality": {"draft": {"tier": "720p"}, "standard": {"tier": "720p"}},
+          "note": "From the frame (and a last frame), 3-15 s",
+          "minS": 3,
+          "maxS": 15,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 0, "maxCharacter": 0},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": null, "field": "multiPrompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true
+          }
+        },
+        {
+          "model": "hailuo3",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false, "resolution": "768p"},
+          "label": "Hailuo 3",
+          "quality": {"draft": {"tier": "768p", "resolution": "768p"}, "standard": {"tier": "768p", "resolution": "768p"}, "final": {"tier": "2k", "resolution": "2k"}},
+          "note": "With no frame, holds a character from up to 9 pictures",
+          "minS": 5,
+          "maxS": 15,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 9, "maxCharacter": 9},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false,
+            "refsWithoutFrame": true
+          }
+        },
+        {
+          "model": "gemini_omni_flash_1.1",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false, "ratio": "1280:720"},
+          "label": "Gemini Omni Flash 1.1",
+          "quality": {"draft": {"tier": "360p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+          "note": "With no frame, holds a character from up to 5 pictures",
+          "minS": 3,
+          "maxS": 10,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 5, "maxCharacter": 5},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": true, "maxS": 10, "maxShots": 6, "withLast": false, "cutAccuracyS": 0.15, "field": "prompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false,
+            "refsWithoutFrame": true
+          }
+        },
+        {
+          "model": "wan3",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false, "ratio": "1280:720"},
+          "label": "WAN 3",
+          "quality": {"draft": {"tier": "480p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+          "note": "With no frame, holds a character from up to 10 pictures; to 30 s",
+          "minS": 2,
+          "maxS": 30,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 10, "maxCharacter": 10},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "tight",
+            "take": {"ok": true, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": 0.05, "field": "prompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true,
+            "refsWithoutFrame": true
+          }
+        },
+        {
+          "model": "seedance2_5",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false, "ratio": "1280:720"},
+          "label": "Seedance 2.5",
+          "quality": {"draft": {"tier": "480p", "draft": true}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+          "note": "Stylised characters only: Seedance refuses photoreal faces",
+          "minS": 4,
+          "maxS": 30,
+          "seed": true,
+          "tagSyntax": "none",
+          "refs": {"max": 30, "maxCharacter": 30},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": true, "maxS": 15, "maxShots": 6, "withLast": false, "cutAccuracyS": 0.15, "field": "prompt"},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true,
+            "refsWithoutFrame": true
+          }
+        },
+        {
+          "model": "seedance2_fast",
+          "endpoint": "POST /v1/image_to_video",
+          "textEndpoint": "POST /v1/text_to_video",
+          "defaults": {"durationS": 6, "audio": false, "ratio": "1280:720"},
+          "label": "Seedance 2.0 Fast",
+          "quality": {"draft": {"tier": "480p"}, "standard": {"tier": "720p"}, "final": {"tier": "720p"}},
+          "note": "Stylised characters only: Seedance refuses photoreal faces",
+          "minS": 4,
+          "maxS": 15,
+          "seed": true,
+          "tagSyntax": "none",
+          "refs": {"max": 9, "maxCharacter": 9},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": true,
+            "lastFrameFidelity": "untested",
+            "take": {"ok": false},
+            "regionEdit": "temporal_keyframe",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": true,
+            "refsWithoutFrame": true
+          }
         }
       ]
     },
     "clip_edit": {
       "model": "aleph2",
       "endpoint": "POST /v1/video_to_video",
-      "estimateUsd": 1.4,
+      "defaults": {"inputS": 5},
+      "minS": 2,
+      "maxS": 30,
+      "seed": true,
+      "label": "Aleph 2",
+      "alternates": [
+        {
+          "model": "klingO3_pro",
+          "endpoint": "POST /v1/video_to_video",
+          "defaults": {"inputS": 5},
+          "label": "Kling O3 Pro",
+          "family": "klingO3",
+          "familyLabel": "Kling O3",
+          "quality": {"final": {"tier": "1080p"}},
+          "note": "Changes or adds things from up to 4 pictures; keeps the sound; 10 s",
+          "maxS": 10,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 5, "maxCharacter": 4},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "regionEdit": "none",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false
+          }
+        },
+        {
+          "model": "klingO3_standard",
+          "endpoint": "POST /v1/video_to_video",
+          "defaults": {"inputS": 5},
+          "label": "Kling O3 Standard",
+          "family": "klingO3",
+          "familyLabel": "Kling O3",
+          "quality": {"draft": {"tier": "720p"}, "standard": {"tier": "720p"}},
+          "note": "Changes or adds things from up to 4 pictures; keeps the sound; 10 s",
+          "maxS": 10,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 5, "maxCharacter": 4},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "regionEdit": "none",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false
+          }
+        },
+        {
+          "model": "gemini_omni_flash_1.1",
+          "endpoint": "POST /v1/video_to_video",
+          "defaults": {"inputS": 5, "resolution": "720p"},
+          "label": "Gemini Omni Flash 1.1",
+          "quality": {"draft": {"tier": "360p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+          "note": "Changes the clip from words and up to 5 pictures; up to 10 s",
+          "maxS": 10,
+          "seed": false,
+          "tagSyntax": "none",
+          "refs": {"max": 6, "maxCharacter": 5},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "regionEdit": "none",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false
+          }
+        },
+        {
+          "model": "seedance2_5",
+          "endpoint": "POST /v1/video_to_video",
+          "defaults": {"inputS": 5, "ratio": "1280:720"},
+          "label": "Seedance 2.5",
+          "keepsSize": true,
+          "quality": {"draft": {"tier": "480p"}, "standard": {"tier": "720p"}, "final": {"tier": "1080p"}},
+          "note": "Stylised characters only: Seedance refuses photoreal faces",
+          "maxS": 30,
+          "seed": true,
+          "tagSyntax": "none",
+          "refs": {"max": 31, "maxCharacter": 30},
+          "video": {
+            "firstFrameWithRefs": false,
+            "lastFrame": false,
+            "regionEdit": "none",
+            "feelEdit": "prompt",
+            "audioDefault": true,
+            "audioControl": false
+          }
+        }
+      ]
+    },
+    "clip_patch": {
+      "model": "aleph2",
+      "endpoint": "POST /v1/video_to_video",
+      "defaults": {"inputS": 2},
       "minS": 2,
       "maxS": 30,
       "seed": true,
       "label": "Aleph 2"
+    },
+    "upscale": {
+      "model": "magnific_precision_upscaler_v2",
+      "endpoint": "POST /v1/image_upscale",
+      "defaults": {"inputPx": 1344, "scaleFactor": 2},
+      "seed": false,
+      "label": "Magnific Precision Upscaler v2"
+    },
+    "resize": {
+      "model": "ideogram_4_5",
+      "endpoint": "POST /v1/text_to_image",
+      "method": "extend",
+      "defaults": {"outputs": 1, "quality": "high"},
+      "seed": false,
+      "mask": "png_black_edit",
+      "label": "Ideogram 4.5",
+      "note": "Extends the master at high: fills round the clean plate",
+      "alternates": [
+        {"model": "gemini_image3_pro", "endpoint": "POST /v1/text_to_image", "method": "regenerate", "defaults": {"outputs": 1, "ratio": "768:1344"}, "seed": false, "mask": "none", "label": "Gemini 3 Pro", "note": "Remakes the master at a new shape, the master as reference"}
+      ]
+    },
+    "cutdown": {
+      "model": "aleph2",
+      "endpoint": "POST /v1/video_to_video",
+      "method": "reframe",
+      "defaults": {"inputS": 3},
+      "minS": 2,
+      "maxS": 30,
+      "seed": true,
+      "label": "Aleph 2",
+      "note": "Makes a shot's new edges where a crop would cut the subject"
+    }
+  },
+  "models": {
+    "gemini_image3_pro": {
+      "maker": "google",
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Gemini 3 Pro",
+      "ratios": [
+        {"ratio": "1344:768", "tier": "1K"},
+        {"ratio": "768:1344", "tier": "1K"},
+        {"ratio": "1024:1024", "tier": "1K"},
+        {"ratio": "1184:864", "tier": "1K"},
+        {"ratio": "864:1184", "tier": "1K"},
+        {"ratio": "1536:672", "tier": "1K"},
+        {"ratio": "832:1248", "tier": "1K"},
+        {"ratio": "1248:832", "tier": "1K"},
+        {"ratio": "896:1152", "tier": "1K"},
+        {"ratio": "1152:896", "tier": "1K"},
+        {"ratio": "2048:2048", "tier": "2K"},
+        {"ratio": "1696:2528", "tier": "2K"},
+        {"ratio": "2528:1696", "tier": "2K"},
+        {"ratio": "1792:2400", "tier": "2K"},
+        {"ratio": "2400:1792", "tier": "2K"},
+        {"ratio": "1856:2304", "tier": "2K"},
+        {"ratio": "2304:1856", "tier": "2K"},
+        {"ratio": "1536:2752", "tier": "2K"},
+        {"ratio": "2752:1536", "tier": "2K"},
+        {"ratio": "3168:1344", "tier": "2K"},
+        {"ratio": "4096:4096", "tier": "4K"},
+        {"ratio": "3392:5056", "tier": "4K"},
+        {"ratio": "5056:3392", "tier": "4K"},
+        {"ratio": "3584:4800", "tier": "4K"},
+        {"ratio": "4800:3584", "tier": "4K"},
+        {"ratio": "3712:4608", "tier": "4K"},
+        {"ratio": "4608:3712", "tier": "4K"},
+        {"ratio": "3072:5504", "tier": "4K"},
+        {"ratio": "5504:3072", "tier": "4K"},
+        {"ratio": "6336:2688", "tier": "4K"}
+      ],
+      "outputs": [1, 4],
+      "promptMax": 5500,
+      "promptUnit": "utf16",
+      "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
+      "mask": "none",
+      "pricing": {
+        "unit": "image",
+        "byResolution": {"1K": 20, "2K": 20, "4K": 40},
+        "source": ["`gemini_image3_pro` | 20 credits per 1K or 2K image, 40 credits per 4K image"]
+      }
+    },
+    "gemini_image3.1_flash": {
+      "maker": "google",
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Gemini 3.1 Flash",
+      "ratios": [
+        {"ratio": "512:512", "tier": "512"},
+        {"ratio": "416:624", "tier": "512"},
+        {"ratio": "624:416", "tier": "512"},
+        {"ratio": "432:592", "tier": "512"},
+        {"ratio": "592:432", "tier": "512"},
+        {"ratio": "448:576", "tier": "512"},
+        {"ratio": "576:448", "tier": "512"},
+        {"ratio": "384:672", "tier": "512"},
+        {"ratio": "672:384", "tier": "512"},
+        {"ratio": "768:336", "tier": "512"},
+        {"ratio": "256:1024", "tier": "512"},
+        {"ratio": "1024:256", "tier": "512"},
+        {"ratio": "176:1408", "tier": "512"},
+        {"ratio": "1408:176", "tier": "512"},
+        {"ratio": "1024:1024", "tier": "1K"},
+        {"ratio": "832:1248", "tier": "1K"},
+        {"ratio": "1248:832", "tier": "1K"},
+        {"ratio": "864:1184", "tier": "1K"},
+        {"ratio": "1184:864", "tier": "1K"},
+        {"ratio": "896:1152", "tier": "1K"},
+        {"ratio": "1152:896", "tier": "1K"},
+        {"ratio": "768:1344", "tier": "1K"},
+        {"ratio": "1344:768", "tier": "1K"},
+        {"ratio": "1536:672", "tier": "1K"},
+        {"ratio": "512:2048", "tier": "1K"},
+        {"ratio": "2048:512", "tier": "1K"},
+        {"ratio": "352:2816", "tier": "1K"},
+        {"ratio": "2816:352", "tier": "1K"},
+        {"ratio": "2048:2048", "tier": "2K"},
+        {"ratio": "1696:2528", "tier": "2K"},
+        {"ratio": "2528:1696", "tier": "2K"},
+        {"ratio": "1792:2400", "tier": "2K"},
+        {"ratio": "2400:1792", "tier": "2K"},
+        {"ratio": "1856:2304", "tier": "2K"},
+        {"ratio": "2304:1856", "tier": "2K"},
+        {"ratio": "1536:2752", "tier": "2K"},
+        {"ratio": "2752:1536", "tier": "2K"},
+        {"ratio": "3168:1344", "tier": "2K"},
+        {"ratio": "1024:4096", "tier": "2K"},
+        {"ratio": "4096:1024", "tier": "2K"},
+        {"ratio": "704:5632", "tier": "2K"},
+        {"ratio": "5632:704", "tier": "2K"},
+        {"ratio": "4096:4096", "tier": "4K"},
+        {"ratio": "3392:5056", "tier": "4K"},
+        {"ratio": "5056:3392", "tier": "4K"},
+        {"ratio": "3584:4800", "tier": "4K"},
+        {"ratio": "4800:3584", "tier": "4K"},
+        {"ratio": "3712:4608", "tier": "4K"},
+        {"ratio": "4608:3712", "tier": "4K"},
+        {"ratio": "3072:5504", "tier": "4K"},
+        {"ratio": "5504:3072", "tier": "4K"},
+        {"ratio": "6336:2688", "tier": "4K"},
+        {"ratio": "2048:8192", "tier": "4K"},
+        {"ratio": "8192:2048", "tier": "4K"},
+        {"ratio": "1408:11264", "tier": "4K"},
+        {"ratio": "11264:1408", "tier": "4K"}
+      ],
+      "outputs": [1, 4],
+      "promptMax": 5500,
+      "promptUnit": "utf16",
+      "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
+      "mask": "none",
+      "pricing": {
+        "unit": "image",
+        "byResolution": {"512": 5, "1K": 7, "2K": 11, "4K": 16},
+        "source": [
+          "`gemini_image3.1_flash` | 5 credits per 512px image, 7 credits per 1K image, 11 credits per 2K image, 16 credits per 4K image"
+        ]
+      }
+    },
+    "ideogram_4_5": {
+      "maker": "ideogram",
+      "endpoint": "POST /v1/text_to_image",
+      "label": "Ideogram 4.5",
+      "ratios": [
+        {"ratio": "1024:1024"},
+        {"ratio": "1280:720"},
+        {"ratio": "720:1280"},
+        {"ratio": "1152:864"},
+        {"ratio": "864:1152"},
+        {"ratio": "1248:832"},
+        {"ratio": "832:1248"},
+        {"ratio": "1120:896"},
+        {"ratio": "896:1120"},
+        {"ratio": "1440:720"},
+        {"ratio": "720:1440"},
+        {"ratio": "2048:2048"},
+        {"ratio": "2560:1440"},
+        {"ratio": "1440:2560"},
+        {"ratio": "2304:1728"},
+        {"ratio": "1728:2304"},
+        {"ratio": "2496:1664"},
+        {"ratio": "1664:2496"},
+        {"ratio": "2240:1792"},
+        {"ratio": "1792:2240"},
+        {"ratio": "2880:1440"},
+        {"ratio": "1440:2880"},
+        {"ratio": "1024:576"},
+        {"ratio": "576:1024"},
+        {"ratio": "1408:704"},
+        {"ratio": "704:1408"},
+        {"ratio": "auto"}
+      ],
+      "outputs": [1, 2, 3, 4, 5, 6, 7, 8],
+      "promptMax": 10000,
+      "promptUnit": "utf16",
+      "refs": {"max": 5},
+      "mask": "png_black_edit",
+      "preciseEdit": true,
+      "pricing": {
+        "unit": "image",
+        "byQuality": {"very_low": 1, "low": 4, "medium": 8, "high": 25},
+        "defaultQuality": {"withRefs": "medium", "otherwise": "high", "preciseEdit": "high"},
+        "notWithPreciseEdit": ["very_low"],
+        "needsRefs": ["very_low"],
+        "source": [
+          "`ideogram_4_5` | 1–25 credits per image, by quality (see below)",
+          "`ideogram_4_5` and `ideogram_4_0` are billed as credits per image × `outputCount`, at any resolution. `ideogram_4_5` defaults to `medium` when generating from reference images and `high` otherwise, including `preciseEdit`; `very_low` requires reference images and is not available with `preciseEdit`. `ideogram_4_0` defaults to `medium`.",
+          "Quality `very_low`: 1",
+          "Quality `low`: 4",
+          "Quality `medium`: 8",
+          "Quality `high`: 25"
+        ]
+      }
+    },
+    "veo3.1": {
+      "maker": "google",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Veo 3.1",
+      "ratios": [{"ratio": "1280:720", "tier": "720p"}, {"ratio": "720:1280", "tier": "720p"}, {"ratio": "1080:1920", "tier": "1080p"}, {"ratio": "1920:1080", "tier": "1080p"}],
+      "durationsS": [4, 6, 8],
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "pricing": {
+        "unit": "second",
+        "credits": 20,
+        "audioCredits": 40,
+        "source": ["`veo3.1 (audio)` | 40 credits per second", "`veo3.1 (no audio)` | 20 credits per second"]
+      },
+      "audioParam": true,
+      "refAspect": { "min": 0.5, "max": 2 },
+      "negativePrompt": true
+    },
+    "veo3.1_fast": {
+      "maker": "google",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Veo 3.1 Fast",
+      "ratios": [{"ratio": "1280:720", "tier": "720p"}, {"ratio": "720:1280", "tier": "720p"}, {"ratio": "1080:1920", "tier": "1080p"}, {"ratio": "1920:1080", "tier": "1080p"}],
+      "durationsS": [4, 6, 8],
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "pricing": {
+        "unit": "second",
+        "credits": 10,
+        "audioCredits": 15,
+        "source": ["`veo3.1_fast (audio)` | 15 credits per second", "`veo3.1_fast (no audio)` | 10 credits per second"]
+      },
+      "audioParam": true,
+      "refAspect": { "min": 0.5, "max": 2 },
+      "negativePrompt": true
+    },
+    "aleph2": {
+      "maker": "runway",
+      "endpoint": "POST /v1/video_to_video",
+      "label": "Aleph 2",
+      "inputS": {"min": 2, "max": 30, "maxFps": 30},
+      "promptMax": 1000,
+      "promptUnit": "utf16",
+      "keyframes": {"max": 5, "range": "whole_seconds_end_exclusive"},
+      "targetAspectRatios": ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4", "9:16", "21:9"],
+      "pricing": {
+        "unit": "second",
+        "credits": 28,
+        "minCredits": 56,
+        "source": ["`aleph2` | 28 credits per second (56 credit minimum per generation)"]
+      },
+      "v2v": {"videoField": "videoUri", "refsMax": 0, "inputMaxS": 30}
+    },
+    "klingO3_pro": {
+      "maker": "kuaishou",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Kling O3 Pro",
+      "ratios": [
+        {"ratio": "1920:1080", "tier": "1080p"},
+        {"ratio": "1080:1920", "tier": "1080p"},
+        {"ratio": "1440:1440", "tier": "1080p"}
+      ],
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "audioParam": true,
+      "refAspect": { "min": 0.4, "max": 2.5 },
+      "imagesMax": 7,
+      "v2v": {"videoField": "promptVideo", "keepOriginalSound": true, "refsMax": 4, "inputMaxS": 10},
+      "pricing": {"unit": "second", "credits": 17, "source": ["`klingO3_pro` | 17 credits per second"]},
+      "promptMax": 2500,
+      "promptUnit": "utf16"
+    },
+    "klingO3_standard": {
+      "maker": "kuaishou",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Kling O3 Standard",
+      "ratios": [
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"},
+        {"ratio": "960:960", "tier": "720p"}
+      ],
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "audioParam": true,
+      "refAspect": { "min": 0.4, "max": 2.5 },
+      "imagesMax": 7,
+      "v2v": {"videoField": "promptVideo", "keepOriginalSound": true, "refsMax": 4, "inputMaxS": 10},
+      "pricing": {"unit": "second", "credits": 13, "source": ["`klingO3_standard` | 13 credits per second"]},
+      "promptMax": 2500,
+      "promptUnit": "utf16"
+    },
+    "kling3.0_pro": {
+      "maker": "kuaishou",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Kling 3.0 Pro",
+      "ratios": [
+        {"ratio": "1920:1080", "tier": "1080p"},
+        {"ratio": "1080:1920", "tier": "1080p"},
+        {"ratio": "1440:1440", "tier": "1080p"}
+      ],
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "audioParam": true,
+      "refAspect": { "min": 0.4, "max": 2.5 },
+      "pricing": {
+        "unit": "second",
+        "credits": 12,
+        "audioCredits": 17,
+        "source": ["`kling3.0_pro` (no audio) | 12 credits per second", "`kling3.0_pro` (audio) | 17 credits per second"]
+      },
+      "promptMax": 2500,
+      "promptUnit": "utf16"
+    },
+    "kling3.0_standard": {
+      "maker": "kuaishou",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Kling 3.0 Standard",
+      "ratios": [
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"},
+        {"ratio": "960:960", "tier": "720p"}
+      ],
+      "firstLastFrame": true,
+      "audioDefault": true,
+      "audioParam": true,
+      "refAspect": { "min": 0.4, "max": 2.5 },
+      "pricing": {
+        "unit": "second",
+        "credits": 9,
+        "audioCredits": 13,
+        "source": ["`kling3.0_standard` (no audio) | 9 credits per second", "`kling3.0_standard` (audio) | 13 credits per second"]
+      },
+      "promptMax": 2500,
+      "promptUnit": "utf16"
+    },
+    "hailuo3": {
+      "maker": "minimax",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Hailuo 3",
+      "ratios": [
+        {"ratio": "adaptive"},
+        {"ratio": "21:9"},
+        {"ratio": "16:9"},
+        {"ratio": "4:3"},
+        {"ratio": "1:1"},
+        {"ratio": "3:4"},
+        {"ratio": "9:16"}
+      ],
+      "resolutions": ["768p", "2k", "768P", "2K"],
+      "audioParam": false,
+      "refAspect": { "min": 0.2, "max": 4 },
+      "pricing": {
+        "unit": "second",
+        "byResolution": {"768p": 10, "768P": 10, "2k": 15, "2K": 15},
+        "perRef": 2,
+        "source": [
+          "`hailuo3` (768P) | 10 credits per second, plus 2 credits per reference image or keyframe (including an image-to-video start frame); reference video billed at the same per-second rate as output (capped at 15 seconds)",
+          "`hailuo3` (2K) | 15 credits per second, plus 2 credits per reference image or keyframe (including an image-to-video start frame); reference video billed at the same per-second rate as output (capped at 15 seconds)"
+        ]
+      },
+      "promptMax": 6000,
+      "promptUnit": "utf16"
+    },
+    "gemini_omni_flash_1.1": {
+      "maker": "google",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Gemini Omni Flash 1.1",
+      "ratios": [
+        {"ratio": "640:360", "tier": "360p"},
+        {"ratio": "360:640", "tier": "360p"},
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"},
+        {"ratio": "1920:1080", "tier": "1080p"},
+        {"ratio": "1080:1920", "tier": "1080p"},
+        {"ratio": "3840:2160", "tier": "4K"},
+        {"ratio": "2160:3840", "tier": "4K"}
+      ],
+      "firstLastFrame": true,
+      "audioParam": false,
+      "refAspect": { "min": 0.5, "max": 2 },
+      "v2v": {"videoField": "videoUri", "mode": "edit", "ratio": true, "refsMax": 5, "inputMaxS": 10},
+      "pricing": {
+        "unit": "second",
+        "byResolution": {"360p": 3.4, "720p": 10, "1080p": 15, "4K": 30},
+        "perRef": 1,
+        "perInputSecond": 1,
+        "source": [
+          "`gemini_omni_flash_1.1` (360p) | 3.4 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+          "`gemini_omni_flash_1.1` (720p) | 10 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+          "`gemini_omni_flash_1.1` (1080p) | 15 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video",
+          "`gemini_omni_flash_1.1` (4K) | 30 credits per second, plus 1 credit per reference image (including an image-to-video start frame) and 1 credit per second of input video"
+        ]
+      },
+      "promptMax": 4000,
+      "promptUnit": "utf16"
+    },
+    "wan3": {
+      "maker": "alibaba",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "WAN 3",
+      "ratios": [
+        {"ratio": "832:480", "tier": "480p"},
+        {"ratio": "720:544", "tier": "480p"},
+        {"ratio": "624:624", "tier": "480p"},
+        {"ratio": "544:720", "tier": "480p"},
+        {"ratio": "480:832", "tier": "480p"},
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "1104:832", "tier": "720p"},
+        {"ratio": "960:960", "tier": "720p"},
+        {"ratio": "832:1104", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"},
+        {"ratio": "1920:1080", "tier": "1080p"},
+        {"ratio": "1648:1248", "tier": "1080p"},
+        {"ratio": "1440:1440", "tier": "1080p"},
+        {"ratio": "1248:1648", "tier": "1080p"},
+        {"ratio": "1080:1920", "tier": "1080p"},
+        {"ratio": "auto_480p", "tier": "480p"},
+        {"ratio": "auto_720p", "tier": "720p"},
+        {"ratio": "auto_1080p", "tier": "1080p"}
+      ],
+      "audioParam": true,
+      "refAspect": { "min": 0.55, "max": 1.8 },
+      "keyframeRatio": "auto_tier",
+      "pricing": {
+        "unit": "second",
+        "byResolution": {"480p": 5, "720p": 10, "1080p": 20},
+        "source": [
+          "`wan3` (480p) | 5 credits per second",
+          "`wan3` (720p) | 10 credits per second",
+          "`wan3` (1080p) | 20 credits per second"
+        ]
+      },
+      "promptMax": 20000,
+      "promptUnit": "utf16"
+    },
+    "seedance2_5": {
+      "maker": "bytedance",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Seedance 2.5",
+      "ratios": [
+        {"ratio": "992:432", "tier": "480p"},
+        {"ratio": "854:480", "tier": "480p"},
+        {"ratio": "752:560", "tier": "480p"},
+        {"ratio": "640:640", "tier": "480p"},
+        {"ratio": "560:752", "tier": "480p"},
+        {"ratio": "480:854", "tier": "480p"},
+        {"ratio": "1470:630", "tier": "720p"},
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "1112:834", "tier": "720p"},
+        {"ratio": "960:960", "tier": "720p"},
+        {"ratio": "834:1112", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"},
+        {"ratio": "2206:946", "tier": "1080p"},
+        {"ratio": "1920:1080", "tier": "1080p"},
+        {"ratio": "1664:1248", "tier": "1080p"},
+        {"ratio": "1440:1440", "tier": "1080p"},
+        {"ratio": "1248:1664", "tier": "1080p"},
+        {"ratio": "1080:1920", "tier": "1080p"}
+      ],
+      "audioDefault": true,
+      "audioParam": true,
+      "draftPromote": true,
+      "v2v": {
+        "videoField": "promptVideo",
+        "mode": "edit",
+        "durationAuto": true,
+        "audioParam": true,
+        "refsMax": 30,
+        "inputMaxS": 30
+      },
+      "pricing": {
+        "unit": "second",
+        "byResolution": {"480p": 20, "720p": 30, "1080p": 68},
+        "perInputSecondByResolution": {"480p": 10, "720p": 15, "1080p": 34},
+        "minCredits": 80,
+        "source": [
+          "`seedance2_5` (480p) | 20 credits per second of output, plus 10 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)",
+          "`seedance2_5` (720p) | 30 credits per second of output, plus 15 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)",
+          "`seedance2_5` (1080p) | 68 credits per second of output, plus 34 credits per second of input and reference video (combined video capped at 30 seconds); reference images and audio are free (80 credit minimum per generation)"
+        ]
+      },
+      "promptMax": 15000,
+      "promptUnit": "utf16"
+    },
+    "seedance2_fast": {
+      "maker": "bytedance",
+      "endpoint": "POST /v1/image_to_video",
+      "label": "Seedance 2.0 Fast",
+      "ratios": [
+        {"ratio": "992:432", "tier": "480p"},
+        {"ratio": "864:496", "tier": "480p"},
+        {"ratio": "752:560", "tier": "480p"},
+        {"ratio": "640:640", "tier": "480p"},
+        {"ratio": "560:752", "tier": "480p"},
+        {"ratio": "496:864", "tier": "480p"},
+        {"ratio": "1470:630", "tier": "720p"},
+        {"ratio": "1280:720", "tier": "720p"},
+        {"ratio": "1112:834", "tier": "720p"},
+        {"ratio": "960:960", "tier": "720p"},
+        {"ratio": "834:1112", "tier": "720p"},
+        {"ratio": "720:1280", "tier": "720p"}
+      ],
+      "audioDefault": true,
+      "audioParam": true,
+      "pricing": {"unit": "second", "credits": 29, "source": ["`seedance2_fast` (480p/720p) | 29 credits per second"]},
+      "promptMax": 3500,
+      "promptUnit": "utf16"
+    },
+    "magnific_precision_upscaler_v2": {
+      "maker": "magnific",
+      "endpoint": "POST /v1/image_upscale",
+      "label": "Magnific Precision Upscaler v2",
+      "scaleFactors": [2, 4, 8, 16],
+      "pricing": {
+        "unit": "image",
+        "credits": 25,
+        "overPx": 4096,
+        "overPxCredits": 150,
+        "source": ["`magnific_precision_upscaler_v2` | 25 credits per image, or 150 credits when output exceeds 4096px"]
+      }
+    },
+    "magnific_video_upscaler_creative": {
+      "maker": "magnific",
+      "endpoint": "POST /v1/video_upscale",
+      "label": "Magnific Video Upscaler Creative",
+      "resolutions": ["720p", "1k", "2k", "4k"],
+      "inputS": {"max": 30},
+      "pricing": {
+        "unit": "frame",
+        "byResolution": {"720p": 0.7, "1k": 0.7, "2k": 0.9, "4k": 1.2},
+        "round": "ceil",
+        "minCredits": 1,
+        "source": [
+          "`magnific_video_upscaler_creative` is billed per output frame, not per second of video. Credits = `ceil(USD / 0.01)`, where `USD = rate × fps × duration_seconds`. Minimum 1 credit per generation. When `fpsBoost` is enabled, output frame count may differ from input and affect cost. Frame-rate conversion on the same endpoint is billed separately — see [Enhance Frame Rate pricing](#enhance-frame-rate-pricing).",
+          "`720p`, `1k` | $0.007 | 210 credits",
+          "`2k` | $0.009 | 270 credits",
+          "`4k` | $0.012 | 360 credits"
+        ]
+      }
     }
   },
   "tagSyntax": "at_tag",
-  "refs": {
-    "max": 14,
-    "maxCharacter": 5
-  },
+  "refs": {"max": 14, "maxCharacter": 5, "maxObject": 9},
   "seed": false,
   "outputsPerCall": 4,
   "mask": "none",
@@ -140,25 +1030,15 @@
   "video": {
     "firstFrameWithRefs": false,
     "lastFrame": true,
-    "multiShot": false,
+    "lastFrameFidelity": "untested",
+    "take": {"ok": false},
     "regionEdit": "temporal_keyframe",
     "feelEdit": "prompt",
     "audioDefault": true,
     "audioControl": true
   },
-  "inputs": {
-    "headRequired": true,
-    "followsRedirects": false,
-    "maxImageMb": 16,
-    "maxVideoMb": 32
-  },
-  "results": {
-    "mode": "poll",
-    "minPollS": 5,
-    "idempotencyKey": false,
-    "outputUrlTtlH": 24,
-    "cancel": true
-  },
+  "inputs": {"headRequired": true, "followsRedirects": false, "maxImageMb": 16, "maxVideoMb": 32},
+  "results": {"mode": "poll", "minPollS": 5, "idempotencyKey": false, "outputUrlTtlH": 24, "cancel": true},
   "concurrency": {
     "image": 20,
     "video": 20,

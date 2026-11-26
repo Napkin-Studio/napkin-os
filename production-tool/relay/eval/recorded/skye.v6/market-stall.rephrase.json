@@ -1,0 +1,26 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "In a bustling street market, @sai_front lifts a ripe mango, smells it, then pays the stallholder in coins."
+     },
+     {
+      "type": "direction",
+      "text": "Crowded, colourful background."
+     }
+    ],
+    "note": "I rephrased the action and direction, keeping the same events and @name."
+   }
+  ],
+  "rationale": "Rephrase keeps the same facts, order, length and @name, with only the wording changed."
+ }
+}

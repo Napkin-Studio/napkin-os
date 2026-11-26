@@ -9,18 +9,24 @@
 // but the registry's offers. The Launcher stays as the app library and the
 // fallback.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ToolPage } from './ToolPage'
 import type { Manage } from './useLanding'
 import { agencySummary, newsOf, whoIs, type AgencySummary } from './model'
-import { TOOLS, isLive, toolById } from './tools'
+import { liveTools, newDocHref, sendsToBrief, startsFromBrief, toolById, toolHref, toolOfApp, type Tool } from './tools'
+import { productionOn } from '../../host/http'
 import { arrival, isTyping } from './keys'
 import type { LandingData } from './store'
 import { correctRoute, formatRoute, sameRoute, up, type Route } from '../route'
 import { Desk } from '../nui/Desk'
 import { ClientView } from '../nui/ClientView'
+import type { BrandApi } from '../../host/brandClans'
+import { TrashPage } from '../nui/TrashPage'
+import { useTrashDesk } from '../nui/trashDesk'
+import type { TrashApi } from '../../host/types'
 import type { Facts } from '../nui/deskData'
 import { useLensDots } from '../nui/lenses'
+import { useTerritoryCounts } from '../nui/useTerritoryCounts'
 import './landing.css'
 
 const NONE: never[] = []
@@ -44,9 +50,13 @@ interface Props {
   onOffline?: () => void
   /** The Decisions drawer (the client page's record line opens it). */
   onDecisions?: () => void
+  /** The Brand Clan operations of the shell's host (the client page's Brand Clans). */
+  brand?: BrandApi
+  /** The library's Trash (the host's); the ⋯ on documents, the Trash link and the Trash page need it. */
+  trash?: TrashApi
 }
 
-export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions }: Props) {
+export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDocument, onRefresh, facts = {}, onOpenFile, onOffline, onDecisions, brand, trash }: Props) {
   const top = useRef<HTMLDivElement>(null)
   const [registryNote, setRegistryNote] = useState<string | null>(null)
 
@@ -58,7 +68,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return
       const r = routeRef.current
-      if (r.level === 'agency' || r.level === 'clients') return
+      if ((r.level === 'agency' && !r.trash) || r.level === 'clients') return
       e.preventDefault()
       const u = up(r)
       goRef.current(u.level === 'clients' ? { level: 'agency' } : u)
@@ -84,10 +94,47 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     if (said) setNews(said)
   }, [summary])
   const installed = useMemo(() => data.apps.map(app_id => ({ app_id })), [data.apps])
-  const live = useMemo(() => new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string)), [installed])
+  // The Production Tool, when this server serves it to this person: Prod's tile opens /production.
+  const [production, setProduction] = useState(false)
+  useEffect(() => { void productionOn().then(setProduction) }, [])
+  const live = useMemo(() => liveTools(installed, production), [installed, production])
+  // A tool with a page here: live, and not one that opens outside the shell (Prod).
+  const routable = useCallback((id: string) => live.has(id) && toolHref({ id }) === null, [live])
+  // Territories starts from a brief: with none of its documents, or from a "+", the client's Brief opens
+  // and says so; nothing empty is made.
+  const [fromBrief, setFromBrief] = useState<string | null>(null)
+  const startFromBrief = (clientId: string) => {
+    const brief = toolById('brief')!
+    if (!live.has('brief')) { sayingSoon(brief); return }
+    const to: Route = { level: 'tool', client: clientId, tool: 'brief' }
+    setFromBrief(formatRoute(to))
+    go(to)
+  }
+  // A tool's "+": Territories starts from a brief (above), Production starts its film on its own page (a full load), an app starts in the shell.
+  const startNew = (t: Tool, clientId: string) => {
+    if (startsFromBrief(t)) { startFromBrief(clientId); return }
+    const href = newDocHref(t, clientId)
+    if (href) window.location.assign(href)
+    else if (t.appId) onStart(t.appId, clientId)
+  }
+
+  const openTool = (clientId: string, t: Tool) => {
+    const href = toolHref(t, clientId)
+    if (href) window.location.assign(href)
+    else if (sendsToBrief(t, data.items.filter(i => i.client?.id === clientId && toolOfApp(i.app_id)?.id === t.id).length)) startFromBrief(clientId)
+    else go({ level: 'tool', client: clientId, tool: t.id })
+  }
 
   const clientId = route.level === 'client' || route.level === 'tool' ? route.client : null
   const client = clientId ? data.clients.find(c => c.id === clientId) : undefined
+
+  // The Trash, for the page that shows it: a client's page (its link and its ⋯) or the Trash page, a client's or the agency's.
+  const refreshRef = useRef(onRefresh)
+  useEffect(() => { refreshRef.current = onRefresh })
+  const refreshed = useCallback(() => refreshRef.current(), [])
+  const onTrashPage = (route.level === 'client' || route.level === 'agency') && route.trash === true
+  const trashScope = route.level === 'client' ? (client ? client.id : undefined) : onTrashPage ? null : undefined
+  const trashing = useTrashDesk(trashScope === undefined ? undefined : trash, trashScope ?? null, refreshed)
 
   // A client route must name a client that is here. One that is not (archived,
   // another studio's, mistyped) is corrected to the desk, and a tool that is not
@@ -99,7 +146,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   useEffect(() => {
     if (!clientId) return
     if (client) {
-      const fixed = correctRoute(route, { client: () => true, tool: id => live.has(id) })
+      const fixed = correctRoute(route, { client: () => true, tool: routable })
       if (!sameRoute(fixed, route)) go(fixed, true)
       return
     }
@@ -110,7 +157,7 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
     let fresh = true
     void onRefresh().finally(() => { if (fresh) setChecked(clientId) })
     return () => { fresh = false }
-  }, [clientId, client, route, go, checked, onRefresh, live])
+  }, [clientId, client, route, go, checked, onRefresh, routable])
 
   // What the live region says: the level arrived at, or a word about a tool that is not here yet.
   const [soon, setSoon] = useState<{ key: string; text: string; n: number } | null>(null)
@@ -119,22 +166,28 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
   const mine = client ? data.items.filter(i => i.client?.id === client.id) : []
   const inTool = tool?.appId ? mine.filter(i => i.app_id === tool.appId) : []
   const lenses = useLensDots(tool?.id === 'research' ? inTool : NONE)
+  const counts = useTerritoryCounts(tool?.id === 'territories' ? inTool : NONE)
   // a repeated word is still a change to the region, so it is said again
   const say = soon?.key === key ? soon.text + (soon.n % 2 ? '' : ' ') : arrival(route, {
-    agency: who.agency, client: client?.name, tool: tool?.full, tools: 4, open: inTool.length,
+    agency: who.agency, client: client?.name, tool: tool?.full, tools: 5, open: inTool.length,
   })
 
   let body
-  if (clientId && client && route.level === 'tool' && tool && live.has(tool.id)) {
+  if (onTrashPage && trashing && (route.level === 'agency' || client)) {
+    const back: Route = route.level === 'client' ? { level: 'client', client: route.client } : { level: 'agency' }
+    body = <TrashPage client={route.level === 'client' ? client ?? null : null} agency={who.agency} desk={trashing.desk} state={trashing.state} onBack={() => go(back)} />
+  } else if (clientId && client && route.level === 'tool' && tool && routable(tool.id)) {
     body = (
       <ToolPage
         client={client}
         tool={tool}
         items={inTool}
-        onNew={() => { if (tool.appId) onStart(tool.appId, client.id) }}
+        onNew={() => startNew(tool, client.id)}
         onOpenItem={onOpenDocument}
         onBack={() => go({ level: 'client', client: client.id })}
         lenses={lenses}
+        counts={counts}
+        note={tool.id === 'brief' && fromBrief === key ? 'Territories starts from a brief. Open one, then Continue in ▾ Territories.' : undefined}
       />
     )
   } else if (clientId && client) {
@@ -145,10 +198,13 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         facts={facts}
         live={live}
         onOpenItem={onOpenDocument}
-        onNew={t => { if (t.appId) onStart(t.appId, client.id) }}
-        onOpenTool={t => go({ level: 'tool', client: client.id, tool: t.id })}
+        onNew={t => startNew(t, client.id)}
+        onOpenTool={t => openTool(client.id, t)}
         onSoon={sayingSoon}
         onDecisions={onDecisions}
+        brand={brand}
+        trash={trashing ?? undefined}
+        onOpenTrash={() => go({ level: 'client', client: client.id, trash: true })}
         onRename={manage ? name => manage.rename(client.id, name) : undefined}
         onArchive={manage ? async () => {
           const refused = await manage.archive(client.id)
@@ -168,12 +224,13 @@ export function LandingHome({ route, data, go, onAdd, manage, onStart, onOpenDoc
         manage={manage}
         onAdd={onAdd}
         onOpenClient={id => go({ level: 'client', client: id })}
-        onOpenTool={(id, t) => go({ level: 'tool', client: id, tool: t.id })}
+        onOpenTool={(id, t) => openTool(id, t)}
         onSoon={sayingSoon}
         onOpenDocument={onOpenDocument}
         onOpenFile={onOpenFile}
         onOffline={onOffline}
         onSay={setRegistryNote}
+        productionHref={live.has('prod') ? toolHref({ id: 'prod' }) ?? undefined : undefined}
       />
     )
   }

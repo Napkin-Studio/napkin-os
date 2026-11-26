@@ -1,0 +1,33 @@
+{
+ "model": "claude-sonnet-5-5",
+ "reply": {
+  "writes": [
+   {
+    "target": {
+     "kind": "shot",
+     "id": "shot_00000000000000000000000001"
+    },
+    "base_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "lines": [
+     {
+      "type": "action",
+      "text": "In a small coffee shop, the barista slides a cup across the counter to @sai_front, who takes the first sip and closes his eyes."
+     },
+     {
+      "type": "direction",
+      "text": "Steam catches the window light."
+     }
+    ],
+    "new_beats": [
+     {
+      "kind": "moment",
+      "at_s": 3.5,
+      "text": "@sai_front opens his eyes and smiles, wrapping both hands around the cup."
+     }
+    ],
+    "note": "I added a closing beat where Sai opens his eyes and smiles, so the sip has a payoff."
+   }
+  ],
+  "rationale": "The shot ends on the sip with no reaction. A short smiling beat after it gives the moment a payoff. The existing words stay as they are."
+ }
+}

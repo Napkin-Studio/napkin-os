@@ -2,9 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// The six tools a client's circle carries, and the one table that says which
-// installed app each is. Idea and Prod are dimmed "Soon": Idea is not built,
-// and the Production Tool has its own stack and no client link yet.
+// The seven tools a client's circle carries, and the one table that says which
+// installed app each is. Idea is dimmed "Soon": it is not built. Prod is the
+// Production Tool, which is not an installed app: napkin-web serves it at
+// /production (features/os-sign-in.clan), and its tile opens it there, in the
+// tool's own UI, when the server says it is served (features/production-tool-land.clan).
 
 import type { InstalledApp } from '../../host'
 import type { ToolId } from '../route'
@@ -24,20 +26,63 @@ export interface Tool {
 export const TOOLS: readonly Tool[] = [
   { id: 'brief', name: 'Brief', full: 'Brief Maker', appId: 'ie.napkin.brief-maker', noun: ['brief', 'briefs'] },
   { id: 'research', name: 'Research', full: 'Research Tool', appId: 'ie.napkin.campaign-research', noun: ['research', 'research'] },
-  { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
-  { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
+  { id: 'territories', name: 'Territories', full: 'Territories', appId: 'ie.napkin.territories', noun: ['exploration', 'explorations'] },
   { id: 'prod', name: 'Prod', full: 'Production Tool', appId: null, noun: ['production', 'productions'] },
-  // Advertising Studio's id is the one it has always carried (examples/make_advertising_studio.rs).
+  { id: 'deck', name: 'Deck', full: 'Deck Maker', appId: 'ie.napkin.deck-maker', noun: ['deck', 'decks'] },
+  { id: 'idea', name: 'Idea', full: 'Idea', appId: null, noun: ['idea', 'ideas'] },
+  // Advertising Studio is retired (the Production Tool replaces it; features/os-sign-in.clan D15) and no
+  // longer built. Its id stays so the ads its old documents made still file under Ads.
   { id: 'ads', name: 'Ads', full: 'Advertising Studio', appId: 'ie.napkin.film', noun: ['ad', 'ads'] },
 ]
 
-export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)
+/** The order a client's tools are listed in, everywhere the shell lists them (the dial, the client page). */
+export const CLIENT_TOOL_ORDER = ['brief', 'research', 'territories', 'prod', 'deck'] as const
 
-/** The tool an app id belongs to. */
-export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
-  appId ? TOOLS.find(t => t.appId === appId) : undefined
+/** Territories starts from a brief (Continue in), never from nothing: a new one is never made empty here. */
+export const startsFromBrief = (tool: { id: string }): boolean => tool.id === 'territories'
+
+/** Opening Territories with no documents of it for the client sends them to the client's Brief instead. */
+export const sendsToBrief = (tool: { id: string }, docs: number): boolean => startsFromBrief(tool) && docs === 0
+
+export const toolById = (id: string): Tool | undefined => TOOLS.find(t => t.id === id)
 
 /** A tool is live when it has an app and that app is installed; otherwise it is "Soon". */
 export function isLive(tool: Tool, installed: readonly Pick<InstalledApp, 'app_id'>[]): boolean {
   return tool.appId !== null && installed.some(a => a.app_id === tool.appId)
+}
+
+/** The Production Tool's path on this origin. */
+export const PRODUCTION_PATH = '/production/'
+
+/** Where a Production project of the library opens: the tool's page, by the document's id. */
+export const productionDocUrl = (docId: string): string => `${PRODUCTION_PATH}d/${encodeURIComponent(docId)}`
+
+/** Production is an installed app, and its projects are library documents like any other's (features/production-in-library.clan),
+ *  but the Production Tool edits them: they open at /production/d/<id>, never in the shell. It is not a tile to
+ *  launch, and Continue in offers it only where the server serves the tool. */
+export const PRODUCTION_APP_ID = 'ie.napkin.production'
+
+/** The tool an app id belongs to. Production has no tile (it is not an app the shell launches), but its projects
+ *  are Production documents: they file under Production, never under Other. */
+export const toolOfApp = (appId: string | null | undefined): Tool | undefined =>
+  appId === PRODUCTION_APP_ID ? toolById('prod') : appId ? TOOLS.find(t => t.appId === appId) : undefined
+
+/** Where a tool opens with a full page load, outside the shell (Prod: the Production Tool), or null
+ *  when it opens as the shell's own tool page. From a client's dial it carries that client (`?client=`), so the
+ *  film the Production Tool starts belongs to the client (Tidewell UAT: the dial said "Nothing yet"). */
+export const toolHref = (tool: { id: string }, clientId?: string): string | null =>
+  tool.id === 'prod' ? (clientId ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}` : PRODUCTION_PATH) : null
+
+/** Where a tool's "+" starts a new document outside the shell (Prod: a new film in the Production Tool, for this
+ *  client), or null when the shell starts it (an app the shell launches). The Production Tool reads `new=1` once and
+ *  drops it, so a reload makes no second film (UAT acceptance A40: the client page's Production "+" did nothing). */
+export const newDocHref = (tool: { id: string }, clientId: string): string | null =>
+  tool.id === 'prod' ? `${PRODUCTION_PATH}?client=${encodeURIComponent(clientId)}&new=1` : null
+
+/** The tools a person can open now: each whose app is installed, and Prod when this server serves
+ *  the Production Tool to this person (/api/session `production`). */
+export function liveTools(installed: readonly Pick<InstalledApp, 'app_id'>[], production: boolean): Set<string> {
+  const live = new Set(TOOLS.filter(t => isLive(t, installed)).map(t => t.id as string))
+  if (production) live.add('prod')
+  return live
 }

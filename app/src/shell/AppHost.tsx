@@ -3,6 +3,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { PRODUCTION_APP_ID } from './landing/tools'
 import Toolbar, { type Account, type ClientChip, type Crew, type ToolBrand } from '../components/Toolbar'
 import SaveStatus from '../components/SaveStatus'
 import { useLinks, useMadeFrom, useSpinoffTargets, useWakeTick } from '../components/ContinueIn'
@@ -20,10 +21,12 @@ import { splitAside } from './decisions/needs'
 import { useSetAside } from './decisions/useSetAside'
 import ClientReviewPanel from './clientReview/ClientReviewPanel'
 import ClientReviewBand from './clientReview/ClientReviewBand'
+import BrandAsk from './brand/BrandAsk'
+import { takesBrandFiles } from './brand/brandFlow'
 import { assetNameOf, bodyOf, canReview, emptyDraft, knownClients, markedOf, nounOf, problemOf } from './clientReview/review'
 import type { Draft, Mark } from './clientReview/review'
 import { barAction, refreshApp } from './appExport'
-import { modeOf, statusOf, type BarItem } from './appBar'
+import { believePage, modeOf, statusOf, type BarItem } from './appBar'
 import { host } from '../host'
 import type { ClientPartRef, ClientWho, InstalledApp, LibraryItem, RunInfo } from '../host'
 import { useEngaged } from '../components/markStore'
@@ -43,6 +46,8 @@ interface Props {
   tool?: InstalledApp | null
   running: RunningApp
   onHome: () => void
+  /** After a document moved to the Trash from its menu: read the library again, before the page it leaves for shows. */
+  onTrashed?: () => Promise<void>
   onOpenFile: () => void
   onSave: () => void
   onKeepOffline?: () => void
@@ -58,6 +63,8 @@ interface Props {
   toolKey?: string | null
   /** Continue in › Start fresh: a new document of this app for this client. */
   onStartFresh?: () => void
+  /** Continue in lists Production only where the server serves the tool (features/production-spinoff.clan). */
+  productionTarget?: boolean
   /** The document menu's way to its tool's page for its client. */
   onToolPage?: { label: string; run: () => void } | null
   /** The signed-in agency, on the bar's pill, and its page. */
@@ -85,7 +92,7 @@ interface Props {
 }
 
 /** Chrome for one running app: toolbar + (collapsible) sidebar + render surface + panels. */
-export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
+export default function AppHost({ running, onHome, onTrashed, onOpenFile, onSave, onKeepOffline, banner, onExport, onSpinoff, saved, onOpenDocument, tool, client, account, toolKey, onStartFresh, productionTarget, onToolPage, agency, agencyLogo, onAgency, user, onSignOut, mark, onCopyLink, crew, library, run }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false) // collapsed by default
   const { open } = running
   const docPath = open.path
@@ -135,7 +142,8 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   }, [docPath])
   // Which view the drawer shows: Graph, By part, By time or Lineage.
   const [drawerView, setDrawerView] = useState<DrawerView>('graph')
-  const targets = useSpinoffTargets(docPath)
+  const offered = useSpinoffTargets(docPath)
+  const targets = useMemo(() => (productionTarget ? offered : offered.filter(t => t.app_id !== PRODUCTION_APP_ID)), [offered, productionTarget])
   const noun = nounOf(open.manifest.app?.app_id)
   // The tool, as its manifest names it (app.home.brand, else its name); a
   // document made before tools named themselves still finds its tool.
@@ -322,7 +330,9 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
   // The page says its agents are at work (the bar's working chip) before the host's run catches up:
   // the medallion follows the same signal as the chip, with the step it names (owner, 2026-11-10).
   const pageRun = pageRunOf(modeOf(barItems))
-  const mark_ = markTarget({ inDoc: product, needs, run: run?.state === 'working' || !pageRun ? run : pageRun, finished: runSeen.finished, engaged })
+  // A page that says it runs no agents is believed over the host's last-heard run (appBar.ts, `run`).
+  const { run: runNow, crew: crewNow } = believePage(barItems, run, crew)
+  const mark_ = markTarget({ inDoc: product, needs, run: runNow?.state === 'working' || !pageRun ? runNow : pageRun, finished: runSeen.finished, engaged })
   const asked = chrome.doc === docPath
   const glass = asked && chrome.mode === 'glass' && !clientOn
   const glassTint = asked ? chrome.tint : null
@@ -400,11 +410,14 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           onRename: host.setTitle && !open.is_template ? (t: string) => { void host.setTitle!(t).then(() => refreshApp()).catch(e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) })) } : undefined,
           onStartFresh,
           onToolPage,
+          onTrash: open.is_template || !host.trash ? undefined : () => {
+            void host.trash!.move(docPath).then(() => onTrashed?.()).then(() => (client?.onOpen ?? onHome)(), e => setLinkError({ docPath, message: String(e instanceof Error ? e.message : e) }))
+          },
           onSave,
           onCopyLink: open.is_template ? undefined : onCopyLink,
           locked: !!decisions.view?.lock.locked && !decisions.view.lock.reopened?.length,
           onOpenDocument,
-          crew,
+          crew: crewNow,
           onKeepOffline,
           onExport,
           targets,
@@ -454,6 +467,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
           <button type="button" className="ch-link" onClick={() => links.unlink(l.documentId)}>Unlink</button>
         </div>
       ))}
+      {!open.is_template && takesBrandFiles(open.manifest.app?.app_id) && <BrandAsk docPath={docPath} client={open.manifest.client ?? null} />}
       </div>
       <div className={`ch-work ${clientOn ? 'ch-work-review' : ''}`} ref={workRef}>
         {sidebarOpen && <Sidebar manifest={open.manifest} path={open.path} onOpenDocument={onOpenDocument} />}
@@ -478,6 +492,7 @@ export default function AppHost({ running, onHome, onOpenFile, onSave, onKeepOff
             onEditRequest={onEditRequest}
             onChrome={onChrome}
             onBar={onBar}
+            onContinueIn={onSpinoff}
             insets={shown}
             jobs={openJobs}
             person={user}

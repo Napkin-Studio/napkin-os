@@ -72,7 +72,7 @@ class AnthropicTranslate(unittest.TestCase):
     def test_refusals(self):
         cases = {
             "tools": areq(tools=[{"name": "x", "input_schema": {"type": "object"}}]),
-            "stream": areq(stream=True),
+            "stream not a bool": areq(stream="yes"),
             "no max_tokens": {"model": "claude-haiku-4-5", "messages": MSG},
             "empty messages": areq(messages=[]),
             "extra field": areq(bogus=1),

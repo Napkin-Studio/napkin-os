@@ -35,3 +35,32 @@ output "middleware_mounts" {
 output "middleware_secret_arns" {
   value = var.middleware_secrets
 }
+
+output "web_secrets" {
+  description = "napkin-web's task secrets: name to the Secrets Manager ARN it is read from (never a value)"
+  value       = { for s in local.web_secrets : s.name => s.valueFrom }
+}
+
+output "execution_secret_arns" {
+  description = "The secrets the execution role may read (GetSecretValue) to start the tasks"
+  value       = concat([var.session_secret_arn], values(var.middleware_secrets), local.production_secret_arns)
+}
+
+output "deck_container" {
+  description = "The deck engine container of the middleware task, as registered (empty when deck_enabled is off)"
+  value       = local.deck_container
+}
+
+output "middleware_task" {
+  description = "The middleware task's size and container names (the tests read it)"
+  value = {
+    cpu        = local.middleware_cpu
+    memory     = local.middleware_memory
+    containers = concat(["middleware"], [for c in local.deck_container : c.name])
+  }
+}
+
+output "backup_plan_id" {
+  description = "The AWS Backup plan for web's EFS, or null when backup_enabled is false"
+  value       = one(aws_backup_plan.web[*].id)
+}

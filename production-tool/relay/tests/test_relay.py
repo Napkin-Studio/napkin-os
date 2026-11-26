@@ -1,19 +1,26 @@
 import hashlib
 
+from service import SPEND_POLICY
 import pytest
 
 from conftest import Harness, base_config, job_request
 from director import new_id
+from identity import person, tenant_id
 from providers.base import Moderated, ProviderError, Status
 from service import QUEUE_TIMEOUT_S
 
 
 # ── the person and uploads ──────────────────────────────────────────────────
 def test_me_says_who_the_seam_names_with_quotas(h):
-    token = h.as_person("Alice")
+    token = h.as_person("Alice", name="Alice Ng")
     _, out = h.call("GET", "/me", None, token, expect=200)
-    assert out["participantId"].startswith("p_") and out["workspace"] == out["participantId"]
+    assert out["participantId"].startswith("p_") and out["workspace"] == out["tenant"]["id"]
+    assert out["tenant"] == {"id": tenant_id("blue"), "agency": "blue"} and out["name"] == "Alice Ng"
     assert (out["handle"], out["team"]) == ("Alice", "blue") and out["projects"] == 0
+    # Daily quotas are off until the agency turns them on (features/tenant-limits.clan).
+    assert out["quotas"] is None and out["allow"] == {"claude": True, "makers": SPEND_POLICY["allow"]["makers"]}
+    h.limits("blue", dailyQuotas=True)
+    _, out = h.call("GET", "/me", None, token, expect=200)
     assert out["quotas"] == {"image": 40, "video": 6, "render": 3}
     assert "dogfood" not in out
     # the same name in any case is the same person (quotas and workspace follow it)
@@ -22,7 +29,7 @@ def test_me_says_who_the_seam_names_with_quotas(h):
 
 
 def test_no_identity_is_401_everywhere_but_health_and_config(h):
-    for method, path, body in (("POST", "/jobs", job_request("generate", new_id("job"))), ("GET", "/projects", None),
+    for method, path, body in (("POST", "/jobs", job_request("generate", new_id("job"))),
                                ("GET", "/me", None), ("GET", "/jobs/job_x", None), ("GET", "/library", None),
                                ("POST", "/uploads", {"sha256": "sha256:" + "a" * 64, "mime": "image/png", "bytes": 1})):
         _, out = h.call(method, path, body, expect=401)
@@ -41,7 +48,7 @@ def test_the_relay_fails_closed_with_no_identity_source(h):
     identity.use_local(None)
     relay = Relay(store=h.store, blobs=h.blobs, registry=h.relay.registry, director=h.relay.director,
                   config=lambda: h.cfg, clock=h.clock)
-    for method, path in (("POST", "/jobs"), ("GET", "/projects"), ("GET", "/me")):
+    for method, path in (("POST", "/jobs"), ("GET", "/me")):
         status, out, _ = relay.http(method, path, {"Authorization": "Bearer anything"}, b"{}")
         assert status == 401 and out["error"]["code"] == "unauthorised", path
     assert relay.http("GET", "/health", {}, None)[0] == 200
@@ -53,6 +60,7 @@ def test_the_local_person_answers_me_against_the_contract(h, monkeypatch):
 
     monkeypatch.setenv("NAPKIN_LOCAL_USER", "maya@Blue Herons")
     identity.use_local(identity.local_person())
+    h.tenant("Blue Herons")
     try:
         relay = Relay(store=h.store, blobs=h.blobs, registry=h.relay.registry, director=h.relay.director,
                       config=lambda: h.cfg, clock=h.clock)
@@ -93,62 +101,7 @@ def test_invalid_job_request_is_rejected(h):
 
 def test_log_returns_204(h):
     token = h.as_person()
-    h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "stage": "character"}, token, expect=204)
-
-
-def _clan_post(h, token, body, reason="accept", project=None):
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/vnd.clan+zip", "X-Clan-Reason": reason}
-    if project is not None:
-        headers["X-Project-Id"] = project
-    return h.relay.http("POST", "/api/clan", headers, body)
-
-
-def test_clan_mirror_keeps_latest_and_history(h):
-    token = h.as_person()
-    body = b"PK\x03\x04" + b"x" * 100
-    status, out, ctx = _clan_post(h, token, body)
-    assert (status, out) == (204, None)
-    keys = [k for k in h.blobs.objects if k.startswith("clan/")]
-    assert any(k.endswith("/latest.clan") for k in keys)
-    assert any(k.endswith("-accept.clan") for k in keys)
-    assert all(h.blobs.objects[k] == (body, "application/vnd.clan+zip") for k in keys)
-    assert ctx["clanBytes"] == len(body)
-
-
-def test_clan_mirror_keeps_one_copy_per_project(h):
-    token = h.as_person()
-    a, b = "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N9"
-    _clan_post(h, token, b"PK\x03\x04" + b"a" * 10, project=a)
-    _clan_post(h, token, b"PK\x03\x04" + b"b" * 10, reason="manual", project=b)
-    keys = sorted(k for k in h.blobs.objects if k.startswith("clan/"))
-    pid = keys[0].split("/")[1]
-    assert f"clan/{pid}/{a}/latest.clan" in keys and f"clan/{pid}/{b}/latest.clan" in keys
-    assert h.blobs.objects[f"clan/{pid}/{a}/latest.clan"][0].endswith(b"a" * 10)
-    assert h.blobs.objects[f"clan/{pid}/{b}/latest.clan"][0].endswith(b"b" * 10)
-    assert any(k.startswith(f"clan/{pid}/{a}/") and k.endswith("-accept.clan") for k in keys)
-    assert any(k.startswith(f"clan/{pid}/{b}/") and k.endswith("-manual.clan") for k in keys)
-    # Without the header: today's path, next to the projects.
-    _clan_post(h, token, b"PK\x03\x04" + b"c" * 10)
-    assert h.blobs.objects[f"clan/{pid}/latest.clan"][0].endswith(b"c" * 10)
-
-
-def test_clan_mirror_refuses_a_bad_project_id(h):
-    token = h.as_person()
-    for bad in ("", "../other", "prj_short", "PRJ_01J9Z8Y7X6W5V4T3S2R1Q0P9N8", "prj_01J9Z8Y7X6W5V4T3S2R1Q0P9N8/x"):
-        status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"x" * 10, project=bad)
-        assert status == 400 and out["error"]["code"] == "invalid_input", bad
-    assert not [k for k in h.blobs.objects if k.startswith("clan/")]
-
-
-def test_clan_mirror_refuses_bad_bodies(h):
-    token = h.as_person()
-    status, out, _ = _clan_post(h, token, b"not a zip")
-    assert status == 400 and out["error"]["code"] == "invalid_input"
-    status, out, _ = _clan_post(h, token, b"PK\x03\x04" + b"0" * (5 * 1024 * 1024))
-    assert status == 413
-    status, out, _ = h.relay.http("POST", "/clan", {}, b"PK\x03\x04")
-    assert status == 401
-    assert not [k for k in h.blobs.objects if k.startswith("clan/")]
+    h.call("POST", "/log", {"level": "report", "message": "the button did nothing", "node": {"kind": "storyboard", "id": new_id("storyboard")}}, token, expect=204)
 
 
 # ── the ledger ──────────────────────────────────────────────────────────────
@@ -167,7 +120,8 @@ def test_job_id_of_someone_else_is_refused(h):
     jid = new_id("job")
     h.post_job(h.as_person("alice"), job_id=jid, expect=200)
     assert h.post_job(h.as_person("bob"), job_id=jid, expect=409)[1]["error"]["code"] == "invalid_input"
-    assert h.poll(h.as_person("bob"), jid, expect=404)
+    assert h.poll(h.as_person("bob"), jid)["jobId"] == jid  # anyone in the agency reads it
+    assert h.poll(h.as_person("eve", "red"), jid, expect=404)  # another agency never sees it
 
 
 def test_submit_that_raises_is_never_resent_there_and_is_made_on_runway(h):
@@ -254,6 +208,7 @@ def test_provider_failure_never_becomes_success():
 def test_quota_exhaustion():
     h = Harness(base_config(quotas={"image": 2, "video": 1, "render": 1}))
     token = h.as_person()
+    h.limits("blue", dailyQuotas=True)  # off by default (features/tenant-limits.clan)
     h.post_job(token, expect=200)
     h.post_job(token, expect=200)
     _, out = h.post_job(token, expect=429)
@@ -470,6 +425,6 @@ def test_stitch_rejects_clips_that_are_not_ours(h):
 
 def test_config_route_and_api_prefix(h):
     _, out = h.call("GET", "/config", expect=200)
-    assert out["contractVersion"] == "2"
+    assert out["contractVersion"] == "3"
     status, out, _ = h.relay.http("GET", "/api/me", {"Authorization": f"Bearer {h.as_person('zed')}"}, None)
     assert status == 200 and out["handle"] == "zed"

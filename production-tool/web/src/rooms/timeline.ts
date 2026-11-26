@@ -1,0 +1,676 @@
+// The cut in the document (video.timeline, features/make-and-edit.clan P2) and its one compiled plan. The Edit
+// room reads the cut as rooms/cut.ts's plain shape and writes it back whole, one History entry and one undo
+// step per edit. compileTimeline is the single plan both the preview (rooms/preview.ts) and Render ad read,
+// so what plays is what renders. Edit never spends: nothing here starts a paid job.
+
+import { brandKit } from '../campaign/layout'
+import { brandClanOf, cardGroundOf } from '../brandClan/model'
+import { newUlidId } from '../../../clan-store/src'
+import { compileTimeline, type PlanClip as StorePlanClip, type PlanEndCard as StorePlanEndCard, type PlanText as StorePlanText, type TimelineItem as StoreTimelineItem } from '../../../clan-store/src'
+import type { AssetRef, EndCard, Id, ProductionDocument, TimelineItem, TimelinePlan, TransitionIn } from '../contracts/types'
+import { updateDoc } from '../doc/store'
+import { briefForJob, endLineOf, legalOf } from '../brief/model'
+import { quoted } from '../lib/quotes'
+import type { DocumentStore } from '../doc/types'
+import { beatsOf, shotsOf, storyboardOfVideo } from '../model/selectors'
+import {
+  clipEnd, EMPTY_CUT, pack, r3, sortV1,
+  type Cut, type CutClip, type CutEndCard, type CutText, type Transition,
+} from './cut'
+import { boxName, coversShot, inBox, loneOut, lonePlanned, sharesBox, shotWindow, type Box, type Gen } from './model'
+
+// ── The document's cut ↔ the plain cut ────────────────────────────────────────────────────────────────
+
+function transitionOf(t: TransitionIn | undefined): Transition | undefined {
+  return t && t.kind !== 'cut' ? { kind: t.kind, s: t.s ?? 0.5 } : undefined
+}
+
+/** The video's cut, as the timeline edits it. A video with no timeline yet has an empty cut. */
+export function readCut(d: ProductionDocument, videoId: Id | undefined): Cut {
+  const v = videoId ? d.videos[videoId] : undefined
+  if (!v) return EMPTY_CUT
+  const v1: CutClip[] = []
+  const v2: CutClip[] = []
+  const text: CutText[] = []
+  for (const [id, it] of Object.entries(v.timeline ?? {})) {
+    if (it.track === 'text') {
+      const from = it.from_s ?? 0
+      text.push({
+        id, words: it.words ?? '', style: it.style ?? 'caption', startS: from, durS: r3(Math.max(0.3, (it.to_s ?? from + 2) - from)),
+        fadeInS: it.fade_in_s ?? 0, fadeOutS: it.fade_out_s ?? 0,
+      })
+      continue
+    }
+    if (!it.source?.generation_id) continue
+    const tr = transitionOf(it.transition_in)
+    const c: CutClip = {
+      id, genId: it.source.generation_id, inS: it.source.in_s, outS: it.source.out_s, startS: it.start_s ?? 0,
+      speed: it.speed ?? 1, holdS: it.hold_s ?? 0, fadeInS: it.fade_in_s ?? 0, fadeOutS: it.fade_out_s ?? 0,
+      ...(tr ? { transition: tr } : {}),
+      ...(it.follows ? { follows: { ...(it.follows.box_id ? { boxId: it.follows.box_id } : {}), ...(it.follows.shot_id ? { shotId: it.follows.shot_id } : {}) } } : {}),
+      ...(it.opacity !== undefined ? { opacity: it.opacity } : {}),
+    }
+    ;(it.track === 'V2' ? v2 : v1).push(c)
+  }
+  const card = v.end_card
+  const ctr = transitionOf(card?.transition_in)
+  const legal = card && videoId ? cardLegal(d, videoId, card.legal) : card?.legal
+  const endCard: CutEndCard | undefined = card ? {
+    headline: card.headline ?? '', line: card.line, ...(card.cta ? { cta: card.cta } : {}), ...(legal !== undefined ? { legal } : {}), bg: card.bg,
+    ...(card.logo_asset ? { logo: card.logo_asset } : {}), durS: card.s, ...(ctr ? { transition: ctr } : {}),
+  } : undefined
+  return { v1: sortV1(v1), v2: sortV1(v2), text: text.sort((a, b) => a.startS - b.startS), ...(endCard ? { endCard } : {}) }
+}
+
+const omitZero = <K extends string>(k: K, v: number | undefined): Partial<Record<K, number>> => (v ? { [k]: r3(v) } as Record<K, number> : {})
+
+/** The plain cut's items as the document keeps them (video.timeline). */
+export function toTimeline(cut: Cut): Record<Id, TimelineItem> {
+  const items: Record<Id, TimelineItem> = {}
+  const clip = (c: CutClip, track: 'V1' | 'V2'): TimelineItem => ({
+    track, start_s: r3(c.startS),
+    source: { generation_id: c.genId, in_s: r3(c.inS), out_s: r3(c.outS) },
+    ...(c.follows && (c.follows.boxId || c.follows.shotId) ? { follows: { ...(c.follows.boxId ? { box_id: c.follows.boxId } : {}), ...(c.follows.shotId ? { shot_id: c.follows.shotId } : {}) } } : {}),
+    ...omitZero('fade_in_s', c.fadeInS), ...omitZero('fade_out_s', c.fadeOutS), ...omitZero('hold_s', c.holdS),
+    ...(c.speed !== 1 ? { speed: r3(c.speed) } : {}),
+    ...(c.transition ? { transition_in: { kind: c.transition.kind, s: r3(c.transition.s) } } : {}),
+    ...(track === 'V2' && c.opacity !== undefined && c.opacity !== 1 ? { opacity: c.opacity } : {}),
+  })
+  for (const c of cut.v1) items[c.id] = clip(c, 'V1')
+  for (const c of cut.v2) items[c.id] = clip(c, 'V2')
+  for (const t of cut.text) {
+    items[t.id] = {
+      track: 'text', words: t.words.trim() || 'Text', style: t.style, from_s: r3(t.startS), to_s: r3(t.startS + t.durS),
+      ...omitZero('fade_in_s', t.fadeInS), ...omitZero('fade_out_s', t.fadeOutS),
+    }
+  }
+  return items
+}
+
+/** The plain end card as the document keeps it (video.end_card). */
+export function toEndCard(e: CutEndCard): EndCard {
+  return {
+    ...(e.headline ? { headline: e.headline } : {}), line: e.line.trim() || e.headline || 'Your brand', ...(e.cta ? { cta: e.cta } : {}), ...(e.legal !== undefined ? { legal: e.legal.trim() } : {}), bg: e.bg,
+    ...(e.logo ? { logo_asset: e.logo } : {}), s: r3(Math.min(10, Math.max(0.5, e.durS))),
+    ...(e.transition ? { transition_in: { kind: e.transition.kind, s: r3(e.transition.s) } } : {}),
+  }
+}
+
+/** Write a cut into its video, item by item: unchanged items are left as they are (so two people's edits of
+ *  different clips never meet), changed ones replaced, gone ones deleted. */
+export function putCut(x: ProductionDocument, videoId: Id, cut: Cut) {
+  const v = x.videos[videoId]
+  if (!v) return
+  const next = toTimeline(cut)
+  const tl = (v.timeline ??= {})
+  for (const id of Object.keys(tl)) if (!next[id]) delete tl[id]
+  for (const [id, it] of Object.entries(next)) if (JSON.stringify(tl[id]) !== JSON.stringify(it)) tl[id] = it
+  if (cut.endCard) {
+    const e = toEndCard(cut.endCard)
+    if (JSON.stringify(v.end_card) !== JSON.stringify(e)) v.end_card = e
+  } else if (v.end_card) delete v.end_card
+}
+
+/** One edit of the cut: one History entry ("trim shot 2"), one undo step. */
+export function writeCut(store: DocumentStore, videoId: Id, why: string, edit: (cut: Cut) => Cut) {
+  return updateDoc(store, (x) => putCut(x, videoId, edit(readCut(x, videoId))), why)
+}
+
+export const newItemId = () => newUlidId('item')
+
+// ── Assemble first cut ───────────────────────────────────────────────────────────────────────────────
+
+/** The take a box puts in the first cut: its newest ready take. */
+export function topTake(gens: Gen[], boxKey: string): Gen | undefined {
+  return gens.find((g) => inBox(g, boxKey) && g.state === 'ready' && !!g.asset)
+}
+
+/**
+ * The first cut: V1 from the boxes in storyboard order, each box's top take unpacked into one clip per shot at
+ * its cuts (a box made together is several clips of the same take, joined by a bracket), and the end card
+ * last. A box with no take yet is left out. Text items already on the cut stay.
+ */
+export function assemble(d: ProductionDocument, videoId: Id, boxes: Box[], gens: Gen[], ids: () => string = newItemId): Cut {
+  const v1: CutClip[] = []
+  for (const b of boxes) {
+    if (b.endCard) continue
+    const g = topTake(gens, b.key)
+    if (!g) continue
+    for (const shotId of b.shotIds) {
+      const w = shotWindow(g, shotId)
+      if (w.outS - w.inS <= 0) continue
+      v1.push({ id: ids(), genId: g.id, inS: w.inS, outS: w.outS, startS: 0, speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0, follows: { boxId: b.key, shotId } })
+    }
+  }
+  const before = readCut(d, videoId)
+  return { v1: pack(v1), v2: [], text: before.text, endCard: before.endCard ?? endCardFrom(d, videoId) }
+}
+
+/** A shot's words that only name it ("Hearth Oats end card."): the director's label, not a line to show. */
+const END_LABEL = /\s*\bend[ -]?card\b[.!]?$/i
+/** The director's label before the card's words: "End card with the super:", "Quietboil end card –". */
+const END_PREFIX = /^(.*?)\bend[ -]?card\b[^:\u2013\u2014"\u201c]*(?:[:\u2013\u2014]\s*|(?=["\u201c]))/i
+/** A planner's stage directions inside a card shot ("the can centred on clean colour", "appears, the legal line small
+ *  beneath"): they say how the card looks, not what it says (UAT 2026-11-24: they became the card's words). */
+const STAGE = /\b(?:appears?|centred|centered|beneath|underneath|clean colou?r|legal line|small print)\b|^(?:the|a)\s+(?:can|pack|bottle|logo|product)\b|\bon the (?:end[ -]?)?card\b/i
+/** A single copy label at the start of a card shot's words: "Super:", "Headline:", "Title:". */
+const ONE_LABEL = /^(?:super|headline|title)\s*:\s*/i
+/** The words a direction says: the quoted ones, else its sentences less the stage directions. */
+const spoken = (t: string) => quoted(t) ?? sentences(t).filter((x) => !STAGE.test(x)).join(' ')
+const sentences = (t: string) => t.trim().split(/(?<=[.!?])\s+/).filter(Boolean)
+const bare = (t: string) => t.replace(/[.!?]$/, '').trim()
+
+/**
+ * The end card from the storyboard's end card shot. Its words when they are words ("SuperSamurai. Clean in one
+ * sweep.": the first sentence is the headline, the rest the line). When the direction labels the card and gives
+ * its words ('End card with the super: "Quietboil. Let them sleep."', UAT 2026-11-18: the card read 'End card
+ * with the super: "Quietboil' over 'Let them sleep."'), the words are the quoted ones (else what follows the
+ * label), split the same way; one sentence is the line under the brand the label names. When they only label
+ * the card ("Hearth Oats end card.", live test 2026-11-18: the card read "Hearth Oats end card" twice), the
+ * brand in the label is the headline and the film's own closing line (its last VO or spoken line) is the line,
+ * without the brand again.
+ */
+export function endCardFrom(d: ProductionDocument, videoId: Id): CutEndCard | undefined {
+  const card = endCardOf(d, storyboardOfVideo(d, videoId)?.id)
+  if (!card) return undefined
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, cardCopy(card, endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine), briefLegal(d, videoId), cardName(d, videoId))))
+}
+
+/** The end card a storyboard's cell shows: the one its film will carry (endCardFrom: the Brief's end line, no placement
+ *  words, the legal line apart), else the shot's own words cleaned (UAT round 4 F34: the cell read "Logo top right…"). */
+export function storyboardEndCard(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
+  const videoId = storyboardId ? Object.keys(d.videos ?? {}).find((v) => storyboardOfVideo(d, v)?.id === storyboardId) : undefined
+  if (videoId) return endCardFrom(d, videoId)
+  const card = endCardOf(d, storyboardId)
+  return card && cardCopy(card, undefined, undefined, cardName(d))
+}
+
+const plainWords = (x: string | undefined) => (x ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const within = (part: string, whole: string) => { const p = plainWords(part); return !!p && plainWords(whole).includes(p) }
+
+/** Words that place things on the card ("Logo top right.", "centred", "lower third"): layout, never copy (UAT round 4
+ *  F34: the Director's "Logo top right. Small line below: …" was printed on the ad). */
+export const PLACE = /\b(?:top|bottom|upper|lower)[\s-]+(?:left|right|centre|center|corner|third)\b|\b(?:logo|lock-?up|pack ?shot)\s+(?:at\s+the\s+)?(?:top|bottom|left|right|centred|centered|corner|in the corner)\b|\b(?:placed|placement|positioned|layout|typeface|font size|point size)\b/i
+/** A label that says where words go ("Small line below:", "Text under:"): the label is layout, what follows may be copy. */
+/** A note that names a picture to put on the card ("@logo on a clean, quiet field"): a direction, never copy. */
+export const MENTION_NOTE = /(?<![\w@])@[a-z][a-z0-9]{1,23}(?:_[a-z0-9-]+)?\b/i
+const WHERE_LABEL = /^(?:(?:a|the)\s+)?(?:small(?:er)?\s+|fine\s+)?(?:line|text|copy|type|print|words?)\s+(?:below|above|under(?:neath)?|beneath|at the (?:bottom|top))\s*[:\-\u2013\u2014]\s*/i
+
+/**
+ * A card made from the end card shot, as copy only (UAT round 4 F34, local run: the card read "Refill" over "Not landfill.
+ * Logo top right. Small line below: Keep out of reach of children…", with the legal line again under it).
+ * - Placement sentences are dropped, and a "Small line below:" label leaves only what follows it.
+ * - What the Brief's legal line says stays in the legal field alone: never in the headline or the line too.
+ * - With a Brief end line, the headline is that line word for word (never split at a full stop), and the line is what
+ *   copy is left once the end line's own words are out, else the brand's name.
+ * - A card with no Brief end line keeps its own headline and line, cleaned the same way.
+ */
+export function cardCopy(card: CutEndCard, end: string | undefined, legal: string | undefined, named: string): CutEndCard {
+  const keep = (text: string) => sentences(text).map((x) => x.replace(WHERE_LABEL, '').trim())
+    .filter((x) => !!plainWords(x) && !PLACE.test(x) && !MENTION_NOTE.test(x) && !(legal && (within(x, legal) || within(legal, x))))
+  // With a Brief end line the card says that line and the brand under it: never what is left of the shot's note (UAT
+  // round 4 gate: the line read "@logo on a clean, quiet field." twice, the end card shot's own layout note).
+  if (end) return { ...card, headline: end.slice(0, 120), line: plainWords(named) === plainWords(end) ? '' : named.slice(0, 200) }
+  const headline = keep(card.headline).join(' ')
+  const own = keep(card.line).join(' ')
+  // The line never repeats the headline: a one-sentence card shows it once, the brand under it.
+  const line = own && plainWords(own) !== plainWords(headline) ? own : plainWords(named) === plainWords(headline) ? '' : named
+  if (plainWords(headline) === plainWords(card.headline) && plainWords(line) === plainWords(card.line)) return card
+  return { ...card, headline: headline || named, line }
+}
+
+/** The colour a new end card starts with; while a card keeps it, the linked Brand Clan's ground shows instead (A55). */
+export const DEFAULT_CARD_BG = '#14161B'
+
+/** An end card as it renders: its own logo, else the Brand board's, else the logo of the Brand Clan linked to the film (or up
+ *  the canvas: Film ← Storyboard ← Script, nearest link wins); its own colour, unless it is still the default and that Brand
+ *  Clan has a dark colour for it. `from`: the Brand Clan that gave anything ("Copperell Original"), for the Inspector. */
+export function endCardLook(d: ProductionDocument, videoId: Id, card: { bg: string; logo?: string }): { bg: string; logo?: string; from?: string; bgFrom?: string } {
+  const clan = brandClanOf(d, videoId)?.node
+  const logo = card.logo ?? brandKit(d, videoId).logo?.sha256
+  const ground = card.bg.toUpperCase() === DEFAULT_CARD_BG && clan ? cardGroundOf(clan.bible) : undefined
+  const logoFromClan = !card.logo && !!clan?.logo && logo === clan.logo.sha256
+  return { bg: ground ?? card.bg, ...(logo ? { logo } : {}), ...(clan && (ground || logoFromClan) ? { from: clan.title } : {}), ...(ground && clan ? { bgFrom: clan.title } : {}) }
+}
+
+/** A new end card for a film with no end-card shot: the brand name set in type (the project's name; there is no logo without a
+ *  brand book) and the linked Brief's legal line as its legal. */
+export function newEndCard(d: ProductionDocument, videoId: Id): CutEndCard {
+  return withBriefLegal(d, videoId, withCampaignLine(d, videoId, { headline: '', line: cardName(d, videoId), bg: DEFAULT_CARD_BG, durS: 1.5 }))
+}
+
+/** The name an end card's line starts as: the project's without the " · Territories" a spin-off adds ("Copperell Refill"),
+ *  else the linked Brief's own name, else "Your brand". Never the whole spin-off title (UAT acceptance A52: the card read
+ *  "Copperell Refill · Territories"). A route's Brief is titled "Territories · The Sunday Drop · v1": not a name. */
+export function cardName(d: ProductionDocument, videoId?: Id): string {
+  const plain = (x: string | undefined) => { const t = x?.trim(); return t && !t.includes(' · ') && !/^untitled/i.test(t) ? t : undefined }
+  return plain(d.project.title?.split(' · ')[0])
+    ?? (videoId ? plain(briefForJob(d, { kind: 'video', id: videoId })?.brief.title) : undefined)
+    ?? 'Your brand'
+}
+
+/** The campaign's line for a film: the linked Brief's end line ("Proper crunch."), else the script's own last spoken line. */
+export function campaignLine(d: ProductionDocument, videoId: Id): string | undefined {
+  const brief = endLineOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
+  if (brief) return brief.slice(0, 120)
+  const sb = storyboardOfVideo(d, videoId)
+  const said = sb ? closingLine(d, shotsOf(d, sb.id).map((s) => s.id)) : undefined
+  return said?.slice(0, 120)
+}
+
+/** A new card's headline starts as the campaign line (UAT round 3: it was empty, and the person typed it); the person can overwrite it. */
+function withCampaignLine(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  if (card.headline.trim()) return card
+  const line = campaignLine(d, videoId)
+  return line ? { ...card, headline: line } : card
+}
+
+/** The legal line of the Brief linked to this film (never one that is only in the project): what an end card starts with. */
+export function briefLegal(d: ProductionDocument, videoId: Id): string | undefined {
+  return legalOf(briefForJob(d, { kind: 'video', id: videoId })?.brief.spine)
+}
+
+/** The card's legal line: its own saved words ('' once the person cleared it), else the linked Brief's. */
+export const cardLegal = (d: ProductionDocument, videoId: Id, own: string | undefined) => own ?? briefLegal(d, videoId)
+
+/** The card with the linked Brief's legal line as its own `legal`, which the person can then overwrite (owner 2026-11-23: it
+ *  was the call to action's fallback before). Without a linked Brief it has none. */
+function withBriefLegal(d: ProductionDocument, videoId: Id, card: CutEndCard): CutEndCard {
+  const legal = briefLegal(d, videoId)
+  return legal ? { ...card, legal } : card
+}
+
+// The labels a planned end card shot writes its copy under (UAT acceptance A54: "Charcoal card. Super: A little nicer, every 500 ml.
+// Beneath it: Refill. Not landfill. COPPERELL wordmark top right. Small line: Keep out of reach of children."). What a label
+// introduces is copy, up to the next label; the rest (the card's colour, where the wordmark sits) is direction, never copy.
+const CARD_LABEL = /\b(super|headline|title|beneath it|under(?:neath)? it|below it|line|tagline|small (?:line|print)|legal(?: line)?|fine print)\s*:\s*/gi
+const HEAD_LABEL = /^(?:super|headline|title)$/i
+const LEGAL_LABEL = /^(?:small (?:line|print)|legal(?: line)?|fine print)$/i
+
+/** A planned end card's copy read from its labels: the headline (Super), the line (Beneath it), the legal line (Small line),
+ *  each without placement sentences; undefined when the action has no Super/Headline label. Pure. */
+export function labelledCard(action: string): { headline: string; line: string; legal: string } | undefined {
+  const marks = [...action.matchAll(CARD_LABEL)]
+  // A Super and at least one more label: one label alone ("End card, super: \"Quietboil. Let them sleep.\"") is read as before.
+  if (!marks.some((m) => HEAD_LABEL.test(m[1])) || marks.length < 2) return undefined
+  const parts = { headline: [] as string[], line: [] as string[], legal: [] as string[] }
+  marks.forEach((m, i) => {
+    const text = action.slice(m.index! + m[0].length, i + 1 < marks.length ? marks[i + 1].index : undefined)
+    const copy = sentences(text).filter((x) => !PLACE.test(x) && !MENTION_NOTE.test(x) && !/\b(?:word ?mark|logo)\b/i.test(x)).join(' ').trim()
+    if (!copy) return
+    const key = HEAD_LABEL.test(m[1]) ? 'headline' : LEGAL_LABEL.test(m[1]) ? 'legal' : 'line'
+    parts[key].push(copy)
+  })
+  return { headline: parts.headline.join(' '), line: parts.line.join(' '), legal: parts.legal.join(' ') }
+}
+
+/** The end card a storyboard's end card shot makes (endCardFrom), for the Film's cut or the storyboard's cell. */
+export function endCardOf(d: ProductionDocument, storyboardId: Id | undefined): CutEndCard | undefined {
+  const shots = storyboardId ? shotsOf(d, storyboardId) : []
+  const shot = shots.find((s) => s.kind === 'end_card')
+  if (!shot) return undefined
+  const named = cardName(d)
+  const action = (shot.action ?? '').trim()
+  // One label alone ("Super: Still cider. Even on a Tuesday.") is not labelled copy (labelledCard needs two): the label
+  // goes and the words are read as words (five-tool run 2026-11-26: the headline read "Super: Still cider").
+  const words = labelledCard(action) ? action : action.replace(ONE_LABEL, '')
+  const card = (headline: string, line: string) => ({ headline: headline || named, line: line || headline || named, bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 })
+  // Labelled copy (A54): the Super is the headline, what is beneath it the line (else the brand), the small line the legal.
+  const labelled = labelledCard(words)
+  if (labelled?.headline) {
+    const own = { headline: labelled.headline.slice(0, 120), line: (labelled.line || named).slice(0, 200), bg: DEFAULT_CARD_BG, durS: shot.duration_s || 1.5 }
+    return labelled.legal ? { ...own, legal: labelled.legal.slice(0, 200) } : own
+  }
+  const label = END_PREFIX.exec(words)
+  const after = label ? words.slice(label[0].length).trim() : ''
+  const said = after ? spoken(after) : ''
+  if (said) {
+    const [head, ...rest] = sentences(said)
+    if (rest.length) return card(bare(head), rest.join(' '))
+    // The one line a staged card says is its headline ("Flat out good."); a label that names the brand keeps the brand there.
+    return STAGE.test(after) && !label?.[1] ? card(said, '') : card(bare(label?.[1] ?? ''), said)
+  }
+  if (words && !END_LABEL.test(words) && !(label && after)) {
+    const heard = spoken(words)
+    const [head, ...rest] = sentences(heard)
+    return heard !== words && !rest.length ? card(heard, '') : card(bare(head ?? ''), rest.join(' '))
+  }
+  const brand = bare((label && after ? label[1] : words).replace(END_LABEL, ''))
+  const closing = closingLine(d, shots.map((s) => s.id))
+  if (!closing) return card(brand, '')
+  const [first, ...rest] = sentences(closing)
+  // "Hearth Oats. Slow down, warm up." under the brand "Hearth Oats": the line is what follows the brand.
+  if (brand && bare(first).toLowerCase() === brand.toLowerCase()) return card(brand, rest.join(' ') || closing)
+  return brand ? card(brand, closing) : card(bare(first), rest.join(' '))
+}
+
+/** The film's last spoken words: the last VO or line beat, in shot order. */
+function closingLine(d: ProductionDocument, shotIds: Id[]): string | undefined {
+  for (const id of [...shotIds].reverse()) {
+    const said = beatsOf(d, id).filter((b) => (b.kind === 'vo' || b.kind === 'line') && b.text?.trim())
+    if (said.length) return said[said.length - 1].text!.trim()
+  }
+  return undefined
+}
+
+// ── New take ready ────────────────────────────────────────────────────────────────────────────────────
+
+/** The ready takes of each box in the cut that are newer than the take its clips play: "New take ready". */
+export function readyTakes(cut: Cut, gens: Gen[], dismissed: ReadonlySet<string> = NOT_NOW): Set<string> {
+  const out = new Set<string>()
+  for (const c of [...cut.v1, ...cut.v2]) {
+    const n = newerTake(c, gens)
+    if (n && !dismissed.has(`${c.genId}>${n.id}`)) out.add(n.id)
+  }
+  return out
+}
+
+/** The newest ready take of a clip's box that is newer than the one the clip plays. */
+export function newerTake(c: CutClip, gens: Gen[]): Gen | undefined {
+  const own = gens.find((g) => g.id === c.genId)
+  if (!own) return undefined
+  // A newer take of a box the clip's take belongs to, that has footage for the clip's shot (a take made together
+  // whose shots were made apart since is a take of each of their boxes).
+  const shotId = c.follows?.shotId
+  const newer = gens.filter((g) => sharesBox(own, g) && coversShot(g, shotId) && g.state === 'ready' && g.id !== own.id && (g.createdAt ?? '') > (own.createdAt ?? ''))
+  return newer[0]
+}
+
+/** "Not now", for this browser's session: the badge stays away until a newer take lands. */
+const NOT_NOW = new Set<string>()
+export function notNow(c: CutClip, take: Gen) { NOT_NOW.add(`${c.genId}>${take.id}`) }
+export const dismissedTakes = (): ReadonlySet<string> => NOT_NOW
+
+// ── compileTimeline: one plan for the preview and the render ─────────────────────────────────────────
+
+/** A clip of the plan (clan-store compileTimeline's, the one plan the preview plays and stitch renders) with what
+ *  the preview needs beside it: how long it lasts and how long its take is. */
+export interface PlanClip extends StorePlanClip {
+  durS: number
+  /** The take's whole length: a transition out of this clip plays its footage after outS, up to here. */
+  takeS: number
+}
+export interface PlanText extends StorePlanText { fadeInS?: number; fadeOutS?: number }
+export interface PlanEndCard extends StorePlanEndCard { startS: number }
+export interface Plan {
+  clips: PlanClip[]
+  texts: PlanText[]
+  endCard?: PlanEndCard
+  /** The film before the studio's roll-up: the last clip's end plus the end card. */
+  lengthS: number
+  /** Clips whose take has no footage yet: left out, and said. */
+  missing: Id[]
+}
+
+/**
+ * The one compiled plan of a video's timeline (clan-store compileTimeline): every V1 clip, text and the end card
+ * at its ad time. The preview plays exactly this, and Render ad sends it as stitch's timeline (renderPlan).
+ */
+export function compileFor(d: ProductionDocument, videoId: Id): Plan {
+  const v = d.videos[videoId]
+  if (!v) return { clips: [], texts: [], lengthS: 0, missing: [] }
+  const legal = v.end_card ? cardLegal(d, videoId, v.end_card.legal) : undefined
+  // The card's own logo, else the Brand board's (UAT round 4 F23: the card said so, but the render had none), else the linked
+  // Brand Clan's (owner 2026-11-24); its colour the Brand Clan's while it is the default (A55).
+  const look = v.end_card ? endCardLook(d, videoId, { bg: v.end_card.bg, ...(v.end_card.logo_asset ? { logo: v.end_card.logo_asset } : {}) }) : undefined
+  const card = v.end_card ? { ...v.end_card, ...(legal === undefined ? {} : { legal }), ...(look?.logo ? { logo_asset: look.logo } : {}), bg: look?.bg ?? v.end_card.bg } : undefined
+  const plan = compileTimeline({ timeline: v.timeline as Record<string, StoreTimelineItem>, ...(card ? { end_card: card } : {}) }, d.generations)
+  const clips = plan.clips.map((c) => {
+    const g = c.generation_id ? d.generations[c.generation_id] : undefined
+    const speed = c.speed ?? 1
+    return { ...c, durS: r3((c.outS - c.inS) / speed + (c.holdS ?? 0)), takeS: g?.duration_s ?? d.assets[c.sha256]?.duration_s ?? c.outS }
+  })
+  const last = clips.at(-1)
+  const endCard = plan.endCard ? { ...plan.endCard, startS: last ? r3(last.startS + last.durS) : 0 } : undefined
+  return { clips, texts: plan.texts, ...(endCard ? { endCard } : {}), lengthS: plan.lengthS, missing: plan.missing }
+}
+
+/** Render ad's request: the plan with each file named for the relay (relay-api TimelinePlan). `logo`: how the end card's logo is
+ *  named (as it is, not fitted for a provider: jobs/assets logoRef). */
+export async function renderPlan(plan: Plan, ref: (sha: string) => Promise<AssetRef>, logo: (sha: string) => Promise<AssetRef> = ref): Promise<TimelinePlan> {
+  const clips = []
+  for (const c of plan.clips) {
+    clips.push({
+      asset: await ref(c.sha256), startS: c.startS, inS: c.inS, outS: c.outS,
+      ...(c.speed !== undefined ? { speed: c.speed } : {}), ...(c.holdS ? { holdS: c.holdS } : {}),
+      ...(c.fadeInS ? { fadeInS: c.fadeInS } : {}), ...(c.fadeOutS ? { fadeOutS: c.fadeOutS } : {}),
+      ...(c.transitionIn ? { transitionIn: c.transitionIn } : {}),
+    })
+  }
+  const texts = plan.texts.map((t) => ({ words: t.words, style: t.style, fromS: t.fromS, toS: t.toS, ...(t.fadeInS ? { fadeInS: t.fadeInS } : {}), ...(t.fadeOutS ? { fadeOutS: t.fadeOutS } : {}) }))
+  const e = plan.endCard
+  const endCard = e ? {
+    ...(e.headline ? { headline: e.headline } : {}), line: e.line, ...(e.cta ? { cta: e.cta } : {}), ...(e.legal ? { legal: e.legal } : {}), bg: e.bg,
+    ...(e.logo_sha256 ? { logo: await logo(e.logo_sha256) } : {}), s: e.s, ...(e.transitionIn ? { transitionIn: e.transitionIn } : {}),
+  } : undefined
+  return { clips, ...(texts.length ? { texts } : {}), ...(endCard ? { endCard } : {}), lengthS: plan.lengthS }
+}
+
+/** What shows at ad time `t`: the clip layers bottom to top (two inside a transition: the outgoing clip's
+ *  footage after its out point under the incoming one), the text on screen, the end card, and a colour wash
+ *  (a dip's darkest point is 1). The preview draws exactly this. */
+export interface Frame {
+  layers: { clip: PlanClip; srcS: number; alpha: number }[]
+  text: { t: PlanText; alpha: number }[]
+  endCard?: { card: PlanEndCard; alpha: number }
+  wash: { colour: 'black' | 'white'; alpha: number }
+}
+
+/** Where in its take a clip is at ad time t (its last frame held after its window). */
+export function sourceTime(c: Pick<PlanClip, 'startS' | 'inS' | 'outS' | 'speed'>, t: number): number {
+  const into = Math.max(0, t - c.startS)
+  return r3(Math.min(c.outS, c.inS + into * (c.speed ?? 1)))
+}
+
+const fadeAlpha = (into: number, len: number, fin: number, fout: number) => {
+  let a = 1
+  if (fin > 0 && into < fin) a = Math.min(a, into / fin)
+  if (fout > 0 && into > len - fout) a = Math.min(a, Math.max(0, (len - into) / fout))
+  return Math.max(0, Math.min(1, a))
+}
+
+export function frameAt(plan: Plan, t: number): Frame {
+  const layers: Frame['layers'] = []
+  let wash: Frame['wash'] = { colour: 'black', alpha: 0 }
+  const cur = [...plan.clips].reverse().find((c) => t >= c.startS - 1e-6 && t < c.startS + c.durS - 1e-6)
+  if (cur) {
+    const into = t - cur.startS
+    let alpha = fadeAlpha(into, cur.durS, cur.fadeInS ?? 0, cur.fadeOutS ?? 0)
+    const tr = cur.transitionIn
+    const i = plan.clips.indexOf(cur)
+    const prev = i > 0 ? plan.clips[i - 1] : undefined
+    if (tr && tr.s > 0 && into < tr.s && prev) {
+      const k = into / tr.s
+      // The outgoing clip carries on into its footage after its out point (its last frame when it has none).
+      const handle = r3(Math.min(prev.takeS, prev.outS + into * (prev.speed ?? 1)))
+      if (tr.kind === 'dissolve') {
+        layers.push({ clip: prev, srcS: handle, alpha: 1 })
+        alpha *= k
+      } else {
+        const colour = tr.kind === 'dip_white' ? 'white' : 'black'
+        if (k < 0.5) { layers.push({ clip: prev, srcS: handle, alpha: 1 }); alpha = 0; wash = { colour, alpha: k * 2 } }
+        else wash = { colour, alpha: (1 - k) * 2 }
+      }
+    }
+    layers.push({ clip: cur, srcS: sourceTime(cur, t), alpha })
+  }
+  const text = plan.texts.filter((x) => t >= x.fromS && t < x.toS).map((x) => ({ t: x, alpha: fadeAlpha(t - x.fromS, x.toS - x.fromS, x.fadeInS ?? 0, x.fadeOutS ?? 0) }))
+  const e = plan.endCard
+  const endCard = e && t >= e.startS - 1e-6 && t < e.startS + e.s ? { card: e, alpha: e.transitionIn && e.transitionIn.s > 0 && t - e.startS < e.transitionIn.s ? (t - e.startS) / e.transitionIn.s : 1 } : undefined
+  return { layers, text, ...(endCard ? { endCard } : {}), wash }
+}
+
+/** One clip's sound at a moment: where in its take, and how loud (0..1). */
+export interface Sound { clip: PlanClip; srcS: number; gain: number }
+
+/** What the preview hears at ad time `t`, as stitch mixes the render (stitch/timeline.py; owner 2026-11-18,
+ *  until the Sound feature mixes one): each clip's own sound inside its window, at its speed; its fades; a
+ *  transition (a dissolve or a dip) crossfades the two linearly over its seconds, the outgoing clip running on
+ *  into its footage after its out point, silent when it holds its last frame instead, has faded out or has no
+ *  footage left. Silent under a held last frame, a gap and the end card (and the roll-up after it). A still
+ *  has no sound: the preview never plays a picture. */
+export function soundAt(plan: Plan, t: number): Sound[] {
+  const cur = [...plan.clips].reverse().find((c) => t >= c.startS - 1e-6 && t < c.startS + c.durS - 1e-6)
+  if (!cur) return []
+  const out: Sound[] = []
+  const into = t - cur.startS
+  let gain = fadeAlpha(into, cur.durS, cur.fadeInS ?? 0, cur.fadeOutS ?? 0)
+  const tr = cur.transitionIn
+  const i = plan.clips.indexOf(cur)
+  const prev = i > 0 ? plan.clips[i - 1] : undefined
+  if (tr && tr.s > 0 && into < tr.s && prev) {
+    const k = into / tr.s
+    gain *= k
+    const handle = prev.outS + into * (prev.speed ?? 1)
+    if (!prev.holdS && !prev.fadeOutS && handle < prev.takeS - 0.02) out.push({ clip: prev, srcS: r3(handle), gain: r3(1 - k) })
+  }
+  const src = cur.inS + into * (cur.speed ?? 1)
+  if (src < cur.outS - 0.02) out.push({ clip: cur, srcS: r3(src), gain: r3(gain) })
+  return out
+}
+
+/** The clip under the playhead in words, for the transport: "Box 1 at 0:01.0". */
+export function whereWords(plan: Plan, t: number, nameOf: (genId: Id) => string): string {
+  const c = [...plan.clips].reverse().find((x) => t >= x.startS && t < x.startS + x.durS)
+  if (!c) return plan.endCard && t >= plan.endCard.startS ? 'End card' : ''
+  const s = sourceTime(c, t)
+  return `${nameOf(c.generation_id ?? '')} at ${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
+}
+
+export { clipEnd }
+
+// ── Brackets ──────────────────────────────────────────────────────────────────────────────────────────
+
+/** The Edit room's brackets over V1: neighbouring clips, end to end, of one take, whose shots sit in one box
+ *  that is made together NOW. A box made apart since its take was made draws none (live test 2026-11-16,
+ *  finding 22: "Box 1 · made together" stayed over four clips after Made apart). */
+export function cutBrackets(v1: CutClip[], gens: Gen[], boxes: Box[]): { from: number; to: number; label: string }[] {
+  const boxOf = (c: CutClip) => (c.follows?.shotId ? boxes.find((b) => b.shotIds.includes(c.follows!.shotId!)) : undefined)
+  const out: { from: number; to: number; label: string }[] = []
+  let i = 0
+  while (i < v1.length) {
+    const b = boxOf(v1[i])
+    let j = i
+    while (j + 1 < v1.length && v1[j + 1].genId === v1[i].genId && Math.abs(v1[j + 1].startS - clipEnd(v1[j])) < 0.01 && !!b && boxOf(v1[j + 1]) === b) j++
+    if (j > i && b?.together && gens.some((g) => g.id === v1[i].genId)) out.push({ from: v1[i].startS, to: clipEnd(v1[j]), label: `${boxName(b)} · made together` })
+    i = j + 1
+  }
+  return out
+}
+
+// ── A joined take into the cut ───────────────────────────────────────────────────────────────────────
+
+/**
+ * A take of shots the person joined (Make room: Join, then Make), put into the cut where those shots' clips are
+ * (UAT 2026-11-21, B2: the take landed beside the old separate clips, so the Edit room kept playing them and
+ * asked "Use this take" once per shot). The take's windows replace exactly those shots' V1 clips, in shot order,
+ * at the first one's place: its transition and fade in, the last one's fade out. Every other clip keeps its
+ * trims, fades and gaps, the clips after move by the change in length, and texts, V2 and the end card stay.
+ * Nothing happens when none of the shots is in the cut, or when the cut already plays one take of them all
+ * (a new take of a box already joined in the cut is offered as New take ready, as before). Pure: the new cut,
+ * or null.
+ */
+export function placeTakeInCut(d: ProductionDocument, videoId: Id, genId: Id, ids: () => string = newItemId): Cut | null {
+  const g = d.generations?.[genId]
+  if (!g) return null
+  const cut = readCut(d, videoId)
+  const segs = takeSegments(d, g)
+  const shots = segs.map((s) => s.shot_id)
+  const old = sortV1(cut.v1).filter((c) => !!c.follows?.shotId && shots.includes(c.follows.shotId))
+  // A first take of a box none of whose shots is in the cut yet goes in at its storyboard place (R3-F4).
+  if (!old.length) return insertFirstTake(d, cut, g, segs, ids)
+  if (segs.length < 2) return null
+  if (old.every((c) => c.genId === old[0].genId) && shots.every((id) => old.some((c) => c.follows?.shotId === id))
+    && d.generations[old[0].genId]?.segments?.length === shots.length) return null
+  const first = old[0]
+  const last = old.at(-1)!
+  // The box a clip stands for is the run its take was made for (a document id), as Assemble first cut writes it.
+  const box = g.box_id
+  const added: CutClip[] = []
+  let at = first.startS
+  for (const [i, s] of segs.entries()) {
+    const len = r3(s.out_s - s.in_s)
+    if (len <= 0) continue
+    added.push({
+      id: ids(), genId, inS: s.in_s, outS: s.out_s, startS: r3(at), speed: 1, holdS: 0,
+      fadeInS: i === 0 ? first.fadeInS : 0, fadeOutS: i === segs.length - 1 ? last.fadeOutS : 0,
+      ...(i === 0 && first.transition ? { transition: first.transition } : {}),
+      follows: { ...(box ? { boxId: box } : {}), shotId: s.shot_id },
+    })
+    at += len
+  }
+  if (!added.length) return null
+  const gone = new Set(old.map((c) => c.id))
+  const v1: CutClip[] = []
+  let shift = 0
+  for (const c of sortV1(cut.v1)) {
+    if (c.id === first.id) {
+      v1.push(...added)
+      shift += r3(at - first.startS) - (clipEnd(first) - first.startS)
+      continue
+    }
+    if (gone.has(c.id)) { shift -= clipEnd(c) - c.startS; continue }
+    v1.push(c.startS > first.startS && shift ? { ...c, startS: r3(Math.max(0, c.startS + shift)) } : c)
+  }
+  return { ...cut, v1: sortV1(v1) }
+}
+
+/** A take's windows as the cut places them: its segments, or a lone shot's planned length from its start
+ *  (rooms/model loneOut, R3-F2), at least its voiced line (lonePlanned, R5-F2). */
+function takeSegments(d: ProductionDocument, g: ProductionDocument['generations'][string]): { shot_id: Id; in_s: number; out_s: number }[] {
+  if (g.segments?.length) return g.segments
+  if (g.shot_ids.length !== 1) return []
+  const take = g.duration_s ?? (g.asset ? d.assets[g.asset]?.duration_s : undefined) ?? 0
+  return [{ shot_id: g.shot_ids[0], in_s: 0, out_s: loneOut(take, lonePlanned(d, g)) }]
+}
+
+/**
+ * A box's first take, landed while a cut exists (UAT round 3, R3-F4: the first takes of shots 3-5 went only to the
+ * Bin, and the only way in was Assemble again, which drops trims). Its windows go in at the storyboard place of its
+ * shots: after the last clip of a shot before them, before the clips of the shots after, which move later by its
+ * length. Nothing when the cut is empty (Assemble first cut makes it) or the take has no window.
+ */
+function insertFirstTake(d: ProductionDocument, cut: Cut, g: ProductionDocument['generations'][string], segs: { shot_id: Id; in_s: number; out_s: number }[], ids: () => string): Cut | null {
+  if (!cut.v1.length || !segs.length) return null
+  // Only a box's first take: a take of these shots made before (the person may have taken it out) leaves it to them.
+  const shotIds = new Set(segs.map((s) => s.shot_id))
+  const earlier = Object.values(d.generations ?? {}).some((x) => x.id !== g.id && x.state === 'ready' && x.kind !== 'render' && x.kind !== 'upload'
+    && x.kind !== 'combine' && x.shot_ids.some((id) => shotIds.has(id)) && (x.created_at ?? '') <= (g.created_at ?? ''))
+  if (earlier) return null
+  const sb = d.shots[segs[0].shot_id]?.storyboard_id
+  const order = new Map(shotsOf(d, sb).map((s, i) => [s.id, i]))
+  const mine = order.get(segs[0].shot_id) ?? Infinity
+  const v1 = sortV1(cut.v1)
+  const before = v1.filter((c) => (order.get(c.follows?.shotId ?? '') ?? -1) < mine)
+  const at = before.length ? Math.max(...before.map((c) => clipEnd(c))) : 0
+  const added: CutClip[] = []
+  let t = at
+  for (const s of segs) {
+    const len = r3(s.out_s - s.in_s)
+    if (len <= 0.04) continue
+    added.push({ id: ids(), genId: g.id, inS: s.in_s, outS: s.out_s, startS: r3(t), speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0, follows: { ...(g.box_id ? { boxId: g.box_id } : {}), shotId: s.shot_id } })
+    t += len
+  }
+  if (!added.length) return null
+  // A gap left where it goes (a clip taken out with its gap kept) takes it first; the clips after move by the rest.
+  const after = v1.filter((c) => !before.includes(c) && c.startS >= at - 1e-6)
+  const gap = after.length ? Math.max(0, Math.min(...after.map((c) => c.startS)) - at) : 0
+  const shift = r3(Math.max(0, t - at - gap))
+  const moved = v1.map((c) => (!after.includes(c) || !shift ? c : { ...c, startS: r3(c.startS + shift) }))
+  return { ...cut, v1: sortV1([...moved, ...added]) }
+}
+
+/** The words a placed take is said with: "Joined take of shots 1–2 is in the cut.", "Shot 3's first take is in
+ *  the cut." */
+export function placedWords(d: ProductionDocument, genId: Id): string {
+  const g = d.generations?.[genId]
+  if (g?.segments && g.segments.length > 1) return joinedWords(d, genId)
+  const n = g ? shotsOf(d, d.shots[g.shot_ids[0]]?.storyboard_id).findIndex((x) => x.id === g.shot_ids[0]) + 1 : 0
+  return n > 0 ? `Shot ${n}'s first take is in the cut.` : 'The first take is in the cut.'
+}
+
+/** The words a placed joined take is said with: "Joined take of shots 1–2 is in the cut." */
+export function joinedWords(d: ProductionDocument, genId: Id): string {
+  const ns = (d.generations?.[genId]?.segments ?? []).map((s) => shotsOf(d, d.shots[s.shot_id]?.storyboard_id).findIndex((x) => x.id === s.shot_id) + 1).filter((n) => n > 0)
+  return ns.length ? `Joined take of shots ${ns[0]}–${ns.at(-1)} is in the cut.` : 'Joined take is in the cut.'
+}

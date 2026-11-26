@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://napkin.ie/production-tool/contracts/common.schema.json",
   "title": "Production Tool: shared definitions",
-  "description": "Types every other contract uses. Contract version 2 (2026-10-07, canvas-solid-refs: keys and variants replace the character views; combine folds into generate).",
+  "description": "Types every other contract uses. Contract version 3 (2026-10-13, features/contract-v3.clan): id-keyed maps, ranks, camera fields, beats, links with one rule table, asks, the crew, tenants and people, formats, and the decision-tree addresses.",
   "$defs": {
-    "contractVersion": { "const": "2" },
+    "contractVersion": { "const": "3" },
     "sha256": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
@@ -13,37 +13,310 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z]+_[0-9A-HJKMNP-TV-Z]{26}$",
-      "description": "Prefixed ULID made by the client: job_…, ref_…, node_…, shot_…, frame_…, take_…, rev_…, pin_…"
+      "description": "Prefixed ULID made by the client (or, for a job's question, the relay): job_, ref_, key_, shot_, beat_, scene_, script_, storyboard_, video_, frame_, gen_, render_, rev_, link_, board_, sketch_, doc_, brief_, bclan_, fset_, size_, check_, q_, sug_, spin_, stale_, exp_, item_, run_, node_, proj_ …. Never holds '.', '[', ']' or '#', so it is always a safe map key and address segment."
+    },
+    "sceneId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{6,64}$",
+      "description": "An Excalidraw element id on the canvas (a group, a note or an ink group): owned by the canvas, never by the document. Never holds '.', '[', ']' or '#'."
     },
     "tag": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{2,15}$",
-      "description": "A ref's wire name inside one provider job, in the strictest form any provider accepts (Runway: 3-16 chars). The relay derives it from the ref's name (relay/names.py) and rewrites @name in the job's words to it; adapters rewrite it again into each provider's syntax."
+      "description": "A ref's wire name inside one provider job, in the strictest form any provider accepts (Runway: 3-16 chars). The relay derives it from the ref's name (relay/names.py)."
     },
     "key": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9]{1,23}$",
-      "description": "A solid reference key: one character or object (maya, lamp). Lowercase letters and digits only: the underscore separates key from variant."
+      "description": "A solid reference key: one character, place or object (maya, lamp, loc). Lowercase letters and digits only: the underscore separates key from variant."
     },
     "variant": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
-      "description": "Free text after the key: front, side, laughing, red-coat. Lowercase letters, digits and hyphens. The turnaround views are the variants front, three-quarter, side and back."
+      "description": "Free text after the key: front, side, laughing, red-coat. Lowercase letters, digits and hyphens."
     },
     "refName": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9]{1,23}_[a-z0-9][a-z0-9-]{0,31}$",
-      "description": "key_variant, as the participant writes it after @ (maya_laughing). Unique in a document."
+      "description": "key_variant, as a person writes it after @ (maya_laughing). Unique in a document."
     },
     "subject": {
       "anyOf": [{ "$ref": "#/$defs/refName" }, { "$ref": "#/$defs/key" }],
-      "description": "What a script or shot names after @: a bare key (goremon) is the whole character, sent as its front plus up to 3 other variants (three-quarter, side, back, then the rest); key_variant (goremon_laughing) is one look. A key with no front variant cannot be named bare."
+      "description": "A name after @ in words sent to the relay: a bare key is the whole character (its front plus up to 3 other variants), key_variant one look."
+    },
+    "ratio": {
+      "enum": ["16:9", "9:16", "1:1", "4:5"],
+      "description": "The ratios a person picks for a storyboard, a video or a sketch area. A format's exact shape is an aspect, never a new ratio."
+    },
+    "clipQuality": {
+      "enum": ["draft", "standard", "final"],
+      "description": "A clip's quality (features/clip-quality.clan): draft is the cheapest size the model makes, standard 720p (the size before quality existed), final the best it makes up to 1080p. The size each means per model is the capability sheet's ops[op].quality."
+    },
+    "aspect": {
+      "type": "object",
+      "description": "An exact shape in whole units (1080 x 1920, 1.91:1 as 191 x 100). Used where a format's shape is not one of the four ratios.",
+      "properties": {
+        "w": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "h": { "type": "integer", "minimum": 1, "maximum": 100000 }
+      },
+      "required": ["w", "h"],
+      "additionalProperties": false
+    },
+    "rank": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][0-9A-Za-z]{0,63}$",
+      "description": "A fractional order key (rocicorp/fractional-indexing, base 62). The only order of scenes, shots, beats, boards, sizes and cut items: a move is one write to one rank. clan-store/src/rank.ts and relay/rank.py make the same keys (examples/ranks.json)."
+    },
+    "cameraSize": {
+      "enum": ["extreme_wide", "wide", "medium_wide", "medium", "medium_close", "close", "extreme_close", "insert", "over_shoulder", "two_shot", "graphic"],
+      "description": "graphic: a shot with no camera, such as the end card ('Graphic · Static')."
+    },
+    "cameraAngle": { "enum": ["eye_level", "high_angle", "low_angle", "overhead", "aerial", "dutch", "pov"] },
+    "cameraMovement": { "enum": ["static", "pan", "tilt", "push_in", "pull_out", "track", "orbit", "handheld", "crane_up", "crane_down", "drone"] },
+    "movementSpeed": { "enum": ["slow", "normal", "fast"] },
+    "camera": {
+      "type": "object",
+      "description": "A shot's camera, every part its own single-value field (a patch per leaf).",
+      "properties": {
+        "size": { "$ref": "#/$defs/cameraSize" },
+        "angle": { "$ref": "#/$defs/cameraAngle" },
+        "movement": { "$ref": "#/$defs/cameraMovement" },
+        "movement_speed": { "$ref": "#/$defs/movementSpeed" },
+        "lens_mm": { "type": "integer", "minimum": 8, "maximum": 800 },
+        "macro": { "type": "boolean" }
+      },
+      "required": ["size"],
+      "additionalProperties": false
+    },
+    "cameraPatch": {
+      "type": "object",
+      "description": "A change to a shot's camera (frame_edit's frameEdit.camera): the leaves of camera, none required, each the new value. size never becomes graphic (a graphic card has no camera to change).",
+      "properties": {
+        "size": { "allOf": [{ "$ref": "#/$defs/cameraSize" }, { "not": { "const": "graphic" } }] },
+        "angle": { "$ref": "#/$defs/cameraAngle" },
+        "movement": { "$ref": "#/$defs/cameraMovement" },
+        "movement_speed": { "$ref": "#/$defs/movementSpeed" },
+        "lens_mm": { "type": "integer", "minimum": 8, "maximum": 800 },
+        "macro": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "cameraWords": {
+      "description": "How each camera value is said (features/frame-change-edit.clan): label is the word the camera chips and the diff show ('angle: eye level -> overhead'); words are the phrases that mean it (the longest match wins). One table for the web's labels, director.v7's camera lines (the <!-- camera-words --> marker), the passthrough's lexicon and the eval, so they never differ. Every value of cameraSize, cameraAngle, cameraMovement and movementSpeed has a row (a contract test holds it).",
+      "const": {
+        "size": {
+          "extreme_wide": { "label": "extreme wide", "words": ["extreme wide", "extreme long shot", "very wide shot"] },
+          "wide": { "label": "wide", "words": ["wide shot", "wide", "long shot", "establishing", "full shot"] },
+          "medium_wide": { "label": "medium wide", "words": ["medium wide", "medium long shot", "cowboy shot"] },
+          "medium": { "label": "medium", "words": ["medium shot", "mid shot", "waist up"] },
+          "medium_close": { "label": "medium close", "words": ["medium close-up", "medium close up", "medium closeup", "chest up"] },
+          "close": { "label": "close", "words": ["close-up", "close up", "closeup", "close shot"] },
+          "extreme_close": { "label": "extreme close", "words": ["extreme close-up", "extreme close up", "extreme closeup"] },
+          "insert": { "label": "insert", "words": ["insert shot", "insert", "cutaway"] },
+          "over_shoulder": { "label": "over the shoulder", "words": ["over the shoulder", "over-the-shoulder"] },
+          "two_shot": { "label": "two shot", "words": ["two shot", "two-shot"] },
+          "graphic": { "label": "graphic", "words": ["graphic card", "title card"] }
+        },
+        "angle": {
+          "eye_level": { "label": "eye level", "words": ["eye level", "eye-level", "straight on"] },
+          "high_angle": { "label": "high angle", "words": ["high angle", "high-angle", "from above", "looking down"] },
+          "low_angle": { "label": "low angle", "words": ["low angle", "low-angle", "from below", "looking up", "worm's eye"] },
+          "overhead": { "label": "overhead", "words": ["overhead", "top down", "top-down", "bird's eye", "birds eye", "directly above"] },
+          "aerial": { "label": "aerial", "words": ["aerial", "drone shot", "from the air"] },
+          "dutch": { "label": "dutch", "words": ["dutch angle", "dutch tilt", "dutch", "canted"] },
+          "pov": { "label": "POV", "words": ["pov", "point of view", "point-of-view"] }
+        },
+        "movement": {
+          "static": { "label": "static", "words": ["static", "locked off", "locked-off", "holds still"] },
+          "pan": { "label": "pan", "words": ["pan", "pans", "panning"] },
+          "tilt": { "label": "tilt", "words": ["tilt up", "tilt down", "tilts", "tilting"] },
+          "push_in": { "label": "push in", "words": ["push in", "pushes in", "push-in", "dolly in", "moves in"] },
+          "pull_out": { "label": "pull out", "words": ["pull out", "pulls out", "pull back", "pulls back", "dolly out"] },
+          "track": { "label": "track", "words": ["tracking shot", "tracking", "tracks"] },
+          "orbit": { "label": "orbit", "words": ["orbit", "orbits", "circles around", "arcs around"] },
+          "handheld": { "label": "handheld", "words": ["handheld", "hand-held", "shaky cam"] },
+          "crane_up": { "label": "crane up", "words": ["crane up", "cranes up", "boom up", "jib up"] },
+          "crane_down": { "label": "crane down", "words": ["crane down", "cranes down", "boom down", "jib down"] },
+          "drone": { "label": "drone", "words": ["drone move", "flies over", "fly-over", "flyover"] }
+        },
+        "movement_speed": {
+          "slow": { "label": "slow", "words": ["slowly", "slow", "gently"] },
+          "normal": { "label": "normal", "words": ["steadily", "normal speed"] },
+          "fast": { "label": "fast", "words": ["quickly", "fast", "rapidly", "whip"] }
+        }
+      }
+    },
+    "beatKind": {
+      "enum": ["moment", "line", "vo", "music", "sound", "camera"],
+      "description": "moment: something that happens at a time in the shot. line: spoken on screen (speaker, parenthetical, tied to a moment or not). vo, music, sound: the audio rows. camera: a change of camera inside the shot."
+    },
+    "crewId": {
+      "enum": ["dex", "skye", "wren", "rhea", "edie", "ellis", "jude"],
+      "description": "The crew (ui-behaviour 5.1): Dex directs, Skye scripts, Fin films, Rhea retouches, Edie edits; Nell notes and Jude judges are the house agents. Stable ids: the names on screen may change, these do not (wren is Fin, ellis is Nell)."
+    },
+    "tenantId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "The agency: napkin-web's TenantId (UUIDv5 of 'napkin:agency:<agency>'). Opaque here."
+    },
+    "personRef": {
+      "type": "string",
+      "pattern": "^human:[A-Za-z0-9_:-]{1,128}$",
+      "description": "A person, as the decision chain names them: human:<personId> (the participantId from GET /me). Opaque here."
+    },
+    "actorRef": {
+      "anyOf": [{ "$ref": "#/$defs/personRef" }, { "$ref": "#/$defs/crewId" }],
+      "description": "Who wrote something: a person (human:<id>) or a crew member (dex, skye, …)."
+    },
+    "address": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*(\\.[A-Za-z_][A-Za-z0-9_]*(\\[[^\\].\\[#\\s]+\\])*)*$",
+      "description": "<doc-id>#<entity-keyed path> (docs/contracts/os-layer.md §3): shots[shot_X].camera.size, frames[frame_Y]. What a decision targets or cites."
+    },
+    "decisionId": {
+      "type": "string",
+      "pattern": "^d_[0-9A-Za-z]{10,40}$",
+      "description": "A decision in the chain (clan-sdk DECISION_ID_PREFIX)."
+    },
+    "formatId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+      "description": "A format in format-packs.json: lowercase, digits, dots and hyphens (linkedin-image-1.91x1). Never contains '/'. Never a map key or a path segment (it may hold a dot): sizes are their own entities and carry it as a value."
+    },
+    "formatRef": {
+      "type": "object",
+      "description": "Which format a size or a sketch area was made for, and from which version of its pack. A copy: the values that matter (aspect, delivery, bleed, safe area) are copied beside it at creation.",
+      "properties": {
+        "pack_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" },
+        "pack_version": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "format_id": { "$ref": "#/$defs/formatId" },
+        "client_id": { "type": "string", "maxLength": 64, "description": "Set when the pack is a client's own (their library shelf)." }
+      },
+      "required": ["pack_id", "pack_version", "format_id"],
+      "additionalProperties": false
+    },
+    "safeArea": {
+      "description": "format-packs.json safe_area: insets from each edge, or a centred live box.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "insets" },
+            "top": { "type": "number", "minimum": 0 },
+            "right": { "type": "number", "minimum": 0 },
+            "bottom": { "type": "number", "minimum": 0 },
+            "left": { "type": "number", "minimum": 0 },
+            "unit": { "enum": ["%", "px", "mm"] }
+          },
+          "required": ["type", "top", "right", "bottom", "left", "unit"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "box" },
+            "width": { "type": "number", "exclusiveMinimum": 0 },
+            "height": { "type": "number", "exclusiveMinimum": 0 },
+            "unit": { "enum": ["%", "px", "mm"] },
+            "basis": { "const": "full_size" },
+            "anchor": { "const": "centre" }
+          },
+          "required": ["type", "width", "height", "unit", "basis", "anchor"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "deliveryPx": {
+      "type": "object",
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "pxBox": {
+      "type": "object",
+      "description": "A box in a picture's own pixels, origin top-left (features/campaign-formats.clan): a protected subject, a size's crop. The pixels of the master as the format set recorded it (format_set.master w and h), or of a take for a clip's crop.",
+      "properties": {
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "protectBox": {
+      "type": "object",
+      "description": "What must stay in every size (Wren's ask 'What must stay in every size?'): a subject or a product, as a box in the master's pixels. The logo and the words are never boxes: they are type layers from the Brand board.",
+      "properties": {
+        "role": { "enum": ["subject", "product", "other"] },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "x": { "type": "number", "minimum": 0 },
+        "y": { "type": "number", "minimum": 0 },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["role", "x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "formatChannel": {
+      "enum": ["film", "social", "ooh", "print", "display"],
+      "description": "The Campaign board's lanes (features/campaign-formats.clan): film (TV and online video), social, out of home, print, display. A format without one is placed by its kind: video → film, image → social, and ooh, print and display as themselves."
+    },
+    "sizeMethod": {
+      "enum": ["crop", "extend", "nearest", "reframe", "regenerate", "layout", "reedit"],
+      "description": "How a size is made from its master (features/campaign-formats.clan, a method per format). crop: a subject-aware crop on the relay, free. extend: an Ideogram 4.5 mask on the padded clean plate. nearest: the model's nearest ratio, then a crop. regenerate: Gemini 3 Pro with the master and the named references at the nearest ratio, then a crop. layout: a crop and the type layers on a brand colour field (banners), free. reedit: a cutdown, windows of the same takes (stitch), free on the provider. reframe: a clip cropped per shot, outpainted by Aleph 2 only where the crop would cut a protected box."
+    },
+    "typeLayerKind": {
+      "enum": ["line", "logo", "supers", "legal", "captions"],
+      "description": "The type laid out on every size from the Brand board and the format's safe area (features/campaign-formats.clan): the brand line, the logo, supers (on-screen words) and legal. captions (a film's spoken lines, burnt in for sound off; on by default on the social shapes 9:16, 4:5 and 1:1, CF9; added 2026-10-16, additive): one layer per line, timed by fromS and toS. Rendered by the relay (stills) and stitch (video); never sent to a model."
+    },
+    "typeLayerOverride": {
+      "type": "object",
+      "description": "One size's change to a type layer (Edit type on its tile). Absent fields keep the layout's own.",
+      "properties": {
+        "hidden": { "type": "boolean" },
+        "text": { "type": "string", "maxLength": 600, "description": "The words for this size only (a shorter OOH line, Skye's suggestion once kept)." },
+        "box": { "$ref": "#/$defs/region", "description": "Where it sits, in 0-1 coordinates of the size." },
+        "scale": { "type": "number", "minimum": 0.25, "maximum": 4, "description": "Times the layout's own type size." }
+      },
+      "additionalProperties": false
+    },
+    "formatCheckCode": {
+      "enum": ["subject_safe", "logo_safe", "clear_space", "type_size", "ooh_words", "line_present", "end_card", "sound_off", "brand_first_3s", "logo_present", "look_match"],
+      "description": "Jude's per-format checks (features/campaign-formats.clan); they never block. subject_safe: every protected box inside the safe area. logo_safe: the logo inside the safe area. clear_space: the logo's clear space is free of type. type_size: type at least the format's minimum size. ooh_words: an out-of-home line is 7 words or fewer. line_present: the brand line is on the size. end_card: a film ends on its end card. sound_off: social video carries supers or captions. brand_first_3s: social video shows the brand in its first 3 s. logo_present: the Brand board has a logo and it is drawn on the size (added 2026-11-03, additive). look_match: the size's colour and tone are close to the master's (added 2026-11-03, additive). A check's result is pass, flag, or unverified (Jude cannot measure it, e.g. what must stay in a regenerated picture)."
     },
     "refRole": {
-      "enum": ["character", "shape", "texture", "colour", "feel", "pose", "prop", "other"],
-      "description": "What a key contributes. A character key goes to Runway as subject human; every other role goes as an object/image ref."
+      "enum": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"],
+      "description": "What a reference is for (ui-behaviour 3.6). An open set in meaning: a ref may add its own label. What Dex takes from each role is refRoleTable."
     },
-    "view": { "enum": ["front", "three-quarter", "side", "back"], "description": "op view: the turnaround view to make from the source image. It is also the variant the result is named by (maya_three-quarter)." },
+    "refRoleTable": {
+      "description": "One line per role, shown in the role picker (ui_line) and written into the director's prompt (prompt_line) verbatim, so the UI and the prompt never differ. views: whether the role gets a front and turnaround views. payload: what a ref of this role holds (image: an asset; swatches; font; rule; document). picker: main (one of the ten pills) or more.",
+      "const": {
+        "character": { "ui_line": "The Director agent keeps who they are: face, build and look", "prompt_line": "character reference: keep this person's identity, face, build and look", "views": true, "payload": "image", "picker": "main" },
+        "location": { "ui_line": "The Director agent keeps the place", "prompt_line": "location reference: set the scene in this place", "views": true, "payload": "image", "picker": "main" },
+        "lighting": { "ui_line": "The Director agent matches its light only", "prompt_line": "lighting reference: match its light only", "views": false, "payload": "image", "picker": "main" },
+        "composition": { "ui_line": "The Director agent follows its framing", "prompt_line": "composition reference: follow its framing and camera position only", "views": false, "payload": "image", "picker": "main" },
+        "product": { "ui_line": "The Director agent keeps the product exactly", "prompt_line": "product reference: show this exact product; keep its shape, label and colours", "views": true, "payload": "image", "picker": "main" },
+        "style": { "ui_line": "The Director agent matches its look and finish", "prompt_line": "style reference: match its look, palette and finish, not its content", "views": false, "payload": "image", "picker": "main" },
+        "wardrobe": { "ui_line": "The Director agent matches the clothes only", "prompt_line": "wardrobe reference: match the clothes only", "views": false, "payload": "image", "picker": "main" },
+        "pose": { "ui_line": "The Director agent copies the pose only", "prompt_line": "pose reference: copy the body pose only", "views": false, "payload": "image", "picker": "main" },
+        "prop": { "ui_line": "The Director agent keeps the object", "prompt_line": "prop reference: include this object as it looks", "views": false, "payload": "image", "picker": "main" },
+        "texture": { "ui_line": "The Director agent matches the surface only", "prompt_line": "texture reference: match the surface and material only", "views": false, "payload": "image", "picker": "more" },
+        "colour": { "ui_line": "The Director agent takes its colours only", "prompt_line": "colour reference: take its colours only", "views": false, "payload": "image", "picker": "more" },
+        "layout": { "ui_line": "The Director agent follows where things sit, not how they look", "prompt_line": "layout reference: follow where things sit, not how they look", "views": false, "payload": "image", "picker": "more" },
+        "logo": { "ui_line": "The Director agent places the logo as drawn, never redrawn", "prompt_line": "logo reference: reproduce this logo exactly; never redraw or restyle it", "views": false, "payload": "image", "picker": "more" },
+        "palette": { "ui_line": "The Director agent keeps to these colours", "prompt_line": "brand palette: keep to these colours", "views": false, "payload": "swatches", "picker": "more" },
+        "typography": { "ui_line": "The Director agent sets type in this font", "prompt_line": "typography: set any type in this font and weight", "views": false, "payload": "font", "picker": "more" },
+        "brand_rule": { "ui_line": "The Director agent follows the rule; the Review agent checks it", "prompt_line": "brand rule: follow this rule", "views": false, "payload": "rule", "picker": "more" },
+        "document": { "ui_line": "The Director agent reads it as background only", "prompt_line": "background document: use it as context only, never as text on screen", "views": false, "payload": "document", "picker": "more" },
+        "other": { "ui_line": "The Director agent uses it as you describe in the label", "prompt_line": "reference: use as the label says", "views": false, "payload": "image", "picker": "main" }
+      }
+    },
+    "view": { "enum": ["front", "three-quarter", "side", "back"], "description": "op view: the turnaround view to make from the source image, and the variant the result is named by." },
     "region": {
       "type": "object",
       "description": "A box in 0-1 coordinates of the image it sits on, origin top-left.",
@@ -56,19 +329,157 @@
       "required": ["x", "y", "w", "h"],
       "additionalProperties": false
     },
+    "briefSpine": {
+      "type": "object",
+      "description": "A brief's spine (features/brief-node.clan, owner 2026-11-17): the few parts of a Brief Maker brief every agent reads, projected by one declaration (web/src/brief/spine.ts BRIEF_SPINE) and frozen at the version taken. Each part is cut at a word to its length here; the relay's brief block has its own, smaller budget per op. Never typed in Production.",
+      "properties": {
+        "insight": { "type": "string", "maxLength": 400 },
+        "proposition": { "type": "string", "maxLength": 200, "description": "The single-minded proposition." },
+        "audience": { "type": "string", "maxLength": 400 },
+        "tone": { "type": "string", "maxLength": 300, "description": "Tone and world, its lines joined." },
+        "feel": { "type": "string", "maxLength": 200, "description": "What they should feel (desired response)." },
+        "mandatories": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "maxItems": 6 },
+        "donts": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 120 }, "maxItems": 6, "description": "What the film must not do: the brief's mandatories worded as a prohibition (Don't, Do not, Never, Avoid, No …)." },
+        "format": { "type": "string", "maxLength": 160, "description": "Format and length, when the brief sets them (its role of each medium)." }
+      },
+      "additionalProperties": false
+    },
+    "linkEndpointKind": {
+      "enum": ["board", "group", "note", "ink", "script", "storyboard", "video", "ref", "key", "frame", "render", "sketch", "document", "format_set", "shot", "text", "brief", "brand_clan"],
+      "description": "What a link joins. group, note and ink are canvas things: their id is a sceneId. Every other kind is a document entity: its id is the entity's id. key (2026-10-15, owner): a solid key (keys[id]), the whole character or thing; every named ref with that key, each of its views, is in a node's scope through the one link. text (2026-10-16, owner): a text written on the canvas (texts[id], which holds its words and its canvas element); linked into a node, its words are that node's input words. brief (2026-11-17, owner; features/brief-node.clan): a Brief node (briefs[id]), a frozen, read-only copy of a Brief Maker brief's spine; linked into a node, the spine goes with every job from it."
+    },
+    "linkEndpoint": {
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/$defs/linkEndpointKind" },
+        "id": { "type": "string" }
+      },
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "if": { "properties": { "kind": { "enum": ["group", "note", "ink"] } } },
+      "then": { "properties": { "id": { "$ref": "#/$defs/sceneId" } } },
+      "else": { "properties": { "id": { "$ref": "#/$defs/id" } } }
+    },
+    "linkRole": {
+      "anyOf": [
+        { "enum": ["drives", "renders", "input", "note", "context", "brand", "master", "frame", "made_from", "note_on_shot", "brief"] },
+        { "$ref": "#/$defs/refRole" }
+      ],
+      "description": "A link's label (ui-behaviour 3.4). A reference's link carries its role (character, lighting, …); 'layout' is both a ref role and a shot's layout guide."
+    },
+    "linkRule": {
+      "description": "Every link that may exist (ui-behaviour 3.4), the one table the canvas's canLink(), clan-store's integrity check and check.py read. A link is allowed when a rule has its from kind, its to kind and its role; the first such rule decides its limits. per_target one: at most one link of that role into one target. per_source one: at most one link from one source into one target. system: made only by the tool. generating: the nodes that send work to an agent. A Brand board may also feed a text (a note on the canvas): 'use this brand' for whatever the note feeds (UAT round 4 S2-2, added 2026-11-21, additive). Refused besides: a link into a ref, a document, a brief or a brand board; a link out of a video except as a format set's master; a link that makes a loop.",
+      "const": {
+        "generating": ["script", "storyboard", "video", "sketch", "format_set"],
+        "rules": [
+          { "from": ["script"], "to": ["storyboard"], "roles": ["drives"], "per_target": "one" },
+          { "from": ["storyboard"], "to": ["video"], "roles": ["renders"], "per_target": "one" },
+          { "from": ["script"], "to": ["video"], "roles": ["drives"], "per_target": "one" },
+          { "from": ["ref", "frame"], "to": ["shot"], "roles": ["frame", "layout"], "per_target": "one" },
+          { "from": ["ref"], "to": ["script", "storyboard", "video", "sketch", "format_set", "shot"], "roles": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"], "per_target": "many" },
+          { "from": ["key"], "to": ["script", "storyboard", "video", "sketch", "format_set", "shot"], "roles": ["character", "location", "lighting", "composition", "product", "style", "wardrobe", "pose", "prop", "texture", "colour", "layout", "logo", "palette", "typography", "brand_rule", "document", "other"], "per_target": "many", "per_source": "one" },
+          { "from": ["board", "group"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["input"], "per_target": "many", "per_source": "one" },
+          { "from": ["note", "ink", "document", "text"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["note", "context"], "per_target": "many", "per_source": "one" },
+          { "from": ["board"], "to": ["script", "storyboard", "video", "sketch", "format_set"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
+          { "from": ["board"], "to": ["text", "note"], "roles": ["brand"], "per_target": "one", "board_purpose": "brand" },
+          { "from": ["frame", "ref", "render", "video"], "to": ["format_set"], "roles": ["master"], "per_target": "one", "system": true },
+          { "from": ["sketch"], "to": ["frame"], "roles": ["made_from"], "per_target": "one", "system": true },
+          { "from": ["ink"], "to": ["shot"], "roles": ["note_on_shot"], "per_target": "many", "per_source": "one" },
+          { "from": ["brief"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brief"], "per_target": "one" },
+          { "from": ["brand_clan"], "to": ["script", "storyboard", "video", "format_set"], "roles": ["brand"], "per_target": "one" }
+        ]
+      }
+    },
+    "questionOption": {
+      "type": "object",
+      "description": "One button under a question (the Research tool's question_option, app/templates/campaign-research/schema.json). With a value it proceeds with that value; without one it is the escape that opens the text box, and the answer is sent as text. detail and cost are said under the label ('6 shots · about $1.20 for frames').",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "value": {
+          "anyOf": [
+            { "$ref": "#/$defs/routeValue" },
+            { "type": ["string", "number", "boolean"] },
+            { "type": "object", "not": { "required": ["route"] } },
+            { "type": "array" }
+          ]
+        },
+        "detail": { "type": "string", "maxLength": 120 },
+        "cost": {
+          "type": "object",
+          "properties": {
+            "estimate": { "type": "number", "minimum": 0 },
+            "currency": { "const": "USD" }
+          },
+          "required": ["estimate", "currency"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "routeValue": {
+      "type": "object",
+      "description": "An option that sends the work somewhere: plan the storyboard first, link a script. node is the node it goes to, when there is one.",
+      "properties": {
+        "route": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$" },
+        "node": { "$ref": "#/$defs/linkEndpoint" }
+      },
+      "required": ["route"],
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "object",
+      "description": "What an agent asks instead of guessing (ui-behaviour 3.17), the Research tool's question with three additions: kind, recommended_option_id and per-option detail and cost. block: no option proceeds until one is done. nudge: at least one proceeds; one may be recommended. ambiguity: the words could mean two things; nothing is recommended. recast: a change to a frame would swap who is in the picture, which an edit cannot do; options redraw and edit, redraw recommended (features/frame-edit-or-redraw.clan). A job's question id is minted by the relay.",
+      "properties": {
+        "id": { "type": "string", "pattern": "^q_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "kind": { "enum": ["block", "nudge", "ambiguity", "recast"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "why": { "type": "string", "maxLength": 300 },
+        "options": { "type": "array", "maxItems": 6, "items": { "$ref": "#/$defs/questionOption" } },
+        "allow_text": { "type": "boolean" },
+        "recommended_option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "address": { "$ref": "#/$defs/address", "description": "The field the answer settles, when it settles one." }
+      },
+      "required": ["id", "kind", "text", "options", "allow_text"],
+      "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "ambiguity" } } }, "then": { "not": { "required": ["recommended_option_id"] } } },
+        { "if": { "properties": { "options": { "maxItems": 0 } } }, "then": { "properties": { "allow_text": { "const": true } } } },
+        { "if": { "properties": { "options": { "contains": { "not": { "required": ["value"] } } } } }, "then": { "properties": { "allow_text": { "const": true } } } }
+      ]
+    },
+    "answer": {
+      "type": "object",
+      "description": "A person's answer: an option id or text, never both.",
+      "properties": {
+        "option_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      },
+      "oneOf": [{ "required": ["option_id"], "not": { "required": ["text"] } }, { "required": ["text"], "not": { "required": ["option_id"] } }]
+    },
     "provider": { "enum": ["mock", "runway"], "description": "A provider the relay can route to." },
-    "madeBy": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$", "description": "The provider that made an output, as recorded at the time. Free, not the routing enum: projects saved during the hackathon name fal and HeyGen, which are no longer routed (features/drop-hackathon-extras.clan)." },
+    "madeBy": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$", "description": "The provider that made an output, as recorded at the time. Free, not the routing enum." },
     "op": {
-      "enum": ["generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch"],
-      "description": "generate: one new image from 1-14 selected canvas nodes (drawings exported as the sketch, text as the instruction, pictures as refs). view: one turnaround view from a source image. shot_list: script to shots (director only, no provider). frame: one storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: region comment or feel change on a clip. stitch: shots to one MP4 with the end card."
+      "enum": ["generate", "view", "shot_list", "frame", "region_edit", "clip", "clip_edit", "stitch", "frame_edit", "clip_patch", "bridge", "cutout", "transcribe", "write", "read", "check", "resize", "cutdown", "upscale"],
+      "description": "generate: a new image from 1-14 inputs. view: a turnaround view. shot_list: Dex plans shots from a script (no provider). frame: a storyboard frame. region_edit: edit inside a region of a still. clip: frame to video. clip_edit: change a clip. stitch: render the ad. frame_edit: change this frame. clip_patch: fix a moment's window and splice it. bridge: a clip between two shots. cutout: Rhea's cut-out. transcribe: Nell reads ink. write: Skye drafts or rewrites. read: Nell reads a document. check: Jude judges a result. resize: Make all sizes on a still. cutdown: a video cut-down. upscale: Rhea upscales. Ops with no builder yet answer 422 capability_missing."
     },
     "quotaClass": {
       "enum": ["image", "video", "render", "text"],
-      "description": "image: generate, view, frame, region_edit. video: clip, clip_edit. render: stitch. text: shot_list."
+      "description": "Which daily quota an op draws on: opQuotaClass."
+    },
+    "opQuotaClass": {
+      "description": "The quota class of every op.",
+      "const": {
+        "generate": "image", "view": "image", "frame": "image", "region_edit": "image", "frame_edit": "image", "cutout": "image", "resize": "image", "upscale": "image",
+        "clip": "video", "clip_edit": "video", "clip_patch": "video", "bridge": "video", "cutdown": "video",
+        "stitch": "render",
+        "shot_list": "text", "transcribe": "text", "write": "text", "read": "text", "check": "text"
+      }
     },
     "jobState": {
-      "enum": ["queued", "submitting", "submitted", "fetching", "validating", "completed", "failed", "cancelled", "uncertain"],
-      "description": "The job states of the repo's production pipeline contract (app/templates/advertising-studio/app/pipeline.yaml), borrowed for their uncertain state. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again."
+      "enum": ["queued", "submitting", "submitted", "fetching", "validating", "needs_input", "completed", "failed", "cancelled", "uncertain"],
+      "description": "needs_input: an agent asked (Job.question) and the job waits, uncharged and never timing out into a guess, until someone answers or stops it. uncertain: the provider may have accepted the job with no id recorded; reconciled by querying, never by paying again."
     },
     "cost": {
       "type": "object",
@@ -76,6 +487,7 @@
       "properties": {
         "estimate": { "type": "number", "minimum": 0 },
         "reserved": { "type": "number", "minimum": 0 },
+        "agentUsd": { "type": "number", "minimum": 0, "description": "What the agents' Claude calls for this job cost: their tokens at the model's price (relay agent_cost.py; config director.prices). Recorded and in the ledger, never shown in the UI. Added 2026-11-21 (pt-film-r2, F21), additive." },
         "confirmed": { "type": "number", "minimum": 0 },
         "currency": { "const": "USD" },
         "unknown": { "type": "boolean" }
@@ -83,20 +495,24 @@
       "required": ["currency", "unknown"],
       "additionalProperties": false
     },
+    "mime": {
+      "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "audio/mpeg", "audio/wav", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "font/woff2", "font/ttf", "font/otf", "text/plain", "application/zip"],
+      "description": "The kinds of file the tool keeps: pictures (SVG for logos), clips, audio, brand books (PDF), documents (DOCX), fonts, Fountain or plain text, and zips."
+    },
     "assetRef": {
       "type": "object",
       "description": "An artifact passed between browser, relay and provider. url is our CloudFront input path from POST /uploads.",
       "properties": {
         "sha256": { "$ref": "#/$defs/sha256" },
         "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-        "mime": { "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4"] }
+        "mime": { "$ref": "#/$defs/mime" }
       },
       "required": ["sha256", "url", "mime"],
       "additionalProperties": false
     },
     "output": {
       "type": "object",
-      "description": "One result of a job, already copied into our S3 (the provider URL is never handed out).",
+      "description": "One result of a job, already copied into our S3 (the provider URL is never handed out). An image output always carries its measured w and h; one centre-cropped to the job's shape (input.aspect, else input.ratio) also carries croppedFrom.",
       "properties": {
         "sha256": { "$ref": "#/$defs/sha256" },
         "url": { "type": "string", "pattern": "^https://" },
@@ -104,7 +520,8 @@
         "w": { "type": "integer" },
         "h": { "type": "integer" },
         "durationS": { "type": "number" },
-        "bytes": { "type": "integer" }
+        "bytes": { "type": "integer" },
+        "croppedFrom": { "$ref": "#/$defs/aspect", "description": "The model's size before the relay centre-cropped the picture to the job's shape (1344 x 768 for a 16:9 job that came back 1344 x 756). The uncropped original is kept." }
       },
       "required": ["sha256", "url", "mime"],
       "additionalProperties": false
@@ -113,12 +530,12 @@
       "type": "object",
       "properties": {
         "code": {
-          "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "conflict", "internal"]
+          "enum": ["invalid_input", "unauthorised", "blocked", "flag_off", "quota_exhausted", "spend_stop", "limit_reached", "not_allowed", "queue_full", "capability_missing", "moderated", "provider_failed", "provider_unavailable", "timeout", "uncertain", "conflict", "gone", "internal"]
         },
-        "message": { "type": "string", "description": "One line a participant can read in the node." },
+        "message": { "type": "string", "description": "One line a person can read in the node." },
         "retryable": { "type": "boolean" },
         "retryAfterS": { "type": "integer", "minimum": 0 },
-        "providerCode": { "type": "string", "description": "The provider's own code, e.g. SAFETY.INPUT.TEXT or content_policy_violation. For logs." }
+        "providerCode": { "type": "string", "description": "The provider's own code, for logs." }
       },
       "required": ["code", "message", "retryable"],
       "additionalProperties": false

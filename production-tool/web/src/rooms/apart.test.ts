@@ -1,0 +1,183 @@
+// A take made together whose shots were made apart since (live test 2026-11-16, finding 11): the 15 s take stayed
+// filed under the new one-shot Box 1, which played all 15 s, and Boxes 2-4 said "No takes yet" although each shot
+// had its window in that take. Now each box lists the take, plays its own window, assembles and adds its own shot.
+
+import { describe, expect, it } from 'vitest'
+import type { Generation, ProductionDocument, Shot } from '../contracts/types'
+import { systemUpdate } from '../doc/store'
+import { mainVideo } from '../model/selectors'
+import { addShots, id, job, MAYA, modelStore, SHA, T } from '../test/model'
+import { appendTake } from './editOps'
+import { boxBeats, boxKeyOf, boxWindow, inBox, roomGens, type Box } from './model'
+import type { RoomData } from './Rooms'
+import { assemble, cutBrackets, newerTake, readCut, topTake } from './timeline'
+
+function gen(d: ProductionDocument, shots: Shot[], sha: string, extra: Partial<Generation> = {}): Generation {
+  const j = job(d, 'clip', [], sha)
+  d.jobs[j.id] = j
+  const g: Generation = {
+    id: id('gen'), v: 1, field_v: {}, kind: shots.length > 1 ? 'together' : 'clip', shot_ids: shots.map((s) => s.id),
+    asset: sha, duration_s: 9, state: 'ready', job_id: j.id, provider: 'mock', crew: 'wren', mock: true, created_at: T, by: `human:${MAYA.id}`,
+    ...extra,
+  }
+  d.generations[g.id] = g
+  d.assets[sha] ??= { sha256: sha, kind: 'video', mime: 'video/mp4', origin: 'generated', locations: [], duration_s: g.duration_s }
+  return g
+}
+
+/** Three 3 s shots made together in one 9 s take (cuts at 3 and 6), then made apart: three one-shot boxes. */
+async function madeApart() {
+  const store = modelStore()
+  await store.create(MAYA, 'Rain')
+  let out!: { shots: Shot[]; together: Generation; videoId: string }
+  await systemUpdate(store, (d) => {
+    const shots = addShots(d, 3, { duration_s: 3 })
+    const videoId = mainVideo(d)!.id
+    const runId = id('run')
+    d.videos[videoId].runs = { [runId]: { shot_ids: shots.map((s) => s.id), mode: 'take', model: 'mock', state: 'done', planned_by: 'crew' } }
+    const together = gen(d, shots, SHA('a'), {
+      box_id: runId,
+      segments: shots.map((s, i) => ({ shot_id: s.id, in_s: i * 3, out_s: i * 3 + 3, by: 'detected' as const })),
+    })
+    out = { shots, together, videoId }
+  }, 'sync')
+  await store.flush()
+  if (store.trouble) throw new Error(`the fixture was refused: ${store.trouble}`)
+  const boxes: Box[] = out.shots.map((s, i) => ({ key: boxKeyOf([s.id]), n: i + 1, shotIds: [s.id], together: false, endCard: false, lengthS: 3 }))
+  return { store, boxes, ...out }
+}
+
+describe('a take made together, its shots made apart since', () => {
+  it('is a take of every box it has footage for, each playing its own window', async () => {
+    const { store, boxes, together, videoId } = await madeApart()
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, boxes)
+    expect(gens).toHaveLength(1)
+    const g = gens[0]
+    expect(g.id).toBe(together.id)
+    expect(g.boxKey).toBe(boxes[0].key)
+    expect(boxes.map((b) => inBox(g, b.key))).toEqual([true, true, true])
+    expect(boxes.map((b) => boxWindow(g, b))).toEqual([{ inS: 0, outS: 3 }, { inS: 3, outS: 6 }, { inS: 6, outS: 9 }])
+    // A one-shot box shows no cut marks inside its window; the take's own box would show both.
+    expect(boxBeats(g, boxes[1], () => 2)).toBeUndefined()
+    expect(boxBeats(g, undefined, (sid) => boxes.findIndex((b) => b.shotIds[0] === sid) + 1)).toEqual([{ atS: 3, label: 'Shot 2' }, { atS: 6, label: 'Shot 3' }])
+  })
+
+  it('a box of exactly its shots plays all of it, as before', async () => {
+    const { store, shots, videoId } = await madeApart()
+    const box: Box = { key: boxKeyOf(shots.map((s) => s.id)), n: 1, shotIds: shots.map((s) => s.id), together: true, endCard: false, lengthS: 9 }
+    const [g] = roomGens(store.get(), { jobs: {} }, videoId, [box])
+    expect(g.boxKeys).toBeUndefined()
+    expect(inBox(g, box.key)).toBe(true)
+    expect(boxWindow(g, box)).toBeUndefined()
+  })
+
+  it('Assemble first cut takes each box\'s window of it', async () => {
+    const { store, boxes, together, videoId } = await madeApart()
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, boxes)
+    expect(boxes.map((b) => topTake(gens, b.key)?.id)).toEqual([together.id, together.id, together.id])
+    let n = 0
+    const cut = assemble(store.get(), videoId, boxes, gens, () => `c${++n}`)
+    expect(cut.v1.map((c) => [c.genId, c.inS, c.outS, c.startS])).toEqual([[together.id, 0, 3, 0], [together.id, 3, 6, 3], [together.id, 6, 9, 6]])
+  })
+
+  it('Add to edit from Box 2 adds only shot 2\'s window', async () => {
+    const { store, boxes, shots, videoId } = await madeApart()
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, boxes)
+    const data: RoomData = { videoId, title: 'Rain', ratio: '16:9', targetS: 9, boxes, gens }
+    await appendTake(store, store.get(), data, gens[0], boxes[1])
+    await store.flush()
+    expect(store.trouble).toBeNull()
+    expect(readCut(store.get(), videoId).v1.map((c) => [c.inS, c.outS, c.follows?.shotId])).toEqual([[3, 6, shots[1].id]])
+  })
+
+  it('a newer take made apart for one shot is "New take ready" for that shot\'s clip only', async () => {
+    const { store, boxes, shots, videoId } = await madeApart()
+    await systemUpdate(store, (d) => { gen(d, [shots[1]], SHA('b'), { duration_s: 3, created_at: '2099-01-01T00:00:00Z' }) }, 'sync')
+    await store.flush()
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, boxes)
+    const old = gens.find((g) => g.segments.length === 3)!
+    const lone = gens.find((g) => g.segments.length === 1)!
+    const clip = (shotId: string) => ({ id: 'c', genId: old.id, inS: 0, outS: 3, startS: 0, speed: 1, holdS: 0, fadeInS: 0, fadeOutS: 0, follows: { shotId } })
+    expect(newerTake(clip(shots[1].id), gens)?.id).toBe(lone.id)
+    expect(newerTake(clip(shots[0].id), gens)).toBeUndefined()
+  })
+})
+
+describe('the Edit room brackets', () => {
+  it('draw over the clips of a box made together now, and none once its shots are made apart', async () => {
+    const { store, boxes, shots, videoId } = await madeApart()
+    const together: Box = { key: boxKeyOf(shots.map((s) => s.id)), n: 1, shotIds: shots.map((s) => s.id), together: true, endCard: false, lengthS: 9 }
+    const gens = roomGens(store.get(), { jobs: {} }, videoId, [together])
+    let n = 0
+    const v1 = assemble(store.get(), videoId, [together], gens, () => `c${++n}`).v1
+    expect(cutBrackets(v1, gens, [together])).toEqual([{ from: 0, to: 9, label: 'Box 1 · made together' }])
+    // The same three clips, the shots now three boxes of one shot each: no bracket.
+    expect(cutBrackets(v1, roomGens(store.get(), { jobs: {} }, videoId, boxes), boxes)).toEqual([])
+    // Shots 1-2 together again, shot 3 apart: the bracket covers shots 1-2 only.
+    const two: Box[] = [{ ...together, key: boxKeyOf([shots[0].id, shots[1].id]), shotIds: [shots[0].id, shots[1].id], lengthS: 6 }, boxes[2]]
+    expect(cutBrackets(v1, roomGens(store.get(), { jobs: {} }, videoId, two), two)).toEqual([{ from: 0, to: 6, label: 'Box 1 · made together' }])
+  })
+})
+
+describe('a lone take longer than its shot (UAT round 3, R3-F2)', () => {
+  it('plays the shot\'s planned length from its start; Out still stretches to the real take', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'Rain')
+    let out!: { shots: Shot[]; videoId: string; g: Generation }
+    await systemUpdate(store, (d) => {
+      const shots = addShots(d, 2, { duration_s: 1.5 })
+      // Veo makes 4 s for a 1.5 s shot; the take's real length is 4.011 s.
+      const g = gen(d, [shots[0]], SHA('c'), { duration_s: 4.011 })
+      gen(d, [shots[1]], SHA('d'), { duration_s: 1.2 })
+      out = { shots, videoId: mainVideo(d)!.id, g }
+    }, 'sync')
+    await store.flush()
+    const boxes: Box[] = out.shots.map((s, i) => ({ key: boxKeyOf([s.id]), n: i + 1, shotIds: [s.id], together: false, endCard: false, lengthS: 1.5 }))
+    const gens = roomGens(store.get(), { jobs: {} }, out.videoId, boxes)
+    const g = gens.find((x) => x.id === out.g.id)!
+    expect(g.durationS).toBe(4.011)
+    expect(g.segments).toEqual([{ shotId: out.shots[0].id, inS: 0, outS: 1.5 }])
+    let n = 0
+    const cut = assemble(store.get(), out.videoId, boxes, gens, () => `c${++n}`)
+    // Shot 1 at its 1.5 s; shot 2's take is shorter than planned, so all of it.
+    expect(cut.v1.map((c) => [c.inS, c.outS, c.startS])).toEqual([[0, 1.5, 0], [0, 1.2, 1.5]])
+  })
+})
+
+describe('a voiced lone take plays its whole line (UAT round 5, R5-F2)', () => {
+  it('"Good boy." whispered, planned 1.0 s, on WAN 3 (2 s take): the window runs to the line\'s end, 2.0 s; silent, 1.0 s', async () => {
+    const store = modelStore()
+    await store.create(MAYA, 'Quietboil')
+    let out!: { shots: Shot[]; videoId: string; wan: Generation; omni: Generation }
+    await systemUpdate(store, (d) => {
+      const shots = addShots(d, 2, { duration_s: 1 })
+      for (const s of shots) {
+        const b = id('beat')
+        d.beats[b] = { id: b, v: 1, field_v: {}, shot_id: s.id, kind: 'line', at_s: 0, text: 'Good boy.', speaker: 'MAYA', parenthetical: 'whispering, to the kettle', rank: 'a0' } as never
+      }
+      // Round 5's box 5: WAN 3 (a sound switch) makes 2.02 s. Shot 2 on Omni (no switch): the line is not voiced.
+      const wan = gen(d, [shots[0]], SHA('c'), { duration_s: 2.02, provider: 'runway', inputs: { model: 'wan3' } as never })
+      const omni = gen(d, [shots[1]], SHA('d'), { duration_s: 3, provider: 'runway', inputs: { model: 'gemini_omni_flash_1.1' } as never })
+      out = { shots, videoId: mainVideo(d)!.id, wan, omni }
+    }, 'sync')
+    await store.flush()
+    const boxes: Box[] = out.shots.map((s, i) => ({ key: boxKeyOf([s.id]), n: i + 1, shotIds: [s.id], together: false, endCard: false, lengthS: 1 }))
+    const gens = roomGens(store.get(), { jobs: {} }, out.videoId, boxes)
+    expect(gens.find((x) => x.id === out.wan.id)!.segments).toEqual([{ shotId: out.shots[0].id, inS: 0, outS: 2 }])
+    expect(gens.find((x) => x.id === out.omni.id)!.segments).toEqual([{ shotId: out.shots[1].id, inS: 0, outS: 1 }])
+    let n = 0
+    const cut = assemble(store.get(), out.videoId, boxes, gens, () => `c${++n}`)
+    expect(cut.v1.map((c) => [c.inS, c.outS])).toEqual([[0, 2], [0, 1]])
+  })
+})
+
+describe('an ask about the take offers no "Make shot apart?" (UAT round 4, R4-F9)', () => {
+  it('round 4: an ask about shots 4 and 5 offers nothing; one about shot 4 alone does; a words change does', async () => {
+    const { offersApart } = await import('./apartOffer')
+    expect(offersApart('Show the empty room for shot 4, Maya in shot 5.', 4, [5])).toBe(false)
+    expect(offersApart('Hold the wide a beat longer.', 4, [5])).toBe(false)
+    expect(offersApart('Shots 4 and 5: warmer light.', 4, [5])).toBe(false)
+    expect(offersApart('In shot 4, no one is seen.', 4, [5])).toBe(true)
+    expect(offersApart(undefined, 4, [5])).toBe(true)
+  })
+})
