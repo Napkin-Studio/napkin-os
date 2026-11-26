@@ -1,14 +1,14 @@
 """Frames for the greenlit routes of a Territories document (feature territories-pictures-frames).
 
 ``engine/territory/visuals`` makes frames from a saved run FILE (the CLI). In the middleware the document is the run, so this module drives the
-SAME reviewed library (``engine/visuals``: the Runway client and its double-pay rules, the picture-prompt lint, the Confidential deny-list, the
-client-to-Runway policy, the style (the client's Brand Clan, else the built-in look), the safe-messaging gate, the guard) from a document, for the routes a person greenlit and no others.
+SAME reviewed library (``engine/visuals``: the Runway client and its double-pay rules, the picture-prompt lint, the
+client-material rule (``visuals.policy``), the style (the client's Brand Clan, else the built-in look), the safe-messaging gate, the guard) from a document, for the routes a person greenlit and no others.
 
-    f = Frames(doc, store, blobs, doc_id=..., marks=[...], llm=..., transport=..., guard_post=...)
+    f = Frames(doc, store, blobs, doc_id=..., llm=..., transport=..., guard_post=...)
     f.ask(ids)                 the cost card: how many pictures, which places are not offered and why; the ask goes into the history
     f.make(ids, card_id)       the paid step: the frame plan (once), the pictures, the guard, the placing
     f.approve(keys, by)        a named person accepts frames the guard held back; they are placed
-    f.declare(origin, by)      a named person says what the material is (invented, demo or client); client material is refused by default
+    f.declare(origin, by)      a named person says what the material is (invented, demo or client); asked before the first picture, recorded with the frames
     f.status()                 what exists, what is held and why
 
 Every move returns ``(doc, refusals, note, info, decisions)`` or raises ``Refuse`` in words. Rules this module adds on top of the library:
@@ -65,22 +65,14 @@ class Refuse(Exception):
         self.need = need
 
 
-#: The material question, in the approved frames mock's words (state 1a).
-MATERIAL_WORDS = ("Words from a brief go to the outside picture tool only if a named person says the material is invented or a demo. "
-                  "Client material is not sent.")
+#: The material question (the approved frames mock, state 1a; its words changed with the owner's rule of 26 Nov 2026, ``visuals.policy``).
+MATERIAL_WORDS = ("Say what this material is before the first picture: the pictures record it. Client material is used the same way as for "
+                  "the words; anything marked Confidential stays out of Napkin's own knowledge, not out of the work.")
 
 
-def material_refusal(mat: dict, declared: bool = True) -> Refuse:
-    """The material gate's no, in plain words (live click-through 2026-11-26: it read as engine text, the policy's name and 'part(s)')."""
-    n = len(mat.get("marks") or [])
-    if n:
-        return Refuse(f"Pictures are not made for this document: {'one part' if n == 1 else f'{n} parts'} of what it was made from "
-                      f"{'is' if n == 1 else 'are'} marked Confidential, and nothing marked Confidential goes to the outside picture tool. "
-                      "Pictures can be made from material that is not the client's.")
-    if mat.get("origin") in ("client", "unknown") and mat.get("client_derived"):
-        return Refuse(("Pictures are not made for this document yet: it is the client's material. " if declared and mat.get("origin") == "client" else
-                       "Pictures are not made for this document yet: nobody has said what its material is. ") + MATERIAL_WORDS, need="material")
-    return Refuse("Pictures are not made for this document: " + str(mat.get("why") or "its material cannot be checked.").rstrip(".") + ".")
+def material_refusal() -> Refuse:
+    """The material gate's no, in plain words: nobody has said what the material is yet, so the question is asked (``need``)."""
+    return Refuse("Pictures are not made for this document yet: nobody has said what its material is. " + MATERIAL_WORDS, need="material")
 
 
 def enabled(environ=None) -> bool:
@@ -301,7 +293,7 @@ def unquoted(shot: dict) -> dict:
     """A planned shot's words with quotation marks taken out before the picture-prompt check (live click-through 2026-11-26: a plan that
     wrote 'the friend's car' or a quoted phrase lost three of four frames). A contraction is said in full (does not); an apostrophe left
     inside a word goes (friends); every other
-    quotation mark goes. Only the marks: the checker's other rules (figures, names, brands, banned imagery, Confidential parts) still judge
+    quotation mark goes. Only the marks: the checker's other rules (figures, names, brands, banned imagery) still judge
     what is left, and the on-screen line, which never reaches a picture, is untouched."""
     out = dict(shot)
     for k in ("framing", "camera", "action"):
@@ -314,7 +306,7 @@ def unquoted(shot: dict) -> dict:
     return out
 
 
-def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
+def run_view(doc: dict, routes: list[dict], origin: str | None) -> dict:
     """The routes as the library's run shape (what the safety gate, the frame plan and the material gate read)."""
     brief = {}
     for u in (doc.get("upstream") or {}).values():
@@ -325,19 +317,18 @@ def run_view(doc: dict, routes: list[dict], marks: list, origin: str) -> dict:
     terr = [{"id": t["id"], "line": t.get("thought"), "proposition": t.get("thought"), "tension_text": t.get("tension"), "mechanism": t.get("theme") or t.get("sketch"),
              "tier": t.get("tier")} for t in routes]
     return {"status": "proceed", "gate": {"category": None, "market": None}, "assumed_brief": {"fields": fields}, "territories": terr,
-            "material": {"origin": origin, "marks": list(marks), "brand": _brand_of(doc)}}
+            "material": {"origin": origin, "brand": _brand_of(doc)}}
 
 
 # ---------------------------------------------------------------- the engine of one document
 
 
 class Frames:
-    def __init__(self, doc: dict, store, blobs, *, doc_id: str, marks=None, llm=None, transport=None, guard_post=None, environ=None, spend=None,
+    def __init__(self, doc: dict, store, blobs, *, doc_id: str, llm=None, transport=None, guard_post=None, environ=None, spend=None,
                  sleep=time.sleep, poll_every: float = 4.0, on_line=None, brand=None):
         self.doc, self.store, self.blobs, self.doc_id = doc, store, blobs, str(doc_id)
         self.assets: list[dict] = []                         # the frames this move made or placed, bytes and all, for the host to save (assets_put)
         self.brand = brand                                  # the Brand Clan it holds (host: clan.brand_clan), or None: the built-in look
-        self.marks = marks                                  # None: the document was not checked for Confidential marks, and nothing is drawn
         self.llm, self.transport, self.guard_post, self.environ = llm, transport, guard_post, environ
         self.sleep, self.poll_every = sleep, poll_every
         self.cap = min(sp.caps()[1], runway.LIFETIME_CAP_USD)
@@ -374,19 +365,17 @@ class Frames:
 
     # -------- the shared preparation of an ask and a make
     def _prepare(self, ids, retry_flagged=(), retry_unknown=False):
-        if self.marks is None:
-            raise Refuse("This document was not checked for parts marked Confidential, so nothing is drawn.")
         routes, why = eligible(self.doc, ids)
         if why:
             raise Refuse(" ".join(why))
-        run = run_view(self.doc, routes, self.marks, (self.origin() or {}).get("origin") or "client")
+        run = run_view(self.doc, routes, (self.origin() or {}).get("origin"))
         sens = gates.sensitive_state(self.doc)
         safe = safety.check(run, reviewed=sens["done"])
         if (safe["applies"] or sens["required"]) and not sens["done"]:
             raise Refuse("This is a sensitive category. A named person reviews the routes before any picture is made. " + (sens["words"] if sens["required"] else ""))
-        mat = material.gate(run, None, environ=self.environ)
+        mat = material.gate(run)
         if not mat["ok"]:
-            raise material_refusal(mat, declared=self.origin() is not None)
+            raise material_refusal()
         try:
             sty, look = brand_style(self.brand, forbid=[x for x in [mat.get("brand")] if x])
             refs = style_mod.reference_images(sty)
@@ -411,7 +400,6 @@ class Frames:
                 shots_of[t["id"]] = have["shots"]
             else:
                 need.append(t["id"])
-        deny = lint.deny_list(mat["marks"] or [])
         jobs, refused = [], []
         for t in routes:
             th = route_hash(t)
@@ -420,7 +408,7 @@ class Frames:
                 text = " ".join(str(x).rstrip(".") + "." for x in (s.get("framing"), s.get("camera"), s.get("action")) if x)
                 row = {"key": runway.job_key(f"{t['id']}-{th}", s["shot"], "quick"), "tid": t["id"], "shot": s["shot"], "kind": "quick"}
                 hit = safety.banned_in(text, banned)
-                badl = lint.lint_text(text, banned, deny) if t["id"] in shots_of and not hit else None
+                badl = lint.lint_text(text, banned) if t["id"] in shots_of and not hit else None
                 if hit:
                     refused.append({**row, "why": "the shot description names banned imagery: " + ", ".join(hit)})
                 elif badl:
@@ -440,7 +428,7 @@ class Frames:
                 e.update(status="RETRY")
         spent, sends = vjobs.spent_usd({"jobs": {}}, self.ledger), vjobs.send_count({"jobs": {}}, self.ledger)
         card = runway.cost_card(P["jobs"], m, P["vdir"], None, len(P["refs"]), self.cap, spent, sends,
-                                id_parts=["territory-frames-doc", self.doc_id, P["ids"], P["sty"].hash, sorted(P["retry_flagged"]), P["retry_unknown"], P["mat"]["policy"],
+                                id_parts=["territory-frames-doc", self.doc_id, P["ids"], P["sty"].hash, sorted(P["retry_flagged"]), P["retry_unknown"], P["mat"]["origin"],
                                           bool(P["need"]), [r["key"] for r in P["refused"]]])
         off = {}
         for t in P["routes"]:
@@ -521,7 +509,7 @@ class Frames:
             rows[r["key"]] = {"territory": r["tid"], "shot": r["shot"], "tier": r["kind"], "model": runway.MODELS[r["kind"]][0], "status": "REFUSED", "error": r["why"],
                               **({"history": old["history"]} if old.get("history") else {})}
         manifest["style"] = P["sty"].summary()
-        manifest["material"] = {"origin": (self.origin() or {}).get("origin") or "client", "policy": P["mat"]["policy"], "confidential_parts": len(P["mat"]["marks"] or [])}
+        manifest["material"] = {"origin": P["mat"]["origin"], "by": P["mat"]["by"], "policy": P["mat"]["policy_label"]}
         runway.save_manifest(vdir, manifest)
         client = runway.Client(key, self.transport)
         res = runway.generate(client, jobs, vdir, manifest, P["refs"], sleep=self.sleep, poll_every=self.poll_every, ledger=self.ledger, cap_usd=self.cap)
@@ -552,7 +540,7 @@ class Frames:
         if self.llm is None:
             raise Refuse("No model is connected to plan the pictures, so nothing was made.")
         need = [t for t in P["routes"] if t["id"] in P["need"]]
-        run = run_view(self.doc, need, P["mat"]["marks"] or [], "client")
+        run = run_view(self.doc, need, P["mat"]["origin"])
         obj, _usage = self.spend.wrap(self.llm)("frames_plan", prompt("frames_plan"), json.dumps(plan_mod._payload(run, P["banned"]), ensure_ascii=False))
         try:
             shots = plan_mod._clean(obj, [t["id"] for t in need])

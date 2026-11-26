@@ -31,17 +31,17 @@ def plan_for(user: str) -> dict:
 class Rig:
     """One document, one store folder, the fakes; ``make()`` builds a fresh Frames over the same folder, as each request does."""
 
-    def __init__(self, tmp_path, monkeypatch, *, doc=None, marks=None, rw=None, guard=clean_ollama, llm=None, environ=None):
+    def __init__(self, tmp_path, monkeypatch, *, doc=None, rw=None, guard=clean_ollama, llm=None, environ=None):
         monkeypatch.delenv(sp.ENV_IMAGES_CAP, raising=False)
         self.doc = doc or copy.deepcopy(contract.example("data"))
         self.store = runner.Store(tmp_path / "doc1")
         self.blobs = pictures.DirStore(tmp_path / "blobs")
-        self.rw, self.guard, self.marks = rw or FakeRunway(), guard, [] if marks is None else marks
+        self.rw, self.guard = rw or FakeRunway(), guard
         self.llm = llm or FakeLLM({"frames_plan": plan_for})
         self.environ = environ if environ is not None else dict(ENV)
 
     def make(self, **kw):
-        a = dict(doc_id="doc1", marks=self.marks, llm=self.llm, transport=self.rw, guard_post=self.guard, environ=self.environ, sleep=lambda s: None, poll_every=0)
+        a = dict(doc_id="doc1", llm=self.llm, transport=self.rw, guard_post=self.guard, environ=self.environ, sleep=lambda s: None, poll_every=0)
         a.update(kw)
         return frames.Frames(self.doc, self.store, self.blobs, **a)
 
@@ -88,40 +88,22 @@ def test_only_greenlit_routes_and_the_words_when_not(rig):
     assert rig.rw.posts == []
 
 
-def test_client_material_is_refused_by_default_and_a_named_declaration_opens_it(tmp_path, monkeypatch):
-    """The refusals are plain words (live click-through 2026-11-26: they read as engine text); the material question is flagged as
-    something a person can answer (need: material), a Confidential part is not (declaring cannot open it)."""
+def test_the_material_question_is_asked_once_and_client_material_is_made_like_any_other(tmp_path, monkeypatch):
+    """Owner, 26 Nov 2026: client material goes to the picture tool like it goes to Bedrock; Confidential keeps a part out of Napkin's own
+    knowledge only. A named person still says what the material is before the first picture (need: material), in plain words."""
     engine_words = re.compile(r"CLIENT_TO_RUNWAY|visuals\.|part\(s\)|client-derived|policy refuses")
     r = Rig(tmp_path, monkeypatch)
     with pytest.raises(frames.Refuse, match="nobody has said what its material is") as e:
         r.make().ask(TWO)
     assert e.value.need == "material" and frames.MATERIAL_WORDS in str(e.value) and not engine_words.search(str(e.value))
+    assert "not sent" not in frames.MATERIAL_WORDS
     with pytest.raises(frames.Refuse, match="named person"):
         r.make().declare("invented", " ")
     r.declare("client")
-    with pytest.raises(frames.Refuse, match="it is the client's material") as e:
-        r.make().ask(TWO)
-    assert e.value.need == "material" and not engine_words.search(str(e.value))
-    r.declare("invented")
     card = r.card(TWO)
-    assert card["frames"] == 8 and frames.Frames.public(card)["material"] == {"origin": "invented", "by": "Shrey"}
-    r.marks = [{"path": "brief.mandatories", "text": "weekend return fare", "kind": "confidential_field"}]     # a Confidential part: refused, whatever was said
-    with pytest.raises(frames.Refuse, match="one part of what it was made from is marked Confidential") as e:
-        r.make().ask(TWO)
-    assert e.value.need is None and not engine_words.search(str(e.value))
-    r.marks = r.marks * 5
-    r.marks = [dict(m, path=f"brief.p{i}") for i, m in enumerate(r.marks)]
-    with pytest.raises(frames.Refuse, match="5 parts of what it was made from are marked Confidential"):
-        r.make().ask(TWO)
-    assert r.rw.posts == []
-
-
-def test_a_document_never_checked_for_marks_draws_nothing(tmp_path, monkeypatch):
-    r = Rig(tmp_path, monkeypatch)
-    r.declare()
-    r.make(marks=None)
-    with pytest.raises(frames.Refuse, match="not checked for parts marked Confidential"):
-        frames.Frames(r.doc, r.store, r.blobs, doc_id="doc1", marks=None, environ=r.environ).ask(TWO)
+    assert card["frames"] == 8 and frames.Frames.public(card)["material"] == {"origin": "client", "by": "Shrey"}
+    out = r.run(["t_started"])
+    assert len(r.rw.posts) == 4 and out[3]["frames"]["placed"] == 4
 
 
 def test_the_card_shows_no_price_and_the_history_carries_it(rig):
@@ -283,21 +265,6 @@ def test_a_sensitive_category_waits_for_a_named_review(rig):
     with pytest.raises(frames.Refuse, match="sensitive"):
         rig.make().ask(TWO)
     assert rig.rw.posts == []
-
-
-def test_a_shot_that_draws_on_a_confidential_part_is_refused_not_sent(tmp_path, monkeypatch):
-    def plan(user):
-        out = plan_for(user)
-        for t in out["territories"]:
-            t["shots"][0].update(framing="A wide view of a kitchen with a jar", action="A person opens a cupboard in the garden")
-        return out
-    marks = [{"path": "brief.mandatories", "text": "kitchen cupboard garden", "kind": "confidential_field"}]
-    r = Rig(tmp_path, monkeypatch, llm=FakeLLM({"frames_plan": plan}), marks=marks, environ={**ENV, "VISUALS_CLIENT_TO_RUNWAY": "allow"})
-    r.declare("invented")
-    out = r.run(["t_started"])
-    assert len(r.rw.posts) == 3 and out[3]["frames"]["placed"] == 3, "the shot that would draw on the marked part is refused, the other three go"
-    refused = [x for x in r.make().status()[3]["frames"]["frames"] if x["status"] == "REFUSED"]
-    assert len(refused) == 1 and "cannot go to a picture model" in refused[0]["why"] and "Confidential" in refused[0]["why"]
 
 
 def test_no_key_means_nothing_is_made(tmp_path, monkeypatch):

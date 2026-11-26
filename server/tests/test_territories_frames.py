@@ -89,6 +89,20 @@ def test_client_material_is_refused_until_a_named_person_says_otherwise(fr, monk
     assert r[-1]["job"]["state"] == "done" and r[-1]["result"]["info"]["card"]["frames"] == 4
 
 
+def test_a_brief_with_confidential_parts_gets_pictures_once_the_material_is_said(fr, monkeypatch):
+    """Owner, 26 Nov 2026: Confidential keeps a part out of Napkin's own knowledge only; the picture tool gets client material like Bedrock does."""
+    monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
+    h = host()
+    brief = next(v for v in h.data["upstream"].values() if "background" in v)
+    brief["confidential_fields"] = ["background", "insight", "mandatories"]
+    h.data.setdefault("materials", []).append({"id": "m1", "kind": "text", "text": "The client's pasted brief.", "licence": "client-confidential"})
+    r = step(fr, h, "frames", ids=["t_started"], by="Shrey")
+    assert r[-1]["job"]["error"].get("need") == "material" and "marked Confidential, and" not in r[-1]["job"]["error"]["message"]
+    assert step(fr, h, "frames_material", origin="client", by="Shrey")[-1]["job"]["state"] == "done"
+    r = step(fr, h, "frames", ids=["t_started"], by="Shrey")
+    assert r[-1]["job"]["state"] == "done" and r[-1]["result"]["info"]["card"]["frames"] == 4
+
+
 def test_ask_then_yes_makes_the_frames_and_the_price_is_only_in_the_history(fr, monkeypatch):
     monkeypatch.setenv("NAPKIN_TERRITORY_IMAGES", "1")
     h = host()

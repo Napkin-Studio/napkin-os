@@ -9,9 +9,9 @@ THE SWAP (the creative lead's style pack replaces the default; only pictures cha
     python -m territory.visuals --from-run <run.json> --style <its folder> --live --yes-cost <card id>
 The run, the territory text and the frame plan are not touched; the pictures go to a new frames/v<N>-<hash>/ folder.
 
-Pictures go to Runway's Gemini image models. Whether a client-derived prompt may go is one switch, visuals.policy.CLIENT_TO_RUNWAY
-(refuse by default, Sai 18 Nov 2026; VISUALS_CLIENT_TO_RUNWAY=allow for testing; the card always says which), and marks that cannot be known refuse the frames. Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, the
-Confidential deny-list) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
+Pictures go to Runway's Gemini image models. Client material goes there like it goes to Bedrock (visuals.policy, Shrey 26 Nov 2026:
+Confidential keeps a part out of Napkin's own knowledge only); a person says what the material is before the first picture (--material).
+Every shot passes the picture-prompt lint (visuals.lint: the common-word allow-list, brand words, banned imagery) before it is sent. A yes is the card's id (``--yes-cost c_...``): a stale or wrong id is refused. Spend is
 derived from an append-only ledger outside the frames folder (visuals.jobs.Ledger), every attempt of every version counted, and capped
 for the run's lifetime (``--max-usd``, default $2.00, never above $2.50).
 
@@ -69,10 +69,8 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--reviewed-by", default="", metavar="NAME", help="the person who has read this safe-messaging run: writes <run>.safe-review.json "
                     "(name, date, run hash) and allows frames. A changed run needs a new review")
     ap.add_argument("--material", choices=material.ORIGINS, help="declare what a run saved before territory.run --material was made from "
-                    "(needs --declared-by): writes <run>.material.json bound to the run's hash; client material follows visuals.policy")
-    ap.add_argument("--declared-by", default="", metavar="NAME", help="the person who vouches for the material and that no part of it is marked Confidential")
-    ap.add_argument("--brief", help="the brief file this run was made from (territory.run --brief): the run keeps only how many parts are marked "
-                    "Confidential and the brief's hash, so the deny-list is rebuilt from it here. Needed when the run's brief has marked parts")
+                    "(needs --declared-by): writes <run>.material.json bound to the run's hash, recorded with the frames")
+    ap.add_argument("--declared-by", default="", metavar="NAME", help="the person who vouches for what the material is")
     ap.add_argument("--forbid", default="", help="comma-separated names (the client, a brand) the style pack's words may not hold")
     ap.add_argument("--max-usd", type=float, default=runway.DEFAULT_MAX_USD,
                     help=f"the cap for this run's frames over its lifetime (plan call plus every picture, every version); default 2.00, at most {runway.LIFETIME_CAP_USD:.2f}")
@@ -146,14 +144,7 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
         except ValueError as e:
             print(e)
             return 2
-    brief = None
-    if a.brief:
-        try:
-            brief = material.brief_marks(Path(a.brief))
-        except Exception as e:   # an unreadable brief or a broken mark: the deny-list cannot be rebuilt, so nothing is drawn
-            print(f"--brief {a.brief} could not be read for its marks: {str(e)[:200]}. Nothing was sent.")
-            return 2
-    mat = material.gate(run, material.load_declaration(run_path, rhash), brief=brief)
+    mat = material.gate(run, material.load_declaration(run_path, rhash))
 
     forbid = [x.strip() for x in [mat.get("brand") or "", *a.forbid.split(",")] if x and x.strip()]
     try:
@@ -244,7 +235,6 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
         print(f"Board refreshed: {vdir / 'board.html'}")
 
     PLACEHOLDER = {"framing": "[frame plan not made yet: this shot is a placeholder]"}
-    deny = lint.deny_list(mat["marks"] or [])
 
     def build_jobs() -> tuple[list[dict], list[dict]]:
         jobs, refused = [], []
@@ -255,7 +245,7 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
                 text = shot_text(s)
                 k = runway.job_key(tid, s["shot"], kind)
                 hit = safety.banned_in(text, banned)
-                bad = lint.lint_text(text, banned, deny) if plan and not hit else None    # a placeholder is never sent: the real shot is linted
+                bad = lint.lint_text(text, banned) if plan and not hit else None    # a placeholder is never sent: the real shot is linted
                 if hit:
                     refused.append({"key": k, "tid": tid, "shot": s["shot"], "kind": kind, "why": "the shot description names banned imagery: " + ", ".join(hit)})
                 elif bad:
@@ -281,14 +271,13 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     spent, sends = vjobs.spent_usd({"jobs": {}}, ledger), vjobs.send_count({"jobs": {}}, ledger)
     card = runway.cost_card(jobs, manifest, vdir, plan_usd, len(refs), a.max_usd, spent, sends,
                             id_parts=[rhash, sty.hash, version, bool(a.retry_flagged), bool(a.retry_unknown), bool(a.plan_only), short,
-                                      mat["policy"], mat["ok"], len(mat["marks"] or [])])
+                                      mat["ok"], mat["origin"]])
     print(runway.render_card(card))
     for r in refused:
         print(f"Refused (needs a person): {r['key']}: {r['why']}")
     print("  " + mat["policy_label"])
     if mat["ok"]:
-        print(f"Material: {mat['origin']} (marked by {mat['by']})" + (", client-derived" if mat["client_derived"] else "")
-              + f"; {len(mat['marks'])} part(s) marked Confidential, kept out of every prompt by the deny-list.")
+        print(f"Material: {mat['origin']} (said by {mat['by']}).")
     else:
         print(f"Frames are refused for this run: {mat['why']}")
     if a.retry_unknown and not going_live:
@@ -349,8 +338,7 @@ def main(argv=None, *, llm_factory=None, transport=None, guard_post=None, sleep=
     manifest["inputs"] = expect                    # what these frames were made from; a re-run with other inputs is refused
     manifest["safe_messaging"] = {k: safe[k] for k in ("applies", "packs", "reviewed")}
     manifest["provenance"] = material.PROVENANCE.get(mat["origin"], "Unknown origin")
-    manifest["material"] = {"origin": mat["origin"], "by": mat["by"], "client_derived": mat["client_derived"], "confidential_parts": len(mat["marks"] or []),
-                            "policy": mat["policy"], "policy_label": mat["policy_label"]}
+    manifest["material"] = {"origin": mat["origin"], "by": mat["by"], "policy": mat["policy_label"]}
     for r in refused:
         rows = manifest.setdefault("frames", {})
         old = rows.get(r["key"]) or {}

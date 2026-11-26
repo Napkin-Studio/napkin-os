@@ -83,7 +83,7 @@ assert res.doc["run"]["gate"]["id"] == "pick" and not res.error, res.error
 from territory import frames                                                # the pictures step: the shared picture library must be in the image too
 import tempfile
 tmp = Path(tempfile.mkdtemp())
-f = frames.Frames(contract.example("data"), runner.Store(tmp / "s"), None, doc_id="d", marks=[], environ={})
+f = frames.Frames(contract.example("data"), runner.Store(tmp / "s"), None, doc_id="d", environ={})
 f.declare("invented", "Shrey")
 card = f.ask(["t_started"])[3]["card"]
 assert card["frames"] == 4 and card["plan_call"], card

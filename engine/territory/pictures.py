@@ -11,9 +11,8 @@ that says what a slot shows and what may happen to it, so the screen, the Booth 
 * Final: only a frame, one per touchpoint of a route, and a Final with no stated rights holds the greenlight gate (``blockers``);
 * carrying in: ``rehome`` puts EVERY picture of an arriving bundle on this document's own store and says which did not arrive
   (a mock is never used and is named, never counted as arrived); ``require_all`` refuses a partial arrival in words;
-* the provider: ``provider_allowed`` is ``visuals.policy.allows``: client-derived material is never sent to a picture provider by default.
 
-Standard library only (``visuals.policy`` is read when asked): it runs in the middleware image.
+Standard library only: it runs in the middleware image.
 """
 from __future__ import annotations
 
@@ -210,15 +209,6 @@ def blockers(doc: dict) -> list[dict]:
     return [{"kind": "picture_rights", "ids": [t["id"] for t in out],
              "text": ", ".join(names[:-1]) + (" and " if many else "") + names[-1] +
                      (" have" if many else " has") + " a Final picture with no rights chosen. Say whose it is, or take it off Final."}]
-
-
-# ---------------------------------------------------------------- the provider
-
-
-def provider_allowed(client_derived: bool, environ=None) -> bool:
-    from visuals import policy   # imported here: the gates import this module and must stay light
-
-    return policy.allows(client_derived, environ)
 
 
 # ---------------------------------------------------------------- carrying pictures in (LESSONS 8: all of them, on this store)
