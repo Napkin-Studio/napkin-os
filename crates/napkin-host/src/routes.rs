@@ -591,12 +591,22 @@ fn route(ctx: &Ctx, session: &Session, cfg: &dyn HostConfig, req: HostRequest) -
                 session,
                 ctx,
                 |c, d| {
+                    // Owner 2026-11-26, "Update refreshes the parent": a tool's Update on the document it was made
+                    // from (Continue in) takes the parent's newer version, as `/upstream/update` does, not `409 not linked`.
+                    if mode == crate::library::AttachMode::Update
+                        && crate::library::made_from_only(d, &id)
+                    {
+                        return crate::library::update_from_upstream_of(&*store, c, d, Some(&id));
+                    }
                     let (change, reply) = crate::library::attach_change(&*store, c, d, &id, mode)?;
                     Ok(crate::ops::Outcome::changed(reply, change))
                 },
                 |reply| {
-                    let source = id.clone();
-                    with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    // A parent's update is no link: only an attach or a linked update writes a `linked` backref.
+                    if reply.get("verb").is_some() {
+                        let source = id.clone();
+                        with_backrefs(session, ctx, reply, &Backref::Linked { source });
+                    }
                 },
             )
         }

@@ -1421,6 +1421,64 @@ mod upstream {
         assert_eq!(refused(&brief, "/upstream/update").0, 409);
     }
 
+    // Owner 2026-11-26 ("Update refreshes the parent"): a document made with
+    // Continue in holds its parent as what it was made from, not as a link.
+    // The tools' Update buttons call `/attach/update` with the parent's id
+    // (Deck Maker's "Update from Production"); it takes the parent's newer
+    // version the same way `/upstream/update` does, instead of `409 not
+    // linked` (5-tool run, 2026-11-26). An id that is neither the parent nor
+    // linked stays refused.
+    #[test]
+    fn attach_update_takes_the_direct_parent_of_a_continue_in_document() {
+        let (store, research, brief) = setup();
+        let body = json!({ "document_id": research.doc }).to_string();
+        // Nothing moved yet: refused as not changed, not as not linked.
+        let (status, msg) = post_err(&brief, "/attach/update", &body);
+        assert_eq!(status, 409, "{msg}");
+        assert!(msg.contains("has not changed"), "{msg}");
+
+        resolve(&research, "f_01JA0B9Z9Z");
+        assert_eq!(brief.get("/upstream")["upstream"][0]["status"], "changed");
+        let reply = brief.post("/attach/update", &body);
+        assert_eq!(reply["action"], "update_from_campaign_research", "{reply}");
+        assert_eq!(reply["document_id"], research.doc);
+        let up = brief.get("/upstream");
+        assert_eq!(up["upstream"][0]["how"], "made_from", "{up}");
+        assert_eq!(up["upstream"][0]["status"], "current");
+        let data = brief
+            .session
+            .read(|d| Ok(napkin_host::ops::read::data_json(d)))
+            .unwrap();
+        assert_eq!(
+            data["upstream"][&research.doc]["selection"]["contested"][0]["status"],
+            "resolved"
+        );
+        // A parent is not turned into a link: no `linked` backref is written.
+        assert!(
+            reply["backrefs"].as_array().is_none_or(|b| b.is_empty()),
+            "{reply}"
+        );
+        let rel = research.get("/related");
+        assert!(
+            rel["downstream"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|d| d["how"] != "linked_in"),
+            "{rel}"
+        );
+
+        // Neither the parent nor linked: still refused.
+        let other = Doc::open(
+            &store,
+            library::create_instance(&*store, RESEARCH, Some("Other study".into())).unwrap(),
+        );
+        let body = json!({ "document_id": other.doc }).to_string();
+        let (status, msg) = post_err(&brief, "/attach/update", &body);
+        assert_eq!(status, 409, "{msg}");
+        assert!(msg.contains("not linked"), "{msg}");
+    }
+
     #[test]
     fn a_locked_brief_or_one_made_from_nothing_takes_no_update() {
         let (_store, research, brief) = setup();
