@@ -2623,13 +2623,18 @@ test('the grid export’s header carries the brief’s logos, never a hard-coded
 
 test('logos come from uploads now and a Brand Clan later, ordered client, agency, partner', () => {
   const LOGOS = [{ slot: 'partner', ref: { asset: 'p.png' } }, { slot: 'client', ref: { asset: 'c.png' } }, { slot: 'agency', ref: { brand: 'brand-wk', asset: 'logo-primary' } }, { slot: 'client' }]
-  const KIT = { brand: { name: { value: 'Lumen Water' } }, kit: { version: 5 }, visual: { logos: {
-    'lumen-primary': { name: 'Lumen mark', variants: { mono: { asset: 'assets/lumen-mono.svg', colour: 'mono', on: 'dark' }, 'full-light': { asset: 'assets/lumen-mark.svg', colour: 'full', on: 'light' } } },
-    wordmark: { name: 'Wordmark', variants: { a: { asset: 'assets/../../etc/passwd.png' } } },
-    nofile: { name: 'No file', variants: {} } } } }
-  const lifted = (vals: Record<string, unknown>) => lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[]; kitLogos(k: unknown): { id: string; asset: string }[]; brandAttached(): { id: string } | null; upKeys(): string[] }>(BM,
-    ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf', 'items', 'brandAttached', 'kitLogos', 'isBrandKit', 'upKeys'], {
-      LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`,
+  // The Brand Clan's own shape (app/templates/brand-clan/schema.json visual.logos): a list of {id, label, variant, asset}, the asset
+  // under human/assets/ in the Brand Clan document; attach copies each file to human/assets/brand/<brand id>/<file> here (UAT 2026-11-26:
+  // the brief read an older map shape, so a Brand Clan with a logo said "no logos in its kit").
+  const KIT = { brand: { name: { value: 'Lumen Water' } }, kit: { version: 5 }, visual: { logos: [
+    { id: 'lumen-dark', label: 'Lumen for dark grounds', variant: 'dark', asset: 'human/assets/ab-lumen-dark.svg' },
+    { id: 'lumen-primary', label: 'Lumen mark', variant: 'light', asset: 'human/assets/cd-lumen-mark.svg' },
+    { id: 'wordmark', label: 'Wordmark', variant: 'other', asset: 'human/assets/../../etc/passwd.png' },
+    { id: 'nofile', label: 'No file', variant: 'other' },
+    { id: 'upload', label: 'solas-logo', variant: 'other', asset: 'human/assets/230864de45-solas-logo.png' }] } }
+  const lifted = (vals: Record<string, unknown>) => lift<{ logoSrc(l: unknown): string; nextSlot(ls: unknown[]): string; sheetLogos(): { slot: string }[]; kitLogos(k: unknown, id?: string): { id: string; asset: string }[]; brandName(k: unknown): string; brandAttached(): { id: string } | null; upKeys(): string[] }>(BM,
+    ['logoSrc', 'slotRank', 'sheetLogos', 'nextSlot', 'logosOf', 'items', 'brandAttached', 'kitLogos', 'brandName', 'isBrandKit', 'upKeys'], {
+      LOGO_SLOTS: [['client', 'Client'], ['agency', 'Agency'], ['partner', 'Partner']], arr, assetUrl: (n: string) => `clan://localhost/assets/${n}`, envVal: (v: unknown) => (v && typeof v === 'object' && 'value' in (v as object) ? (v as { value: unknown }).value : v),
       get: (k: string) => vals[k],
     })
   const L = lifted({ logos: LOGOS })
@@ -2643,8 +2648,14 @@ test('logos come from uploads now and a Brand Clan later, ordered client, agency
   // variant for light paper first; a logo pointing out of the assets folder, or with no picture, is not.
   const K = lifted({ logos: LOGOS, upstream: { 'brand-wk': KIT, 'res-1': { findings: {} } } })
   assert.deepEqual(K.brandAttached()!.id, 'brand-wk')
-  assert.deepEqual(K.kitLogos(KIT), [{ id: 'lumen-primary', name: 'Lumen mark', asset: 'lumen-mark.svg' }])
-  assert.equal(K.logoSrc({ ref: { brand: 'brand-wk', asset: 'lumen-primary' } }), 'clan://localhost/assets/lumen-mark.svg')
+  assert.deepEqual(K.kitLogos(KIT, 'brand-wk'), [
+    { id: 'lumen-primary', name: 'Lumen mark', asset: 'brand/brand-wk/cd-lumen-mark.svg' },
+    { id: 'upload', name: 'solas-logo', asset: 'brand/brand-wk/230864de45-solas-logo.png' },
+    { id: 'lumen-dark', name: 'Lumen for dark grounds', asset: 'brand/brand-wk/ab-lumen-dark.svg' }], 'light paper first, then any, then dark; never out of the folder or with no file')
+  assert.equal(K.brandName({ name: 'Sólás Original', kit: { version: 2 }, visual: {} }), 'Sólás Original', 'a Brand Clan is named by its look (UAT 2026-11-26: the line said "attached")')
+  assert.equal(K.brandName(KIT), 'Lumen Water', 'a brand kit by its brand')
+  assert.deepEqual(K.kitLogos({ visual: { logos: { old: { name: 'x', variants: { a: { asset: 'assets/x.png' } } } } } }, 'brand-wk'), [], 'only the Brand Clan’s own list shape')
+  assert.equal(K.logoSrc({ ref: { brand: 'brand-wk', asset: 'lumen-primary' } }), 'clan://localhost/assets/brand/brand-wk/cd-lumen-mark.svg')
   assert.equal(K.logoSrc({ ref: { brand: 'other', asset: 'lumen-primary' } }), '', 'only the kit that is attached')
   assert.deepEqual(K.upKeys(), ['res-1'], 'a Brand Clan is not research')
   assert.match(fn(BM, 'renderLogos'), /kitOffers\(\)/, 'the Logos box offers the kit’s logos')

@@ -167,8 +167,8 @@ rules and tone, imagery style, the source file, and no UI for the provisions), e
 
 | Reader | Reads | From |
 |---|---|---|
-| Brief Maker chip, Deck Update look, Production node, Territories frames | `data.upstream.<id>` (the frozen copy), `lineage.attached[].version`, `kit.version`, `visual.*`, `voice.*`, `imagery.*` | the work document |
-| Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[variant dark/light/mark]` and their files, `imagery.bans[]`, `kit.version` | frozen copy, `human/assets/brand/<id>/` |
+| Brief Maker chip (its Logos box offers `visual.logos[]`, `light` first, then `other`, `mark`, `dark`, each from `human/assets/brand/<id>/<file>`), Deck Update look, Production node, Territories frames | `data.upstream.<id>` (the frozen copy), `lineage.attached[].version`, `kit.version`, `visual.*`, `voice.*`, `imagery.*` | the work document |
+| Deck `look.brand_tokens` | `visual.colours[].role/hex`, `visual.typography[].role/family`, `visual.logos[]` and their files: the `dark` logo, else `mark`, else `other` (what the Brand Clan editor files an upload as) for the cover, `imagery.bans[]`, `kit.version` | frozen copy, `human/assets/brand/<id>/` |
 | Production jobs | `voice` for words; `visual`, `imagery` for pictures; the nearest Brand Clan node up the link graph | the document's `lineage.attached[]` and each node's link |
 | Production end card and sizes | the logo (`dark`, else `mark`, else `light`, else any), copied into the project as a picture when the node is placed, swapped or updated (`brand_clans[id].logo`); used when the node is linked and the project has no Brand board logo, which still wins (owner 2026-11-24) | the Brand Clan's asset route |
 

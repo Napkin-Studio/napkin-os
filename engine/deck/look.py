@@ -103,7 +103,8 @@ def brand_tokens(frozen_brand: dict | None = None, document_id: str | None = Non
     # by construction (only the client's Brand Clans can be attached), so its logo is placed for the deck's client.
     files = fb.get("_logo_files") if isinstance(fb.get("_logo_files"), dict) else {}
     for variant in ("dark", "light"):
-        f = files.get(variant) or (files.get("mark") if variant == "dark" else None)
+        # dark: its own, else the mark, else the "other" an upload in the Brand Clan editor is (as Production's end card, LOGO_ORDER)
+        f = files.get(variant) or (files.get("mark") or files.get("other") if variant == "dark" else None)
         if isinstance(f, dict) and isinstance(f.get("bytes"), (bytes, bytearray)):
             data = bytes(f["bytes"])
             if str(f.get("name", "")).lower().endswith(".svg"):
