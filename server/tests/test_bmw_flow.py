@@ -41,16 +41,16 @@ def test_bmw_subject_categories_as_buttons_then_reuse(server):
     assert camp["categories"]["origin"] == "confirmed"
     assert len(asked) == 1 and host.facts and host.findings and host.data["report"]["headline"]["cites"]
     calls = len(server.research.calls)
-    # every lens, one market, and one search for the category's players: nobody named the comparators
-    # (UAT round 4 F11)
-    assert calls == 9 and sum(1 for c in server.research.calls if c == ("brands_positioning", "IE")) == 2
+    # every lens, one market, and the players' searches: nobody named the comparators (UAT round 4 F11), so
+    # the person's question is searched, then the category's name, as the first found fewer than two
+    assert calls == 10 and sum(1 for c in server.research.calls if c == ("brands_positioning", "IE")) == 3
 
     # campaign two: the roster row the person confirmed is proposed; research reuses the layer
     host2, _ = run(server, lambda r, q: (_ for _ in ()).throw(AssertionError(f"asked {q['text']}")))
     cats = host2.data["campaign"]["categories"]
     assert cats["origin"] == "proposed" and cats["value"] == ["automotive.ev_charging", "automotive.hybrid"]
-    # no lens re-researched; only the players' search runs again, as it found none the first time
-    assert server.research.calls[calls:] == [("brands_positioning", "IE")]
+    # no lens re-researched; only the players' searches run again, as they found none the first time
+    assert server.research.calls[calls:] == [("brands_positioning", "IE")] * 2
     assert {f["id"] for f in host.facts} & {f["id"] for f in host2.facts}
     # where each pin came from (origin_kind): found by research the first time; the layers' own rows,
     # roster and reused research alike, the second

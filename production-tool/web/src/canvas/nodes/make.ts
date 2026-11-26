@@ -30,7 +30,7 @@ export function besideBox(els: readonly CanvasElement[], src: Pick<CanvasElement
   const size = CARD_SIZE[kind]
   // Every card in the way: the stage nodes, and the Brief card and pictures too (UAT 2026-11-21, F18: after Plan
   // shots the Brief card sat on top of the new Storyboard node).
-  const inWay = (e: CanvasElement) => !!cardOf(e) || (e.customData as { kind?: string } | undefined)?.kind === 'brief' || e.type === 'image'
+  const inWay = (e: CanvasElement) => !!cardOf(e) || ['brief', 'brand_clan'].includes((e.customData as { kind?: string } | undefined)?.kind ?? '') || e.type === 'image'
   const nodes = els.filter((e) => !e.isDeleted && inWay(e)).map((e) => ({ x: e.x, y: e.y, w: e.width, h: e.height }))
   let box: Box = { x: Math.round(src.x + src.width + BESIDE_GAP), y: Math.round(src.y), ...size }
   for (let i = 0; i < 40; i++) {
@@ -102,7 +102,9 @@ export async function storyboardFor(env: NodeEnv, scriptId: string): Promise<{ s
 export async function newStoryboardFor(env: NodeEnv, scriptId: string): Promise<{ storyboardId: string; el: CanvasElement }> {
   const d = env.doc.get()
   const made = newEntity(d, 'storyboard')
-  const sb = { ...(made.entity as Storyboard), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
+  // Named after the script that drives it (UAT round 4 A18: Script "Copperell Refill" drove "Storyboard 2").
+  const named = d.scripts[scriptId].title?.trim()
+  const sb = { ...(made.entity as Storyboard), ...(named ? { title: named.slice(0, 200) } : {}), target_s: d.scripts[scriptId].target_s || (made.entity as Storyboard).target_s }
   const src = elementOfEnd(env.canvas.elements(), d, { kind: 'script', id: scriptId })
   const box = src ? besideBox(env.canvas.elements(), src, 'storyboard') : placeNode(env.canvas, d, 'storyboard').box
   const link = newLink({ kind: 'script', id: scriptId }, { kind: 'storyboard', id: sb.id }, 'drives')

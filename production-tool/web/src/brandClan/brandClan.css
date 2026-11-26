@@ -1,0 +1,42 @@
+/* The Brand Clan node (Brand Clan phase 2; mocks d1-d3): a neutral card with a mono tab, so it reads as the client's look,
+   not a document from another tool. Tokens from the canvas theme, in both themes. */
+.bc-card { position: relative; height: 100%; box-sizing: border-box; background: var(--paper, #FAF8F4); color: var(--ink, #141413);
+  border: 1px solid var(--line, #D8D3CC); border-radius: 3px 8px 8px 8px; box-shadow: 0 6px 18px -8px rgba(20, 22, 27, .22);
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 8px; font-family: var(--font-ui); }
+.selected .bc-card { box-shadow: 0 0 0 2px var(--ink, #141413), 0 6px 18px -8px rgba(20, 22, 27, .22); }
+.bc-tab { position: absolute; top: -18px; left: -1px; height: 18px; padding: 0 9px; font: 600 9.5px/18px var(--font-mono); letter-spacing: .12em;
+  background: color-mix(in srgb, var(--line, #D8D3CC) 55%, var(--paper, #FAF8F4)); border: 1px solid var(--line, #D8D3CC); border-bottom: 0; border-radius: 3px 3px 0 0; color: var(--muted, #555); }
+.bc-head { display: flex; align-items: center; gap: 8px; }
+.bc-pick { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 12px/1 var(--font-ui); color: inherit;
+  background: var(--card, #fff); border: 1px solid var(--line, #D8D3CC); border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+.bc-pick:disabled { cursor: default; opacity: .7; }
+.bc-v { font: 600 11px var(--font-mono); color: var(--muted, #555); }
+.bc-logo { height: 46px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line, #D8D3CC); border-radius: 4px; background: #fff; color: #141413; font: 600 15px var(--font-serif); overflow: hidden; }
+.bc-logo img { max-height: 34px; max-width: 86%; object-fit: contain; }
+.bc-sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.bc-sw i { height: 20px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .08); display: block; }
+.bc-type { font: 400 11px var(--font-ui); color: var(--muted, #555); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-type b { font: 600 15px var(--font-serif); color: var(--ink, #141413); margin-right: 4px; }
+.bc-new { font: 500 11px/1.4 var(--font-ui); color: var(--warn-ink, #8A5A00); background: var(--warn-soft, #FDF3E3); border-radius: 4px; padding: 5px 7px; }
+.bc-new button { font: 600 11px var(--font-ui); border: 0; background: var(--ink, #141413); color: var(--paper, #fff); border-radius: 999px; padding: 2px 8px; cursor: pointer; }
+.bc-new button.bc-quiet { background: none; color: inherit; text-decoration: underline; padding: 2px 2px; }
+.bc-new button:disabled { opacity: .6; cursor: default; }
+.bc-foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--line, #D8D3CC); font: 500 11px/1.3 var(--font-ui); }
+.bc-foot.off { color: var(--warn-ink, #8A5A00); }
+.bc-foot.on { color: var(--ok-ink, #15803D); }
+.bc-say { font: 400 10.5px/1.4 var(--font-ui); color: var(--danger, #B3261E); }
+.bc-menu { position: absolute; z-index: 30; top: 44px; left: 8px; width: 230px; background: var(--card, #fff); color: var(--ink, #141413); border: 1px solid var(--line, #D8D3CC);
+  border-radius: 10px; box-shadow: 0 14px 34px rgba(20, 22, 27, .2); padding: 8px 0; }
+.bc-menu-h { margin: 4px 14px 6px; font: 400 11px var(--font-ui); color: var(--muted, #555); }
+.bc-item { display: grid; grid-template-columns: 16px 1fr; gap: 0 6px; width: 100%; text-align: left; border: 0; background: none; color: inherit; padding: 6px 14px; cursor: pointer; }
+.bc-item:hover, .bc-item:focus-visible { background: color-mix(in srgb, var(--ink, #141413) 6%, transparent); }
+.bc-ck { font-weight: 700; color: var(--tool, #2F64F5); }
+.bc-nm { font: 600 12.5px/1.3 var(--font-ui); }
+.bc-nm small { font-weight: 400; color: var(--muted, #555); }
+.bc-sub { grid-column: 2; font: 400 10.5px/1.4 var(--font-ui); color: var(--muted, #555); }
+.bc-cmp { border-top: 1px solid var(--line, #D8D3CC); margin-top: 6px; padding-top: 4px; }
+.bc-tip { position: absolute; width: 220px; padding: 10px 12px; background: var(--card, #fff); color: var(--ink, #141413); border: 1px solid var(--line, #D8D3CC); border-radius: 8px;
+  box-shadow: 0 10px 26px -10px rgba(20, 22, 27, .3); font: 400 12px/1.45 var(--font-ui); pointer-events: none; }
+.bc-tip b { font-weight: 700; }
+/* The card box lets the canvas take clicks (select, move, link); only its own controls take them. */
+.bc-pick, .bc-menu, .bc-new button { pointer-events: auto; }

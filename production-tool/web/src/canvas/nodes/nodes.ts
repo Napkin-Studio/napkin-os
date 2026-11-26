@@ -113,6 +113,8 @@ export function endOf(e: CanvasElement | undefined, doc: ProductionDocument, opt
   if (t.kind === 'sketch' && t.id) return { el: e, doc: { kind: 'sketch', id: t.id }, core: { kind: 'sketch' } }
   // A Brief node (features/brief-node.clan): its card carries {kind: 'brief', id}; an input only.
   if (t.kind === 'brief' && t.id) return doc.briefs?.[t.id] ? { el: e, doc: { kind: 'brief', id: t.id }, core: { kind: 'brief' } } : null
+  // A Brand Clan node (Brand Clan phase 2): its card carries {kind: 'brand_clan', id}; an input only.
+  if (t.kind === 'brand_clan' && t.id) return doc.brand_clans?.[t.id] ? { el: e, doc: { kind: 'brand_clan', id: t.id }, core: { kind: 'brand_clan' } } : null
   // A Format set (the Sizes board's node): a target only, for a brief or a master (live test 2026-11-18: a
   // brief could not be linked to it, so the board never offered itself).
   if (t.kind === 'format_set' && t.id) return doc.format_sets?.[t.id] ? { el: e, doc: { kind: 'format_set', id: t.id }, core: { kind: 'format_set' } } : null
@@ -436,6 +438,7 @@ export function docEnd(doc: ProductionDocument, e: LinkEndpoint): { core: CoreEn
     case 'shot': return doc.shots?.[e.id] ? { core: { kind: 'shot' } } : null
     case 'format_set': return doc.format_sets?.[e.id] ? { core: { kind: 'format_set' } } : null
     case 'brief': return doc.briefs?.[e.id] ? { core: { kind: 'brief' } } : null
+    case 'brand_clan': return doc.brand_clans?.[e.id] ? { core: { kind: 'brand_clan' } } : null
     default: return null
   }
 }

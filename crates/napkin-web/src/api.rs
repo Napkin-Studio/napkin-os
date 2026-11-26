@@ -98,6 +98,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         // Production's calls to the relay, and its landing inbox (production.rs)
         .merge(crate::production::api_router())
         .merge(crate::blobs::router())
+        .merge(crate::brand_clan::router())
         .merge(crate::save::router())
         .merge(crate::trash::router())
 }

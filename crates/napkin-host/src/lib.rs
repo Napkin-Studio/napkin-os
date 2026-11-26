@@ -21,6 +21,7 @@
 //! binds the same table to HTTP.
 
 pub mod blobs;
+pub mod brand_clan;
 pub mod clients;
 pub mod config;
 pub mod ctx;

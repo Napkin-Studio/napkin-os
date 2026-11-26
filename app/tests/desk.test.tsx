@@ -6,7 +6,7 @@
 // §2, §10), rendered from data with no host: the greeting and the circles
 // with their needs badges and lines, Find a client, Archived and ⋯, Show all
 // past a page, Pick up (Everyone / Me) and Worth a look, the empty desk, the
-// add form, and the client page's groups, Needs you and Brand Clan card. What
+// add form, and the client page's groups, Needs you and Brand Clans. What
 // the old agency home and clients wheel said (counts, strips, state in words)
 // is checked where it lives now. Placeholder names.
 
@@ -257,15 +257,15 @@ test('a new client: No work yet, Briefs and Research each say Nothing here yet',
   assert.match(html, /No work yet\. Start the first brief or research for Client A with its \+\./)
 })
 
-test('Brand Clan: nothing invented; Open kit kept, disabled, saying why; its document listed once there is one', () => {
+test('Brand Clans: the section and its + are there, nothing is invented, and a Brand Clan document is never listed as work', () => {
   const html = page([])
-  assert.match(html, /Brand Clan · not started/)
-  assert.match(html, /data-testid="brand-start"/)
-  assert.match(html, /aria-disabled="true"[^>]*aria-describedby="cp-clan-why"|aria-describedby="cp-clan-why"[^>]*data-testid="brand-start"/)
-  assert.match(html, /arrives with the Brand Clan app/)
+  assert.match(html, /aria-label="Brand Clans for Client A" data-testid="brand-clan"/)
+  assert.match(html, /data-testid="brand-new"/)
+  assert.match(html, /No Brand Clan yet<\/b> for Client A/)
+  assert.doesNotMatch(html, /not started|arrives with the Brand Clan app/)
   const withKit = page([item(client(0), 'ie.napkin.brand', { title: 'Client A brand' })])
-  assert.match(withKit, /data-testid="brand-clan".*Client A brand/s)
-  assert.doesNotMatch(withKit, /not started/)
+  assert.doesNotMatch(withKit, /Client A brand/, 'the Brand Clans are read from the host, not listed among the work')
+  assert.doesNotMatch(withKit, /data-testid="work-item"/)
 })
 
 test('Rename and Archive live in the ⋯ menu, only where the registry can be managed; Production says Soon', () => {

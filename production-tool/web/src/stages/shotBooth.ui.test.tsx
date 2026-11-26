@@ -101,6 +101,22 @@ describe('the Storyboard Booth on a selected shot', () => {
     expect(el.querySelector('[data-shot-booth]')).toBeNull()
   })
 
+  it('Delete with a shot selected deletes it, whatever has the focus, and Undo brings it back (UAT round 4 A23)', async () => {
+    const { el, render, services, sb } = await mount()
+    render()
+    await settle()
+    click(cell(el, 2).querySelector('.sb-words')!)
+    await settle()
+    act(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })) })
+    await settle()
+    expect(shotsOf(services.doc.get(), sb)).toHaveLength(2)
+    const note = el.querySelector('.sb-deleted') as HTMLElement
+    expect(note.textContent).toContain('Deleted shot 2.')
+    act(() => buttonIn(note, 'Undo').click())
+    await settle()
+    expect(shotsOf(services.doc.get(), sb)).toHaveLength(3)
+  })
+
   it('What the Camera agent will send shows all of Your words (re-test N-I)', async () => {
     const { el, render, services, shots } = await mount()
     await updateDoc(services.doc, (d) => { addFrame(d, d.shots[shots[0]], SHA('a'), { pick: true }) }, 'a frame')

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">
+  <!-- Brand Clan's mark: a swatch card with a fan of colour chips beneath it.
+       One colour on transparent: the home screen paints it in the Plan zone. -->
+  <path fill="black" fill-rule="evenodd" d="M11 8.5h22a2 2 0 0 1 2 2v14H9v-14a2 2 0 0 1 2-2z M13.5 12.5v8h5v-8z M21 12.5v8h9.5v-8z"/>
+  <path fill="black" d="M9 27.5h8.6v8H11a2 2 0 0 1-2-2z"/>
+  <path fill="black" opacity="0.5" d="M19.7 27.5h8.6v8h-8.6z"/>
+  <path fill="black" opacity="0.75" d="M30.4 27.5H35v6a2 2 0 0 1-2 2h-2.6z"/>
+</svg>

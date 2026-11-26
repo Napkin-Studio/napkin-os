@@ -39,6 +39,7 @@ mod app_ui;
 const APP_ID: &str = "ie.napkin.campaign-research";
 /// A brief can start a research: carried whole under `upstream.<brief id>`,
 /// so extract_ask proposes the ask from it (features/spinoff-and-links.clan).
+const BRAND_APP_ID: &str = "ie.napkin.brand";
 const BRIEF_APP_ID: &str = "ie.napkin.brief-maker";
 const PIPELINE_PATH: &str = "app/pipeline.yaml";
 const FACTS_PATH: &str = "shared/facts.yaml";
@@ -243,8 +244,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
             // Link an existing brief into a research that exists: one
             // research feeds many briefs, and a research may read several.
+            // And the client's Brand Clan (one; Brand Clan phase 2, mock c1).
             attach: Some(AttachSpec {
-                accepts: vec![BRIEF_APP_ID.into()],
+                accepts: vec![BRIEF_APP_ID.into(), BRAND_APP_ID.into()],
                 many: vec![BRIEF_APP_ID.into()],
                 ..Default::default()
             }),

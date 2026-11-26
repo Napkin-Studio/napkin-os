@@ -15,6 +15,7 @@ import type { Id, JobContext, JobInput, JobInputRow, LinkEndpoint, NamedRef, Op,
 import { scopeOf } from '../model/scope'
 import { refName, refsList } from '../model/selectors'
 import { readers } from './linkedText'
+import { brandClanForJob, brandClanWords } from '../brandClan/model'
 
 type Doc = ProductionDocument
 
@@ -97,7 +98,12 @@ export function brandWork(d: Doc, node: LinkEndpoint, input: Pick<JobInput, 'tex
 }
 
 export interface BrandRow {
+  /** The brand ref's id, or for a Brand Clan node its id (bclan_…); `key` then names the item. */
   ref: Id
+  /** A Brand Clan node's item ("tone", "rule:mint-accent", "palette", "type"); absent for a project brand ref. */
+  key?: string
+  /** The Brand Clan it comes from ("Zero v2"), for the tray. */
+  from?: string
   kind: 'brand_rule' | 'palette' | 'typography'
   /** "@harbour_palette", or the ref's own label. */
   label: string
@@ -118,6 +124,17 @@ export function brandRows(d: Doc, op: Op, node: LinkEndpoint, input: Pick<JobInp
   // client's); the tray's ticks still put one in (S2-6).
   const foreign = !!input.brief && !work
   const rows: BrandRow[] = []
+  // The Brand Clan linked into the node, or the nearest up the canvas (Brand Clan phase 2, DESIGN 4a): a link is the person's
+  // "use this brand", so its words and look go with every job that reads the look; a tray tick can still leave one out.
+  const bc = brandClanForJob(d, node)
+  if (bc) {
+    for (const w of brandClanWords(bc.node)) {
+      const tick = `${bc.node.id}#${w.key}`
+      const byDefault = EDIT_OPS.includes(op) ? work || w.kind === 'brand_rule' : true
+      const on = choice.add?.includes(tick) ? true : choice.leave?.includes(tick) ? false : byDefault
+      rows.push({ ref: bc.node.id, key: w.key, from: `${bc.node.title} v${bc.node.source.version}`, kind: w.kind, label: `${bc.node.title} · ${w.kind === 'palette' ? 'colours' : w.kind === 'typography' ? 'type' : 'rule'}`, text: w.text, on, byDefault })
+    }
+  }
   for (const r of refsList(d)) {
     const w = brandWords(r)
     if (!w || w.kind === 'note' || w.kind === 'document') continue
@@ -134,7 +151,7 @@ function brandItems(d: Doc, op: Op, node: LinkEndpoint, input: JobInput, choice:
   return brandRows(d, op, node, input, choice).filter((b) => b.on).map((b) => {
     const title = cut(b.label, 200)
     const text = cut(b.kind === 'palette' ? `${choice.strict ? 'Strict' : 'Accents'}: ${b.text}` : b.text, TEXT_MAX)
-    return { ctx: { kind: b.kind, title, text }, row: { kind: 'brand', ref: b.ref, used_as: USED_AS[b.kind], included: true, text: cut(text, 200) } }
+    return { ctx: { kind: b.kind, title, text }, row: { kind: 'brand', ref: b.ref, used_as: b.key ? `Brand Clan ${USED_AS[b.kind]}` : USED_AS[b.kind], included: true, text: cut(text, 200) } }
   })
 }
 
