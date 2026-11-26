@@ -371,7 +371,7 @@ NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server    
 
 | Route | |
 |---|---|
-| `GET /status` | what is on and what is busy |
+| `GET /status` | what is on: `max_runs`, the documents `building` and those `waiting` for a slot |
 | `POST /run` | `{doc, inputs: {prompt: {text, client, project, agency}, kind, format}, approvals: {storyline, territories: {picked}, idea}, mode, render}`: the next segment of this document's run |
 | `GET /run/<doc>` | the run so far: `state` (building, gate, done, failed), `run`, notices, and once built the `payload` |
 | `GET /file/<doc>/<name>` | `deck.html`, `deck.pptx`, `deck.pdf` or `report.json`, once written |
@@ -383,10 +383,13 @@ NAPKIN_DECK_REPLAY=deck/tests/fixtures/fernley/stages python3 -m deck.server    
 | `NAPKIN_DECK_REPLAY` | a folder of recorded stage files: mode `replay` copies them in stage by stage, free |
 | `NAPKIN_DECK_LIVE` | `1` allows mode `live`: paid model calls (about 0.50 to 0.95 USD a deck, at the 17 Nov 2026 price table). Off by default |
 | `NAPKIN_DECK_MAX_USD` | the most one live run may spend (default 2.00); the run stops at the cap with its message and what it wrote stays |
+| `NAPKIN_DECK_MAX_RUNS` | how many documents build at once (default 3); a run past it waits for a slot, says so, and starts by itself |
 
 A gate goes on only when the request carries the person's approval of it **and** its stage output already existed when the request
 arrived, so an approval of an earlier run never skips a gate of a new one. Only `approve` goes on; `edit` and `retry` are refused
-with `not_supported` until the engine can act on them. One run at a time: a second `POST /run` is a 409 `job_state`. A failing engine
+with `not_supported` until the engine can act on them. One segment per document at a time: a second `POST /run` for the same document is a 409 `job_state`. Up to
+`NAPKIN_DECK_MAX_RUNS` documents build at once; past that a run is accepted, waits for a slot (its row says "Waiting for another deck to
+finish · starts automatically") and starts by itself. Each live run keeps its own cost cap, and each run's printed lines stay its own. A failing engine
 is a `failed` state with its message, never a success; a missing cache with no recording and no live is a 409, never invented output.
 The last segment builds the PowerPoint, the web deck and the PDF and needs LibreOffice (`soffice`) and poppler (`pdftoppm`):
 without them it is refused before it starts, and `render: false` stops at the deck instead (`--until deck`).

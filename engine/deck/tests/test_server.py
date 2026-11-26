@@ -62,7 +62,8 @@ def stage_files(e, doc="doc1") -> set[str]:
 
 def test_status_says_what_is_on(engine):
     status, s = call(engine.base, "/status")
-    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "busy": None, "types": srv.type_offers()}   # deck-types: what the picker may offer
+    assert status == 200 and s == {"ok": True, "live": False, "replay": True, "max_usd": 2.0, "max_runs": srv.DEFAULT_MAX_RUNS, "building": [], "waiting": [],
+                                   "types": srv.type_offers()}   # deck-types: what the picker may offer
 
 
 def test_the_run_stops_at_the_storyline_gate_and_nothing_after_it_runs(engine):
@@ -112,7 +113,7 @@ def test_a_changed_prompt_starts_the_run_again(engine):
     other = {**INPUTS, "prompt": {**INPUTS["prompt"], "text": PROMPT + " And make it playful."}}
     call(engine.base, "/run", {"doc": "doc1", "inputs": other, "approvals": {"storyline": {"decision": "approve"}}, "mode": "replay", "render": False})
     v = wait(engine.base, "doc1")
-    assert v["run"]["gate"]["id"] == "storyline" and len(list((engine.dir / "doc1").iterdir())) == 2
+    assert v["run"]["gate"]["id"] == "storyline" and len([p for p in (engine.dir / "doc1").iterdir() if p.is_dir()]) == 2   # two run folders, beside current.json
 
 
 @pytest.mark.parametrize("body,status,kind", [
@@ -138,7 +139,7 @@ def test_without_a_recording_or_live_the_server_says_so(tmp_path):
     assert e.value.status == 409 and e.value.kind == "no_recording"
 
 
-def test_one_run_at_a_time_a_second_is_refused(engine, monkeypatch):
+def test_one_run_per_document_a_second_of_the_same_is_refused_another_document_builds(engine, monkeypatch):
     gate, go = threading.Event(), threading.Event()
     real = srv.Server.call_engine
 
@@ -149,11 +150,12 @@ def test_one_run_at_a_time_a_second_is_refused(engine, monkeypatch):
     monkeypatch.setattr(srv.Server, "call_engine", slow)
     start(engine)
     assert gate.wait(10)
-    status, err = start(engine, doc="other")
+    status, err = start(engine)
     assert status == 409 and err["error"]["type"] == "job_state"
-    assert call(engine.base, "/status")[1]["busy"] == "doc1"
+    assert start(engine, doc="other")[0] == 202, "another person's deck is not held up (UAT 2026-11-26)"
+    assert "doc1" in call(engine.base, "/status")[1]["building"]
     go.set()
-    assert wait(engine.base, "doc1")["state"] == "gate"
+    assert wait(engine.base, "doc1")["state"] == "gate" and wait(engine.base, "other")["state"] == "gate"
 
 
 def test_an_engine_failure_is_a_failed_stage_with_its_message_and_no_payload(engine, monkeypatch):
@@ -164,7 +166,7 @@ def test_an_engine_failure_is_a_failed_stage_with_its_message_and_no_payload(eng
     v = wait(engine.base, "doc1")
     assert v["state"] == "failed" and "the model said no" in v["error"]["message"] and v["error"]["retryable"] is True
     assert v["run"]["state"] == "failed" and v["run"]["error"] == v["error"] and "payload" not in v
-    assert call(engine.base, "/status")[1]["busy"] is None, "a failed run frees the engine"
+    assert call(engine.base, "/status")[1]["building"] == [], "a failed run frees its slot"
 
 
 def test_the_last_step_without_a_renderer_is_refused_before_it_starts(engine, monkeypatch):
@@ -211,7 +213,7 @@ def test_live_stops_at_the_cap_before_it_spends_more(tmp_path):
     cfg = srv.Settings({"NAPKIN_DECK_DATA": str(tmp_path), "NAPKIN_DECK_REPLAY": str(FERN / "stages"), "NAPKIN_DECK_LIVE": "1", "NAPKIN_DECK_MAX_USD": "0.05"})
     s = srv.Server(cfg)
     s.run({"doc": "d", "inputs": INPUTS, "mode": "replay", "render": False})   # the recording's stages, which cost money when they were recorded
-    while s.busy:
+    while s.docs["d"].running():
         time.sleep(0.05)
     with pytest.raises(srv.Refused) as e:
         s.run({"doc": "d", "inputs": INPUTS, "mode": "live", "approvals": {"storyline": {"decision": "approve"}}, "render": False})
@@ -294,3 +296,45 @@ def test_call_engine_runs_the_qa_and_passes_the_text_mode_the_pins_and_the_perso
     plain = srv.validate_request({"doc": "doc", "inputs": INPUTS, "mode": "replay", "render": True}, cfg)
     s.call_engine(d, plain, None)
     assert not {"--text-mode", "--review", "--approve-shorten", "--no-qa"} & set(seen[1])
+
+
+def _built_web_deck(engine, monkeypatch, doc="doc1"):
+    done = {"storyline": {"decision": "approve"}, "territories": {"decision": "approve"}, "idea": {"decision": "approve"}}
+    start(engine, doc=doc); wait(engine.base, doc)
+    start(engine, doc=doc, approvals={"storyline": done["storyline"]}); wait(engine.base, doc)
+    start(engine, doc=doc, approvals={k: done[k] for k in ("storyline", "territories")}); wait(engine.base, doc)
+    monkeypatch.setattr(srv.shutil, "which", lambda name: None)
+    monkeypatch.setenv("NAPKIN_DECK_RENDER", "web")
+    call(engine.base, "/run", {"doc": doc, "inputs": INPUTS, "approvals": done, "mode": "replay"})
+    return wait(engine.base, doc)
+
+
+def test_a_built_deck_is_still_served_after_the_engine_restarts(engine, monkeypatch):
+    """UAT 2026-11-26: a deploy restarted the engine and a finished deck's Export said 'no deck.pptx' though its files were on the run
+    disk: the engine knew its documents only in memory. A new server on the same data folder finds the document's last run again."""
+    v = _built_web_deck(engine, monkeypatch)
+    assert v["state"] == "done"
+    fresh = srv.Server(engine.cfg)   # what a restarted engine is: nothing in memory, the same data folder
+    data, ctype = fresh.file("doc1", "deck.pptx")
+    assert data[:2] == b"PK" and "presentation" in ctype
+    again = fresh.get("doc1")
+    assert again["state"] == "done" and again["payload"]["exports"] == v["payload"]["exports"]
+    assert again["run"]["done"] == v["run"]["done"]
+
+
+def test_a_build_the_restart_cut_short_says_build_again(engine):
+    """A segment the restart killed was 'building' on disk: after the restart it is a failed step that may be run again, never a run
+    that looks under way forever."""
+    start(engine); v = wait(engine.base, "doc1")
+    snap = engine.dir / "doc1" / srv.CURRENT
+    rec = json.loads(snap.read_text())
+    snap.write_text(json.dumps({**rec, "state": "building", "held": None}))
+    again = srv.Server(engine.cfg).get("doc1")
+    assert again["state"] == "failed" and again["error"]["retryable"] is True
+    assert "restarted" in again["error"]["message"] and "Build" in again["error"]["message"]
+
+
+def test_a_document_the_engine_never_ran_is_still_no_run(engine):
+    with pytest.raises(srv.Refused) as e:
+        srv.Server(engine.cfg).get("never")
+    assert e.value.status == 404 and e.value.kind == "no_run"
