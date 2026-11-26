@@ -1,3 +1,4 @@
+import { parseRoute } from '../app/route'
 import { HttpRelay } from './http'
 import { MockRelay } from './mock'
 import { browserRenderer } from './mockRender'
@@ -13,12 +14,19 @@ function mockDelay(): number | undefined {
   }
 }
 
-/** VITE_RELAY_URL set → the real relay; otherwise the in-browser mock. */
+/** The library document the page's route names (/production/d/<doc>), or null on Home. */
+function routeDoc(): string | null {
+  const r = parseRoute(window.location)
+  return r.kind === 'none' ? null : r.projectId
+}
+
+/** VITE_RELAY_URL set → the real relay, through napkin-web's own routes (the value only says "not the mock"); otherwise
+ *  the in-browser mock. */
 export function createRelay(): Relay {
   const url = import.meta.env.VITE_RELAY_URL as string | undefined
-  if (url) return new HttpRelay(url)
+  if (url) return new HttpRelay({ doc: routeDoc })
   return new MockRelay({ renderer: browserRenderer, ...(import.meta.env.DEV ? { delayMs: mockDelay() } : {}) })
 }
 
-export type { AnswerResult, Relay } from './types'
+export type { AnswerResult, InboxEntry, Relay } from './types'
 export { RelayError, asContractError } from './types'

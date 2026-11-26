@@ -82,8 +82,12 @@ run "plans_the_hackathon_stack" {
     error_message = "providers read inputs over HTTPS with no redirect"
   }
   assert {
-    condition     = length(aws_secretsmanager_secret.relay) == 3 && contains(keys(aws_secretsmanager_secret.relay), "TOKEN_SECRET") && !contains(keys(aws_secretsmanager_secret.relay), "FAL_KEY")
-    error_message = "three secrets (Runway, Anthropic, token), values put by hand; fal and HeyGen are gone"
+    condition     = length(aws_secretsmanager_secret.relay) == 4 && contains(keys(aws_secretsmanager_secret.relay), "TOKEN_SECRET") && contains(keys(aws_secretsmanager_secret.relay), "SERVICE_KEY") && !contains(keys(aws_secretsmanager_secret.relay), "FAL_KEY")
+    error_message = "four secrets (Runway, Anthropic, assets-pass token, service key), values put by hand; fal and HeyGen are gone"
+  }
+  assert {
+    condition     = contains(keys(jsondecode(aws_lambda_function.relay.environment[0].variables["SECRET_ARNS"])), "SERVICE_KEY") && contains([for st in data.aws_iam_policy_document.relay.statement : st.sid], "Secrets")
+    error_message = "the relay reads SERVICE_KEY (napkin-web's service credential) from Secrets Manager (features/production-jobs-via-host.clan)"
   }
   assert {
     condition     = aws_cloudwatch_log_group.relay.retention_in_days == 14 && aws_cloudwatch_log_group.stitch.retention_in_days == 14

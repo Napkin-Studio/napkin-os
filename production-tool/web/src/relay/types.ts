@@ -8,6 +8,14 @@ import type {
 } from '../contracts/types'
 import type { Access } from './access'
 
+/** A job that finished with no tab open: the relay's Job as the host read it, once. */
+export interface InboxEntry {
+  job: string
+  state: 'completed' | 'failed' | 'cancelled'
+  outcome: Job
+  at: string
+}
+
 export interface UploadResult extends AssetRef {
   exists: boolean
   bytes: number
@@ -44,6 +52,12 @@ export interface Relay {
   libraryEntry(key: Key, ver?: number, shelf?: string): Promise<LibraryEntry>
   /** POST /library/{shelf}/{key}: publish the next version (409 conflict when baseVer is not the latest). */
   publish(key: Key, req: LibraryPublish, shelf?: string): Promise<LibraryEntry>
+  /** GET .../inbox: jobs that finished while no tab had the project open, each as the relay's Job (only the real relay). */
+  inbox?(): Promise<InboxEntry[]>
+  /** POST .../inbox/{job}/ack: this job is landed (from the inbox, or directly while the tab was open). */
+  ackJob?(jobId: string): Promise<void>
+  /** The host says a job of this project finished and waits in its inbox. Returns how to stop listening. */
+  onSettled?(doc: string, listener: () => void): () => void
   /** POST /dogfood/consent: this person read the beta notice. Only the real relay records. */
   dogfoodConsent?(): Promise<void>
   /** POST /dogfood/events: a batch of the beta's events. Never awaited; failures are dropped. */

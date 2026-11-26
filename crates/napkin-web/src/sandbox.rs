@@ -403,6 +403,7 @@ mod tests {
             true,
             Some("https://relay.example/"),
             Some(KEY),
+            Some(KEY),
             None,
         )
         .unwrap()

@@ -17,7 +17,7 @@ const hex = (v: string) => v.replace(/^sha256:/, '')
 async function setup() {
   const host = new HostFake()
   const v0 = await host.put('doc-1', enc('v0'), 'Hollow Oak')
-  const server = new ProjectServer({ base: '/relay', host: '/api', signedIn: () => true, fetchFn: host.fetch })
+  const server = new ProjectServer({ host: '/api', signedIn: () => true, fetchFn: host.fetch })
   const marks: { etag: string; savedAt: string }[] = []
   const index = { get: () => ({ id: 'doc-1', name: 'Hollow Oak' }), setServer: vi.fn(async (_id: string, m: { etag: string; savedAt: string }) => { marks.push(m) }) }
   const tab = (base = hex(v0)) => new ServerCopy({
@@ -129,7 +129,7 @@ describe('S1-16 pictures are found by their hash, never by an address a document
     const doc = { refs: {}, shots: {}, frames: {}, takes: {}, renders: {}, exports: {}, assets: {
       [sha]: { sha256: sha, kind: 'image', mime: 'image/png', origin: 'uploaded', locations: ['https://old-cdn.test/in/x', 'idb://sha256/abc'] },
     } } as unknown as ProductionDocument
-    await fetchAssets(doc, { where: async () => null, download: dl })
+    await fetchAssets(doc, { where: async () => null, download: dl }, 'doc-1')
     expect(asked).toEqual([`https://media.test/in/${sha}`])
     expect(hexOf(sha)).toHaveLength(64)
   })

@@ -155,9 +155,15 @@ fn server_apps(
         secure: false,
     };
     let production = relay_url.map(|url| {
-        let config = Config::from_vars(true, Some(&url), Some(KEY), Some(tool.to_str().unwrap()))
-            .unwrap()
-            .unwrap();
+        let config = Config::from_vars(
+            true,
+            Some(&url),
+            Some(KEY),
+            Some(KEY),
+            Some(tool.to_str().unwrap()),
+        )
+        .unwrap()
+        .unwrap();
         Arc::new(Relay::with_timeout(config, Duration::from_secs(5)))
     });
     let app = napkin_web::router_full(ctx.clone(), None, Arc::new(identity), production);
@@ -530,7 +536,12 @@ async fn the_old_special_routes_are_gone() {
             .headers
             .get(header::CONTENT_TYPE)
             .is_some_and(|v| v.to_str().unwrap_or("").contains("json"));
-        assert!(!is_json, "{path} answered with JSON: {:?}", r.body);
+        // Production's own route answers a plain 404 in the relay's shape when there is none to call.
+        assert!(
+            !is_json || r.status == StatusCode::NOT_FOUND,
+            "{path} answered with JSON: {:?}",
+            r.body
+        );
         assert_eq!(documents_of(&s, &me, PRODUCTION).await, 0, "{path}");
     }
     // And the generic route no longer refuses Production (the old 422 guard).

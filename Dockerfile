@@ -70,7 +70,7 @@ RUN npm run build
 
 # ── the Production Tool ──────────────────────────────────────────────────────
 # The tool's web app (production-tool/web), served by napkin-web at /production
-# and talking to the relay through napkin-web's /production/api proxy
+# and talking to the relay through napkin-web's own routes (/api/t/{tenant}/.../production)
 # (features/os-sign-in.clan). It bundles the CLAN store
 # (production-tool/clan-store), which loads napkin-wasm: the device stage's
 # bindings, so there is no second Rust build. It also bundles our own canvas

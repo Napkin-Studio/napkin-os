@@ -54,11 +54,11 @@ cd production-tool/relay
 uv run python -m local            # http://localhost:8787
 ```
 
-- Standalone (no `TOKEN_SECRET`), every request is the local person:
+- Standalone (no `SERVICE_KEY`, no `TOKEN_SECRET`), every request is the local person:
   `NAPKIN_LOCAL_USER="handle@agency"`, else `local@napkin`. The startup line says who it runs as.
-- Behind napkin-web (the full stack), set `TOKEN_SECRET` to the same dev value (32 bytes or more)
-  as napkin-web's `NAPKIN_PRODUCTION_RELAY_SECRET`: every request must then carry napkin-web's
-  signed `X-Napkin-Identity`, as on AWS.
+- Behind napkin-web (the full stack), set `SERVICE_KEY` to the same dev value (32 characters or more)
+  napkin-web holds: every request must then carry napkin-web's service credential
+  (`Authorization: Bearer` and a signed `X-Napkin-User`), as on AWS.
 - Tenants on: `NAPKIN_LOCAL_TENANTS="napkin,acme"`, else `napkin` and the local person's agency.
   Everyone in an agency shares its projects and library; other agencies get "not on for your agency".
 - `--port` and `--data <dir>` (default `.local-data/`) choose where it listens and keeps files.
@@ -92,10 +92,12 @@ Every route but `GET /health` and `GET /config` takes its person from `identity.
 (features/drop-hackathon-extras.clan, features/os-sign-in.clan). It fails closed: with no identity,
 every other route answers 401 `unauthorised`.
 
-- On Lambda the source is napkin-web's `X-Napkin-Identity` v1 assertion
-  (`docs/contracts/production-tool-identity.md`), signed with `TOKEN_SECRET` (Secrets Manager,
-  re-read at most every 5 minutes; `new,old` during a rotation) and bound to the method, path,
-  query and body. Browsers reach the relay only through napkin-web's `/production/api`.
+- On Lambda the source is napkin-web's service credential
+  (`docs/contracts/production-tool-identity.md`): `Authorization: Bearer <SERVICE_KEY>` and an
+  `X-Napkin-User` claim signed with the same key (Secrets Manager, re-read at most every 5 minutes;
+  `new,old` during a rotation) and bound to the method, path, query and body. The only other
+  credential is the Deck's read-only assets pass (`X-Napkin-Identity`, `aud: "assets"`, `TOKEN_SECRET`).
+  Browsers never reach the relay: napkin-web calls it.
 - The person's agency is their tenant. Only agencies with `enabled: true` in the tenants table
   (`TENANTS_TABLE`) may use the tool; anyone else gets 403 `flag_off`. Turn one on or off with
   `scripts/tenants.py` (a person's credentials). Every job carries the internal `_tenant`, and

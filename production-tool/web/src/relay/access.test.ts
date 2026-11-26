@@ -76,7 +76,7 @@ describe('saved projects behind Napkin OS', () => {
   it("reports napkin-web's signed-out 401 on a later call, with a readable error", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: false, signin: true }), { status: 401 }))
     const onUnauthorised = vi.fn()
-    const server = new ProjectServer({ base: '/production/api', signedIn: () => true, fetchFn: fetchFn as unknown as typeof fetch, onUnauthorised })
+    const server = new ProjectServer({ signedIn: () => true, fetchFn: fetchFn as unknown as typeof fetch, onUnauthorised })
     await expect(server.list()).rejects.toMatchObject({ status: 401, error: { code: 'unauthorised' } })
     expect(onUnauthorised).toHaveBeenCalledWith('signed_out')
   })
