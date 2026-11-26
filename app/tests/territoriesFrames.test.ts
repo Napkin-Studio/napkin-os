@@ -87,7 +87,7 @@ test('a held picture is drawn dimmed in the next open place, with Needs you and 
   assert.equal((h.match(/class="pslot held"/g) || []).length, 1)
   assert.match(h, /data-pslot="pic_started_tv3"/)
   const slot = /<figure class="pslot held" data-pslot="pic_started_tv3">[\s\S]*?<\/figure>/.exec(h)![0]
-  assert.match(slot, new RegExp(`/assets/${H(3)}`)); assert.match(slot, />Needs you<\/button>/); assert.match(slot, /Illustrative/)
+  assert.match(slot, new RegExp(`/assets/frames/${H(3)}\\.png`)); assert.match(slot, />Needs you<\/button>/); assert.match(slot, /Illustrative/)
   assert.doesNotMatch(slot, /data-pic-rights|data-pic-final|Generated/)
   assert.doesNotMatch(h, /Make pictures/)
   assert.doesNotMatch(P.panel(t, { frames: { held: [{ ...frames(true).held[0], place: 'pic_started_tv1' }] } }, {}), /pslot held/, 'a place that already holds a picture is not drawn over')
@@ -100,7 +100,7 @@ test('Needs you shows the held picture above the engine\'s reason; Approve calls
   const dlg = P.makeDialog('held:t_started:t_started-abc123-f3-tv', d, ui)
   assert.equal(dlg.title, 'Needs you')
   assert.ok(dlg.html.indexOf('<img') < dlg.html.indexOf(WHY), 'the picture comes first')
-  assert.match(dlg.html, new RegExp(`<img class="pic-thumb" src="clan://localhost/assets/${H(3)}"`))
+  assert.match(dlg.html, new RegExp(`<img class="pic-thumb" src="clan://localhost/assets/frames/${H(3)}\\.png"`))
   eq([...dlg.html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m: RegExpMatchArray) => m[1]), ['Leave it out', 'Approve'])
   assert.doesNotMatch(plain(dlg.html), PRICE)
   const r = L.act(d, ui, { a: 'pic_ok', tid: 't_started', id: 't_started-abc123-f3-tv' }, ENV)
@@ -115,7 +115,10 @@ test('Needs you shows the held picture above the engine\'s reason; Approve calls
 
 test('frames_status becomes the page\'s held list and the places a picture cannot fill; held ones only', () => {
   const info = { frames: { frames: [{ key: 'a', route: 't_started', place: 'pic_started_tv1', sha256: H(1), held: false, why: null }, { key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), held: true, why: WHY }], card: { not_offered: [{ touchpoint: 'story', why: 'x' }] } } }
-  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), why: WHY }] })
+  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), asset: null, why: WHY }] })
+  // the engine names each held frame's asset (frames/<sha256>.png): the Needs you window draws it from there
+  info.frames.frames[1] = { ...info.frames.frames[1], asset: `frames/${H(3)}.png` } as typeof info.frames.frames[1]
+  assert.equal(P.framesFrom(info).held[0].asset, `frames/${H(3)}.png`)
   assert.equal(P.framesFrom({ frames: { refused: 'no' } }), null)
   assert.equal(P.framesFrom(undefined), null)
 })

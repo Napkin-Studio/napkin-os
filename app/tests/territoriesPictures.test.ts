@@ -112,7 +112,9 @@ test('the Booth card for a Final with no rights offers Choose rights and Take it
 
 test('a picture is drawn by its link and falls back to the palette; no schema field is invented', () => {
   const d = doc(), h = P.panel(route(d), {}) as string
-  assert.match(h, new RegExp(`<img src="clan://localhost/assets/${H(1)}"`))
+  assert.match(h, new RegExp(`<img src="clan://localhost/assets/frames/${H(1)}\\.png"`))
+  // the document's own asset first (owner 2026-11-26: the host stores a frame's bytes); a picture carried in from elsewhere falls back to its bare hash
+  assert.match(h, new RegExp(`this\\.src=&quot;clan://localhost/assets/${H(1)}&quot;`))
   const schema = json('schema.json'), props = Object.keys(schema.definitions.picture.properties)
   for (const k of ['final', 'source', 'sha256', 'image', 'rights', 'gap_reason', 'kind']) assert.ok(props.includes(k), k)
   eq(schema.definitions.rights.enum, ['generated', 'own', 'licensed', 'unknown'])

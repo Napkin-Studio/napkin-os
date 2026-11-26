@@ -2685,16 +2685,23 @@ var TerritoriesPictures = (function () {
   }
   /** Where the host serves a picture of this document: its `/assets/<name>` under the host's scheme, the way Deck Maker reads its files
    *  (a relative `assets/...` from inside the frame resolves to no route of the host). */
-  function assetUrl(sha) {
+  function assetUrl(sha, name) {
     var ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    return (ua.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost') + '/assets/' + encodeURIComponent(sha);
+    // A made frame is the document's own asset at frames/<sha256>.png (owner 2026-11-26: the host stores the bytes when it applies the change).
+    var rel = name || ('frames/' + sha + '.png');
+    return (ua.indexOf('Windows') !== -1 ? 'http://clan.localhost' : 'clan://localhost') + '/assets/' + rel.split('/').map(encodeURIComponent).join('/');
+  }
+  /** An <img> of a picture of this document: its asset, else (a picture carried in from another document) the asset by its bare hash. */
+  function picImg(sha, name, cls, alt) {
+    return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="' + esc(assetUrl(sha, name)) + '" alt="' + esc(alt || '') + '" loading="lazy"' +
+      ' onerror="if(this.dataset.alt){this.remove()}else{this.dataset.alt=1;this.src=' + esc(JSON.stringify(assetUrl(sha, sha))) + '}">';
   }
   /** The picture itself: a carried frame by its hash link, a sketch from the route's palette, a gap in words. */
   function face(t, c, big) {
     var p = L.pal(t), cls = 'pface' + (big ? ' big' : '');
     if (c.kind === 'gap') return '<div class="' + cls + ' gap"><span>' + esc(c.gap_reason || 'No picture yet.') + '</span></div>';
     var inner = c.kind === 'sketch' ? '<div class="scn">' + L.scene(c.scene || 'platform', p) + '</div>'
-      : '<img src="' + esc(assetUrl(c.sha256)) + '" alt="" loading="lazy" onerror="this.remove()">';
+      : picImg(c.sha256, c.asset, '', '');
     return '<div class="' + cls + (c.kind === 'sketch' ? ' sk' : '') + '" style="background:' + p.bg + '">' + inner + (c.final ? pill() : '') +
       '<span class="plab">' + esc(c.label) + '</span>' + (c.held ? needChip(t, c) : c.kind === 'frame' ? rightsChip(t, c) : '') + '</div>';
   }
@@ -2751,7 +2758,7 @@ var TerritoriesPictures = (function () {
     return v.map(function (c) {
       var h = c.kind === 'sketch' ? hs.filter(function (x) { return x.place === c.id; })[0] : null;
       if (!h) return c;
-      return { id: c.id, kind: 'frame', touchpoint: c.touchpoint, label: 'Illustrative', final: false, source: null, rights: null, trusted: null, sha256: h.sha256, hash: h.sha256.slice(0, 8), held: h.key, why: h.why || '' };
+      return { id: c.id, kind: 'frame', touchpoint: c.touchpoint, label: 'Illustrative', final: false, source: null, rights: null, trusted: null, sha256: h.sha256, asset: h.asset || null, hash: h.sha256.slice(0, 8), held: h.key, why: h.why || '' };
     });
   }
   function canMake(t, ui) {
@@ -2784,14 +2791,14 @@ var TerritoriesPictures = (function () {
     t = L.developed(data).filter(function (x) { return x.id === h[1]; })[0];
     var c = t && withHeld(t, ui).filter(function (x) { return x.held === h[2]; })[0]; if (!c) return null;
     var key = esc(t.id + '|' + c.held);
-    return { title: 'Needs you', closeInside: true, sans: true, html: '<img class="pic-thumb" src="' + esc(assetUrl(c.sha256)) + '" alt="The picture that needs you" onerror="this.remove()">' +
+    return { title: 'Needs you', closeInside: true, sans: true, html: picImg(c.sha256, c.asset, 'pic-thumb', 'The picture that needs you') +
       '<p class="meta" style="margin:0">' + esc(c.why) + '</p>' +
       '<div class="row"><span class="spacer" style="flex:1"></span><button type="button" class="btn-rect" data-pic-leave="' + key + '">Leave it out</button><button type="button" class="btn-rect primary" data-pic-ok="' + key + '">Approve</button></div>' };
   }
   /** The frames_status answer as the page keeps it: the held pictures and the places the engine said a picture cannot fill. */
   function framesFrom(info) {
     var f = isObj(info) && isObj(info.frames) ? info.frames : null; if (!f || !Array.isArray(f.frames)) return null;
-    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, place: x.place || null, sha256: x.sha256, why: x.why || '' }; }) };
+    return { held: f.frames.filter(function (x) { return isObj(x) && x.held && x.key; }).map(function (x) { return { key: x.key, route: x.route, place: x.place || null, sha256: x.sha256, asset: x.asset || null, why: x.why || '' }; }) };
   }
   function makeAct(data, ui, e, env) {
     var by = (env && env.me && env.me.name) || 'You';
@@ -2853,7 +2860,7 @@ var TerritoriesPictures = (function () {
   }
 
   return { STEPS: STEPS, CHOICES: CHOICES, view: view, chip: chip, rightsWord: rightsWord, rightsOf: rightsOf, labelOf: labelOf, panel: panel, strip: strip, slotHtml: slotHtml,
-    dialog: dialog, makeDialog: makeDialog, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
+    dialog: dialog, makeDialog: makeDialog, assetUrl: assetUrl, framesFrom: framesFrom, heldOf: heldOf, withHeld: withHeld, canMake: canMake, STEPS_MAKE: MAKE, boothCard: boothCard, firstOpen: firstOpen, handles: handles, act: act, reqWords: reqWords };
 })();
 </script>
 
