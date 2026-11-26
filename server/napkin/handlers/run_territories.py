@@ -278,7 +278,9 @@ def _frames(step, inp, req, caps, jid, data, by, on_line, marks):
             else:
                 got = f.status()
         except fr.Refuse as e:
-            return _Done(data, [str(e)])
+            done = _Done(data, [str(e)])
+            done.need = e.need          # what a person can answer to unblock it (the material question), for the page
+            return done
         finally:
             lock.release()
         doc, refusals, note, info, decisions = got

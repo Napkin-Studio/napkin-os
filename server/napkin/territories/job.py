@@ -228,7 +228,7 @@ class TerritoriesJob:
             self.info = info
             refusals = list(getattr(res, "refusals", []) or [])
             if refusals:                                  # the engine said no, in words: nothing is written, whatever it spent is recorded
-                self._fail("refused", " ".join(refusals), locked=True)
+                self._fail("refused", " ".join(refusals), locked=True, need=getattr(res, "need", None))
                 self._take_decisions(res, patch={})
                 return
             if self.pending:
@@ -238,11 +238,11 @@ class TerritoriesJob:
             self.summary = getattr(res, "note", "") or self._summary(res)
             self.state, self.finished_at = "done", iso()
 
-    def _fail(self, etype: str, message: str, locked: bool = False):
+    def _fail(self, etype: str, message: str, locked: bool = False, need: str | None = None):
         def go():
             if self._cancelled():
                 return
-            self.state, self.error, self.finished_at = "failed", {"type": etype, "message": message}, iso()
+            self.state, self.error, self.finished_at = "failed", {"type": etype, "message": message, **({"need": need} if need else {})}, iso()
         if locked:
             go()
         else:
