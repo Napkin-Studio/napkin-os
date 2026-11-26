@@ -70,6 +70,21 @@ MATERIAL_WORDS = ("Say what this material is before the first picture: the pictu
                   "the words; anything marked Confidential stays out of Napkin's own knowledge, not out of the work.")
 
 
+#: The picture-prompt check's rules (visuals.lint) in words, for the rewrite call: a refused shot goes back with its reason and these.
+LINT_RULES = ("Plain printable English only. No number, in figures or in words (one, two, three, half, a dozen): write a, a pair of, a few, both. "
+              "No quotation marks or apostrophes. No capital letter in mid-sentence (it reads as a name), no names, no brand names. No 'in the style of'. "
+              "Nothing the never_show list names. Any other describing word is fine.")
+
+
+def refused_refusal(rows: list[dict]) -> Refuse:
+    """Every frame left for these routes was refused by the check, and the planner already rewrote it once: said in words, with Try again
+    (``need``: ``retry_refused``), never as made or waiting."""
+    n = len(rows)
+    why = "; ".join(f"{r['shot']}: " + re.sub(r"^the shot description (cannot go to a picture model|names banned imagery): ", "", r["why"]) for r in rows)
+    return Refuse(f"{n} picture{'s' if n != 1 else ''} could not be made: the words planned for {'them' if n != 1 else 'it'} cannot go to a picture "
+                  f"model ({why}). Try again asks the planner to rewrite {'them' if n != 1 else 'it'} in plain words.", need="retry_refused")
+
+
 def material_refusal() -> Refuse:
     """The material gate's no, in plain words: nobody has said what the material is yet, so the question is asked (``need``)."""
     return Refuse("Pictures are not made for this document yet: nobody has said what its material is. " + MATERIAL_WORDS, need="material")
@@ -230,7 +245,7 @@ def brand_style(rec, forbid=()) -> tuple:
     d, left = b["data"], []
     names = [x for x in forbid if x]
 
-    def ok(text: str, key: str, allow=()) -> bool:
+    def ok(text: str, key: str) -> bool:
         norm = {k: ([] if k != "notes" else "") for k in ("look", "palette", "this_not_that", "banned_imagery", "notes")}
         norm[key] = [text]
         try:
@@ -238,7 +253,7 @@ def brand_style(rec, forbid=()) -> tuple:
         except style_mod.StyleError as e:
             left.append({"what": text, "why": str(e).split(": ", 1)[-1]})
             return False
-        bad = lint.lint_text({"look": "Look: ", "palette": "Palette: "}.get(key, "") + text + ".", banned=[], allow=allow)
+        bad = lint.lint_text({"look": "Look: ", "palette": "Palette: "}.get(key, "") + text + ".", banned=[])
         if bad:
             left.append({"what": text, "why": bad})
             return False
@@ -248,7 +263,7 @@ def brand_style(rec, forbid=()) -> tuple:
     look = [p.lower() for p in _phrases(imagery.get("style"))]
     look = [p for p in dict.fromkeys(look) if ok(p, "look")]
     bans = [p.lower() for p in _phrases(imagery.get("bans"))]
-    bans = [p for p in dict.fromkeys(bans) if ok(p, "banned_imagery", allow=[p])]
+    bans = [p for p in dict.fromkeys(bans) if ok(p, "banned_imagery")]
     cols = [c for c in ((d.get("visual") or {}).get("colours") or []) if isinstance(c, dict)]
     rank = {r: i for i, r in enumerate(COLOUR_ORDER)}
     cols.sort(key=lambda c: rank.get(c.get("role"), len(COLOUR_ORDER)))
@@ -364,7 +379,7 @@ class Frames:
         return self.doc, [], "Noted: this material is " + {"invented": "invented", "demo": "a demo", "client": "the client's"}[origin] + ".", {}, []
 
     # -------- the shared preparation of an ask and a make
-    def _prepare(self, ids, retry_flagged=(), retry_unknown=False):
+    def _prepare(self, ids, retry_flagged=(), retry_unknown=False, retry_refused=False):
         routes, why = eligible(self.doc, ids)
         if why:
             raise Refuse(" ".join(why))
@@ -385,7 +400,7 @@ class Frames:
             raise Refuse("The look changes the picture models, which it cannot do. Nothing was sent.")
         banned = list(safe["banned"])
         guard_banned = list(dict.fromkeys([*banned, *sty.banned_imagery]))
-        bad = lint.lint_text(style_mod.style_block(sty, banned), banned=[], allow=guard_banned)
+        bad = lint.lint_text(style_mod.style_block(sty, banned), banned=[])
         if bad:
             raise Refuse(f"The look's words cannot go to a picture model: {bad}. Nothing was sent.")
         if not runway.cap_ok(self.cap):
@@ -400,23 +415,28 @@ class Frames:
                 shots_of[t["id"]] = have["shots"]
             else:
                 need.append(t["id"])
-        jobs, refused = [], []
+        jobs, refused, repair = [], [], []
         for t in routes:
             th = route_hash(t)
-            for s in shots_of.get(t["id"]) or [{"shot": x, "framing": "[frame plan not made yet: this shot is a placeholder]"} for x in SHOTS]:
-                s = unquoted(s)
+            for s0 in shots_of.get(t["id"]) or [{"shot": x, "framing": "[frame plan not made yet: this shot is a placeholder]"} for x in SHOTS]:
+                s = unquoted(s0)
                 text = " ".join(str(x).rstrip(".") + "." for x in (s.get("framing"), s.get("camera"), s.get("action")) if x)
                 row = {"key": runway.job_key(f"{t['id']}-{th}", s["shot"], "quick"), "tid": t["id"], "shot": s["shot"], "kind": "quick"}
                 hit = safety.banned_in(text, banned)
                 badl = lint.lint_text(text, banned) if t["id"] in shots_of and not hit else None
-                if hit:
-                    refused.append({**row, "why": "the shot description names banned imagery: " + ", ".join(hit)})
-                elif badl:
-                    refused.append({**row, "why": "the shot description cannot go to a picture model: " + badl})
+                why = ("the shot description names banned imagery: " + ", ".join(hit)) if hit else \
+                      ("the shot description cannot go to a picture model: " + badl) if badl else None
+                if why and (not s0.get("rewritten") or retry_refused):
+                    # UAT 2026-11-26: the planner's own words ('one', 'unhurried') were refused and no frame was made. Such a shot is rewritten
+                    # once, with the check's reason, before anything is sent; it is on the card as a frame to make (and the rewrite as a call).
+                    repair.append({**row, "why": why, "words": {k: str(s0.get(k) or "") for k in ("framing", "camera", "action", "on_screen_line")}})
+                    jobs.append({**row, "prompt": style_mod.frame_prompt({"shot": s["shot"], "framing": "[this shot is being rewritten in plain words]"}, sty, banned)})
+                elif why:
+                    refused.append({**row, "why": why})
                 else:
                     jobs.append({**row, "prompt": style_mod.frame_prompt(s, sty, banned)})
         return {"routes": routes, "mat": mat, "sty": sty, "look": look, "refs": refs, "banned": banned, "guard_banned": guard_banned, "vdir": vdir, "manifest": manifest,
-                "shots_of": shots_of, "need": need, "jobs": jobs, "refused": refused, "ids": [t["id"] for t in routes],
+                "shots_of": shots_of, "need": need, "jobs": jobs, "refused": refused, "repair": repair, "ids": [t["id"] for t in routes],
                 "retry_flagged": list(retry_flagged), "retry_unknown": bool(retry_unknown)}
 
     def _card(self, P) -> dict:
@@ -429,12 +449,12 @@ class Frames:
         spent, sends = vjobs.spent_usd({"jobs": {}}, self.ledger), vjobs.send_count({"jobs": {}}, self.ledger)
         card = runway.cost_card(P["jobs"], m, P["vdir"], None, len(P["refs"]), self.cap, spent, sends,
                                 id_parts=["territory-frames-doc", self.doc_id, P["ids"], P["sty"].hash, sorted(P["retry_flagged"]), P["retry_unknown"], P["mat"]["origin"],
-                                          bool(P["need"]), [r["key"] for r in P["refused"]]])
+                                          bool(P["need"]), [r["key"] for r in P["refused"]], sorted(r["key"] for r in P["repair"])])
         off = {}
         for t in P["routes"]:
             for o in offered(t)[1]:
                 off.setdefault(o["touchpoint"], o["why"])
-        return {**card, "frames": sum(r["new"] for r in card["rows"]), "routes": len(P["routes"]), "plan_call": bool(P["need"]),
+        return {**card, "frames": sum(r["new"] for r in card["rows"]), "routes": len(P["routes"]), "plan_call": bool(P["need"] or P["repair"]),
                 "not_offered": [{"touchpoint": k, "why": v} for k, v in off.items()], "refused": [{"key": r["key"], "why": r["why"]} for r in P["refused"]],
                 "policy": P["mat"]["policy_label"], "unknown": sum(r.get("unknown", 0) for r in card["rows"]), "look": P["look"],
                 "material": {k: (self.origin() or {}).get(k) for k in ("origin", "by")} if self.origin() else None}
@@ -448,25 +468,28 @@ class Frames:
         return out
 
     # -------- the ask
-    def ask(self, ids=None, retry_flagged=(), retry_unknown=False, by: str = "a person"):
-        P = self._prepare(ids, retry_flagged, retry_unknown)
+    def ask(self, ids=None, retry_flagged=(), retry_unknown=False, by: str = "a person", retry_refused=False):
+        P = self._prepare(ids, retry_flagged, retry_unknown, retry_refused)
         card = self._card(P)
         if card["over_cap"]:
             raise Refuse("This would pass the limit set for pictures, so it will not run. The limit is set by the team, not in the app.")
         if not card["frames"] and not P["need"]:
+            if P["refused"]:
+                raise refused_refusal(P["refused"])
             raise Refuse("Nothing new to make: every picture for these routes is already made or is waiting for a person.")
         last = next((e for e in reversed(self.spend.events) if e.get("kind") == "ask" and e.get("what") == "frames"), None)
         if not (last and last.get("card_id") == card["id"]):
-            est = card["usd"] + (plan_mod.estimate()["est_usd"] if P["need"] else 0)
+            est = card["usd"] + (plan_mod.estimate()["est_usd"] if (P["need"] or P["repair"]) else 0)
             if hasattr(self.guard_post, "estimate"):      # the cloud check: one Claude vision call per frame, under the Claude cap
                 est += card["frames"] * self.guard_post.estimate()
-            self.spend.ask({"est_usd": round(est, 2), "calls": card["frames"] * (2 if hasattr(self.guard_post, "estimate") else 1) + (1 if P["need"] else 0), "what": "frames", "card_id": card["id"],
+            self.spend.ask({"est_usd": round(est, 2), "calls": card["frames"] * (2 if hasattr(self.guard_post, "estimate") else 1) + (1 if P["need"] else 0) + (1 if P["repair"] else 0),
+                            "what": "frames", "card_id": card["id"],
                             "frames": card["frames"], "routes": card["routes"]}, by=by)
         return self.doc, [], "Costed: read the card, then say yes.", {"card": self.public(card)}, self.spend.decisions()
 
     # -------- the paid step
-    def make(self, ids, card_id: str, retry_flagged=(), retry_unknown=False, by: str = "a person"):
-        P = self._prepare(ids, retry_flagged, retry_unknown)
+    def make(self, ids, card_id: str, retry_flagged=(), retry_unknown=False, by: str = "a person", retry_refused=False):
+        P = self._prepare(ids, retry_flagged, retry_unknown, retry_refused)
         card = self._card(P)
         if not card_id or card_id != card["id"]:
             raise Refuse("That is not the card you were shown: the routes, the pictures made or the limit changed since. Look at the new card and say yes to it.")
@@ -482,6 +505,8 @@ class Frames:
             self.spend.admit(sp.PICTURES, card["usd"])
             if P["need"]:
                 P = self._make_plan(P, ids, retry_flagged, retry_unknown)
+            if P["repair"]:
+                P = self._repair_plan(P, ids, retry_flagged, retry_unknown)
         except sp.CapReached as e:
             raise Refuse(str(e)) from e
         manifest, vdir, jobs = P["manifest"], P["vdir"], P["jobs"]
@@ -550,6 +575,28 @@ class Frames:
         for t in need:
             plan["territories"][t["id"]] = {"route": route_hash(t), "shots": shots[t["id"]]}
         plan["prompt_version"] = plan_mod.PROMPT_VERSION
+        self._write("plan.json", plan)
+        return self._prepare(ids, retry_flagged, retry_unknown)
+
+    def _repair_plan(self, P, ids, retry_flagged, retry_unknown):
+        """ONE model call that rewrites the shots the check refused, each with the check's reason and its rules (under the Claude cap). A shot is
+        rewritten once by itself; a person's Try again asks once more. What the check still refuses after it is refused in words, never sent."""
+        if self.llm is None:
+            raise Refuse("No model is connected to rewrite the refused shots, so nothing was made.")
+        payload = {"rules": LINT_RULES, "shots": [{"territory": r["tid"], "shot": r["shot"], **r["words"], "refused_because": r["why"]} for r in P["repair"]]}
+        if P["banned"]:
+            payload["never_show"] = P["banned"]
+        obj, _usage = self.spend.wrap(self.llm)("frames_repair", prompt("frames_repair"), json.dumps(payload, ensure_ascii=False))
+        got = {(x.get("territory"), x.get("shot")): x for x in ((obj or {}).get("shots") or []) if isinstance(x, dict)}
+        plan = self._read("plan.json", {"prompt_version": plan_mod.PROMPT_VERSION, "territories": {}})
+        for r in P["repair"]:
+            for s in (plan["territories"].get(r["tid"]) or {}).get("shots") or []:
+                if s.get("shot") != r["shot"]:
+                    continue
+                new = got.get((r["tid"], r["shot"])) or {}
+                if str(new.get("framing") or "").strip() or str(new.get("action") or "").strip():
+                    s.update({k: str(new.get(k) or "").strip() for k in ("framing", "camera", "action")})
+                s["rewritten"], s["refused_before"] = True, r["why"]
         self._write("plan.json", plan)
         return self._prepare(ids, retry_flagged, retry_unknown)
 

@@ -115,7 +115,7 @@ test('Needs you shows the held picture above the engine\'s reason; Approve calls
 
 test('frames_status becomes the page\'s held list and the places a picture cannot fill; held ones only', () => {
   const info = { frames: { frames: [{ key: 'a', route: 't_started', place: 'pic_started_tv1', sha256: H(1), held: false, why: null }, { key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), held: true, why: WHY }], card: { not_offered: [{ touchpoint: 'story', why: 'x' }] } } }
-  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), asset: null, why: WHY }] })
+  eq(P.framesFrom(info), { held: [{ key: 'b', route: 't_started', place: 'pic_started_tv3', sha256: H(3), asset: null, why: WHY }], refused: [] })
   // the engine names each held frame's asset (frames/<sha256>.png): the Needs you window draws it from there
   info.frames.frames[1] = { ...info.frames.frames[1], asset: `frames/${H(3)}.png` } as typeof info.frames.frames[1]
   assert.equal(P.framesFrom(info).held[0].asset, `frames/${H(3)}.png`)
@@ -180,4 +180,38 @@ test('the Make pictures ask says whose look the pictures wear, and a fresh docum
   assert.equal(L.brandToStart(fresh, [T({ default: false })]), null, 'no default: nothing is picked for the person')
   assert.equal(L.brandToStart({ ...fresh, upstream: { bc9: { kit: { version: 1 }, visual: { colours: [] } } } }, targets), null, 'carried down from the brief')
   assert.equal(L.brandToStart(d, targets), null, 'work under way keeps what it has')
+})
+
+// UAT 2026-11-26 (track B, Sólás): every frame was refused by the picture check on the planner's own words, and the page showed nothing.
+const REFUSED = { frames: { frames: [
+  { key: 'k1', route: 't_started', shot: 'f1', status: 'REFUSED', held: true, why: "the shot description cannot go to a picture model: 'one' is a number in words", sha256: null },
+  { key: 'k3', route: 't_started', shot: 'f3', status: 'REFUSED', held: true, why: "the shot description cannot go to a picture model: 'unhurried' is not on the allowed word list", sha256: null }] } }
+
+test('frames the check refused are listed with the engine\'s reason and Try again on the route, never held and never silent', () => {
+  const d = doc(), f = P.framesFrom(REFUSED)
+  eq(f.held, [], 'a refused frame is not a held picture')
+  eq(f.refused.map((r: Doc) => r.key), ['k1', 'k3'])
+  const on = plain(W.worldBody(d, { frames: f }, route(d)) as string).replace(/&#39;/g, "'")
+  assert.match(on, /2 pictures could not be made: the words planned for them cannot go to a picture model \(f1: 'one' is a number in words; f3: 'unhurried' is not on the allowed word list\)\. Try again/)
+  assert.match(W.worldBody(d, { frames: f }, route(d)) as string, /data-pic-retry="t_started"/)
+  assert.doesNotMatch(plain(W.worldBody(d, { frames: f }, route(d, 't_small')) as string), /could not be made/, 'only on its own route')
+  const busy = W.worldBody(d, { frames: f, mk: { tid: 't_started', state: 'asking' } }, route(d)) as string
+  assert.match(busy, /data-pic-retry="t_started" disabled><span class="spin-s"[^>]*><\/span>Asking…/)
+})
+
+test('a refusal the person can answer with Try again offers it in the window; Make on that card sends retry_refused', () => {
+  const d = doc()
+  const words = "4 pictures could not be made: the words planned for them cannot go to a picture model (f1: 'one' is a number in words). Try again asks the planner to rewrite them in plain words."
+  const no = P.makeDialog('make:t_started', d, { mk: { tid: 't_started', state: 'refused', refused: words, need: 'retry_refused' } })
+  assert.match(plain(no.html), /could not be made/)
+  eq([...no.html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m: RegExpMatchArray) => m[1]), ['Close', 'Try again'])
+  assert.match(no.html, /data-pic-retry="t_started"/)
+  const r = L.act(d, { mk: { tid: 't_started', state: 'ready', card: { id: 'c_9', frames: 4 }, retry: true } }, { a: 'pic_go', tid: 't_started' }, ENV)
+  eq(r.request.input, { step: 'frames', ids: ['t_started'], card_id: 'c_9', by: 'Shrey', retry_refused: true })
+})
+
+test('a finished make says the engine\'s own words ("0 pictures placed.") under the button, never nothing', () => {
+  const d = doc()
+  const w = plain(W.worldBody(d, { req: { key: 'pic:make:t_started', state: 'done', note: '0 pictures placed.' } }, route(d)) as string)
+  assert.match(w, /0 pictures placed\./)
 })
