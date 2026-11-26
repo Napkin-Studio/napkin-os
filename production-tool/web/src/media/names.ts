@@ -9,13 +9,18 @@
 //   ad/<project>-ad.mp4                      the ad's render (ad-v1, ad-v2… when there are several)
 //   ad/<project>-ad-6s-9x16.mp4              each made size of the film (its length and shape; -v2… when two match)
 //
+// A document can hold several films (one per Territories route), each its own video, storyboard, takes and renders.
+// The first made keeps the names above; each later one, numbered in the order they were made, starts its names with
+// film2-, film3-… (<project>-film2-shot1-frame-v1.png, <project>-film2-ad.mp4, <project>-film2-ad-6s-9x16.mp4). A
+// storyboard no video renders comes after them, numbered the same way.
+//
 // The extension comes from the asset's mime. Drawings the canvas turns into pictures are left out
 // unless they are named: one is made each time the strokes change.
 
-import type { CustomData, Key, ProductionDocument, Sha256, Size, View } from '../contracts/types'
+import type { CustomData, Id, Key, ProductionDocument, Render, Sha256, Shot, Size, View } from '../contracts/types'
 import { extFor } from '../lib/hash'
 import { nameOf } from '../lib/names'
-import { assetsList, framesOf, refsList, rendersOf, shotsOf, takesOf, takeVersion } from '../model/selectors'
+import { assetsList, framesOf, mainStoryboard, refsList, rendersOf, shotsOf, storyboardOfVideo, takesOf, takeVersion } from '../model/selectors'
 
 export type MediaKind = 'picture' | 'view' | 'frame' | 'clip' | 'ad' | 'cutdown'
 export type MediaFolder = 'pictures' | 'storyboard' | 'clips' | 'ad'
@@ -63,8 +68,7 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
   const file = (base: string, sha: Sha256) => `${p}-${base}.${extFor(mimeOf(sha))}`
   const out: MediaItem[] = []
   const taken = new Set<Sha256>()
-  const shots = shotsOf(doc)
-  const ads = rendersOf(doc)
+  const films = filmsOf(doc)
   const elsewhere = new Set<Sha256>([
     ...Object.values(doc.frames).map((f) => f.asset), ...Object.values(doc.generations).map((g) => g.asset).filter((a): a is Sha256 => !!a),
     ...Object.values(doc.renders).map((r) => r.asset), ...Object.values(doc.exports).map((e) => e.asset),
@@ -107,44 +111,84 @@ export function mediaItems(doc: ProductionDocument, project: string | undefined,
     out.push({ kind: 'picture', sha256: f.asset, mime: mimeOf(f.asset), name: file(`sketch-${sketchNo.get(key)}-v${f.version}`, f.asset), folder: 'pictures', which: f.id })
   }
 
-  // Storyboard frames and clips, every version, by shot (numbered by rank).
-  shots.forEach((s, i) => {
-    for (const f of framesOf(doc, s.id)) {
-      out.push({ kind: 'frame', sha256: f.asset, mime: mimeOf(f.asset), name: file(`shot${i + 1}-frame-v${f.version}`, f.asset), folder: 'storyboard', which: f.id })
-    }
-  })
+  // Storyboard frames and clips, every version, by shot (numbered by rank), film by film: only the first film's were
+  // listed, so a later route's video had no Download for its render (live 3-route run, 2026-11-26).
+  for (const { prefix, shots } of films) {
+    shots.forEach((s, i) => {
+      for (const f of framesOf(doc, s.id)) {
+        out.push({ kind: 'frame', sha256: f.asset, mime: mimeOf(f.asset), name: file(`${prefix}shot${i + 1}-frame-v${f.version}`, f.asset), folder: 'storyboard', which: f.id })
+      }
+    })
+  }
   // A take of several shots (joined) is one file, named for its shots, once (UAT 2026-11-21, F15: the zip held each
   // joined take twice, once under each shot).
   const clipped = new Set<string>()
-  const numberOf = new Map(shots.map((s, i) => [s.id, i + 1]))
-  shots.forEach((s, i) => {
-    for (const t of takesOf(doc, s.id)) {
-      if (!t.asset || clipped.has(t.id)) continue
-      clipped.add(t.id)
-      // Its one version number, the Bin's (UAT round 3, F15: the zip said shot1-clip-v2 for the Bin's "Box 1 · v1").
-      const v = takeVersion(doc, t.id)
-      const ns = (t.shot_ids ?? []).map((id) => numberOf.get(id)).filter((n): n is number => !!n)
-      const base = ns.length > 1 ? `shots${ns[0]}-${ns.at(-1)}-clip-v${v}` : `shot${i + 1}-clip-v${v}`
-      out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(base, t.asset), folder: 'clips', which: t.id })
+  for (const { prefix, shots } of films) {
+    const numberOf = new Map(shots.map((s, i) => [s.id, i + 1]))
+    shots.forEach((s, i) => {
+      for (const t of takesOf(doc, s.id)) {
+        if (!t.asset || clipped.has(t.id)) continue
+        clipped.add(t.id)
+        // Its one version number, the Bin's (UAT round 3, F15: the zip said shot1-clip-v2 for the Bin's "Box 1 · v1").
+        const v = takeVersion(doc, t.id)
+        const ns = (t.shot_ids ?? []).map((id) => numberOf.get(id)).filter((n): n is number => !!n)
+        const base = ns.length > 1 ? `shots${ns[0]}-${ns.at(-1)}-clip-v${v}` : `shot${i + 1}-clip-v${v}`
+        out.push({ kind: 'clip', sha256: t.asset, mime: mimeOf(t.asset), name: file(`${prefix}${base}`, t.asset), folder: 'clips', which: t.id })
+      }
+    })
+  }
+  for (const { prefix, ads } of films) {
+    for (const r of ads) {
+      out.push({ kind: 'ad', sha256: r.asset, mime: mimeOf(r.asset), name: file(`${prefix}${ads.length > 1 ? `ad-v${r.version}` : 'ad'}`, r.asset), folder: 'ad', which: r.id })
     }
-  })
-  for (const r of ads) {
-    out.push({ kind: 'ad', sha256: r.asset, mime: mimeOf(r.asset), name: file(ads.length > 1 ? `ad-v${r.version}` : 'ad', r.asset), folder: 'ad', which: r.id })
   }
   // The film's sizes (cutdowns and re-aspects), each made one by its length and shape, in the ad folder (UAT round 3,
   // R3-F12: they were missing from the zip). Two of the same length and shape (two sets) are -v2, -v3…
   const seen = new Map<string, number>()
   const sizes = Object.values(doc.sizes ?? {}).filter((z) => z.media === 'video' && !!z.asset && !taken.has(z.asset!))
     .sort((a, b) => ((a.length_s ?? 0) - (b.length_s ?? 0)) || (a.set_id < b.set_id ? -1 : a.set_id > b.set_id ? 1 : a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0))
+  const prefixOf = new Map(films.filter((f) => f.video).map((f) => [f.video!, f.prefix]))
   for (const z of sizes) {
     taken.add(z.asset!)
-    const base = ['ad', z.length_s ? `${Math.round(z.length_s)}s` : '', shapeWord(z)].filter(Boolean).join('-')
+    const base = [`${prefixOf.get(videoOfSize(doc, z) ?? '') ?? ''}ad`, z.length_s ? `${Math.round(z.length_s)}s` : '', shapeWord(z)].filter(Boolean).join('-')
     const k = (seen.get(base) ?? 0) + 1
     seen.set(base, k)
     const mime = doc.assets[z.asset!]?.mime ?? 'video/mp4'
     out.push({ kind: 'cutdown', sha256: z.asset!, mime, name: `${p}-${k > 1 ? `${base}-v${k}` : base}.${extFor(mime)}`, folder: 'ad', which: z.id })
   }
   return out
+}
+
+/** One film: its video (none for a storyboard no video renders), its shots, its renders and its names' start. */
+interface Film { video?: Id; shots: Shot[]; ads: Render[]; prefix: string }
+
+/** Every film, the first made first (ids are ULIDs): each video with its storyboard's shots and its renders, then each
+ *  storyboard no video took (the main one first, so a document with no video names its shots as before). A storyboard
+ *  two videos share is listed once, under the first. The first film's names have no prefix; the next are film2-, film3-… */
+function filmsOf(doc: ProductionDocument): Film[] {
+  const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  const used = new Set<Id>()
+  const films: Omit<Film, 'prefix'>[] = []
+  for (const v of Object.values(doc.videos ?? {}).sort(byId)) {
+    const sb = storyboardOfVideo(doc, v.id)?.id
+    const shots = sb && !used.has(sb) ? shotsOf(doc, sb) : []
+    if (sb) used.add(sb)
+    films.push({ video: v.id, shots, ads: rendersOf(doc, v.id) })
+  }
+  const main = mainStoryboard(doc)?.id
+  const rest = [...new Set([...Object.keys(doc.storyboards ?? {}), ...Object.values(doc.shots ?? {}).map((s) => s.storyboard_id)])]
+    .filter((id) => !!id && !used.has(id)).sort((a, b) => (a === main ? -1 : b === main ? 1 : a < b ? -1 : a > b ? 1 : 0))
+  for (const sb of rest) {
+    const shots = shotsOf(doc, sb)
+    if (shots.length) films.push({ shots, ads: [] })
+  }
+  return films.map((f, i) => ({ ...f, prefix: i ? `film${i + 1}-` : '' }))
+}
+
+/** The video a size was made from: its set's master (a video, or one of its renders). */
+function videoOfSize(doc: ProductionDocument, z: Pick<Size, 'set_id'>): Id | undefined {
+  const m = doc.format_sets?.[z.set_id]?.master
+  return m?.kind === 'video' ? m.id : m?.kind === 'render' ? doc.renders[m.id]?.video_id : undefined
 }
 
 /** A size's shape for its file name: its format's ("film-9x16" → 9x16), else its delivery's, reduced. */
