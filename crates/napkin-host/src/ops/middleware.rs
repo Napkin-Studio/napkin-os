@@ -135,7 +135,12 @@ pub fn refused(reason: impl Into<String>) -> Value {
 /// reply may carry the change for the stages finished so far, and it applies
 /// exactly as a `done` one. A later poll that repeats part of it adds only
 /// what is new (see [`delivered_before`]). The envelope — the job's `state`, `stage` and `question` reach the app untouched.
-pub fn apply(outer: &Ctx, doc: &Document, reply: &Value) -> HostResult<Outcome> {
+pub fn apply(
+    outer: &Ctx,
+    doc: &Document,
+    reply: &Value,
+    blobs: Option<&dyn crate::store::BlobStore>,
+) -> HostResult<Outcome> {
     check_api(reply)?;
     let change = match reply.get("change") {
         Some(c @ Value::Object(_)) => c,
@@ -145,7 +150,7 @@ pub fn apply(outer: &Ctx, doc: &Document, reply: &Value) -> HostResult<Outcome> 
         Some(_) => return Ok(Outcome::unchanged(refused("`change` is not an object"))),
     };
     let ctx = ctx_for(outer, reply)?;
-    match plan(&ctx, doc, reply, change) {
+    match plan(&ctx, doc, reply, change, blobs) {
         Ok(outcome) => Ok(outcome),
         // A document on an older contract than its app, where the difference is not a safe
         // one (so it was not moved), says so beside the refusal.
@@ -158,7 +163,13 @@ pub fn apply(outer: &Ctx, doc: &Document, reply: &Value) -> HostResult<Outcome> 
     }
 }
 
-fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<Outcome> {
+fn plan(
+    ctx: &Ctx,
+    doc: &Document,
+    reply: &Value,
+    change: &Value,
+    blobs: Option<&dyn crate::store::BlobStore>,
+) -> HostResult<Outcome> {
     let clan = doc.clan();
 
     // 1. The change must be for the document that is open, by its identity
@@ -207,6 +218,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
     let findings_update = entries(change, "findings_update")?;
     let sources_append = entries(change, "sources_append")?;
     let decisions = entries(change, "decisions")?;
+    let assets = assets_put(change, clan)?;
     let rule = ReasoningRule::of(clan)?;
     for d in &decisions {
         check_reasoning(d, open_id, &rule)?;
@@ -221,6 +233,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
         && findings_update.is_empty()
         && sources_append.is_empty()
         && decisions.is_empty()
+        && assets.is_empty()
     {
         return Ok(Outcome::unchanged(serde_json::json!({
             "applied": true, "noop": true, "base_stale": base_stale(change, doc),
@@ -306,6 +319,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
         && recorded.is_empty()
         && contests.is_empty()
         && data == current
+        && assets.is_empty()
     {
         return Err(HostError::conflict("already applied"));
     }
@@ -331,7 +345,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
 
     // 6. One archive: the applicable part of the patch merged over what is
     //    there, the members, the projection rebuilt from them, the decisions.
-    let bytes = assemble(
+    let mut bytes = assemble(
         clan,
         data,
         Members {
@@ -345,6 +359,19 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
         &now,
         true,
     )?;
+
+    // 7. The pictures the step made (Territories frames, owner 2026-11-26): kept as the document's own
+    //    assets, as a link to the workspace's file store when it has one (the bytes stored once,
+    //    features/spinoff-asset-links), embedded otherwise. A spin-off carries the link.
+    let mut saved = Vec::new();
+    for a in assets {
+        bytes = clan_sdk::patch_asset_with(&ClanFile::from_bytes(bytes)?, &a.path, a.bytes, None)?;
+        if let Some(blobs) = blobs {
+            bytes =
+                crate::blobs::link_embedded(blobs, &ClanFile::from_bytes(bytes)?, Some(&a.path))?;
+        }
+        saved.push(a.path);
+    }
 
     let keys: Vec<String> = split
         .patch
@@ -361,6 +388,7 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
         "findings_updated": updated.len(),
         "sources_appended": new_sources.len(),
         "decisions_appended": recorded.len() + contests.len(),
+        "assets_saved": saved.len(),
     });
     let change: Change = doc
         .change(bytes)?
@@ -373,9 +401,80 @@ fn plan(ctx: &Ctx, doc: &Document, reply: &Value, change: &Value) -> HostResult<
             "applied_fields": split.applied,
             "contested_fields": contested_fields,
             "contests": contest_ids,
+            "assets_saved": saved,
         }),
         change,
     ))
+}
+
+/// One picture a middleware step made, for the host to keep as the document's own asset.
+struct AssetPut {
+    /// `human/assets/frames/<sha256>.<ext>`.
+    path: String,
+    bytes: Vec<u8>,
+}
+
+/// The most pictures one change may carry, and the largest one.
+const ASSETS_MAX: usize = 64;
+const ASSET_BYTES_MAX: usize = 25 * 1024 * 1024;
+
+/// `change.assets_put` (`[{name, sha256, data_b64}]`, Territories frames): each a picture under
+/// `frames/<sha256>.<png|jpg|webp>`, its bytes matching its hash. One the document already holds
+/// is left out, so a repeated poll adds nothing. Anything else is refused whole, before anything
+/// is built.
+fn assets_put(change: &Value, clan: &ClanFile) -> HostResult<Vec<AssetPut>> {
+    use base64::Engine as _;
+    let items = match change.get("assets_put") {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(Value::Array(a)) => a,
+        Some(_) => return Err(HostError::bad_request("assets_put is not a list")),
+    };
+    if items.len() > ASSETS_MAX {
+        return Err(HostError::bad_request(format!(
+            "assets_put carries {} pictures; the most is {ASSETS_MAX}",
+            items.len()
+        )));
+    }
+    let mut out = Vec::new();
+    for it in items {
+        let name = it.get("name").and_then(Value::as_str).unwrap_or("");
+        let sha = it.get("sha256").and_then(Value::as_str).unwrap_or("");
+        let ok_name = name
+            .strip_prefix("frames/")
+            .and_then(|r| r.rsplit_once('.'))
+            .is_some_and(|(h, ext)| {
+                h == sha
+                    && h.len() == 64
+                    && h.bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                    && matches!(ext, "png" | "jpg" | "webp")
+            });
+        if !ok_name {
+            return Err(HostError::bad_request(format!(
+                "assets_put: {name:?} is not frames/<its sha256>.<png|jpg|webp>"
+            )));
+        }
+        let b64 = it.get("data_b64").and_then(Value::as_str).unwrap_or("");
+        if b64.len() > ASSET_BYTES_MAX / 3 * 4 + 4 {
+            return Err(HostError::bad_request(format!(
+                "assets_put: {name} is too large"
+            )));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|_| HostError::bad_request(format!("assets_put: {name} is not base64")))?;
+        if clan_sdk::hash::sha256_prefixed(&bytes) != format!("sha256:{sha}") {
+            return Err(HostError::bad_request(format!(
+                "assets_put: {name}'s bytes do not match its sha256"
+            )));
+        }
+        let path = format!("human/assets/{name}");
+        if clan.has_entry(&path) || clan.manifest().file_by_path(&path).is_some() {
+            continue;
+        }
+        out.push(AssetPut { path, bytes });
+    }
+    Ok(out)
 }
 
 /// True unless the change names the version the host holds. A change that

@@ -433,7 +433,7 @@ fn the_operation_proposes_exactly_one_change() {
     let f = fixture();
     let clan = f.session.clan_context_for_agent();
     let doc = Document::from_bytes(f.id.clone(), std::fs::read(f.id.as_str()).unwrap()).unwrap();
-    let outcome = middleware::apply(&Ctx::local(), &doc, &reply_for(&clan)).unwrap();
+    let outcome = middleware::apply(&Ctx::local(), &doc, &reply_for(&clan), None).unwrap();
     assert_eq!(outcome.changes.len(), 1);
     let change = &outcome.changes[0];
     assert_eq!(change.expected_version(), Some(doc.version()));
@@ -1828,4 +1828,162 @@ fn an_engine_fact_conflict_is_recorded_as_a_flag_and_writes_nothing() {
         .as_deref()
         .unwrap()
         .ends_with("#facts[f_01JA0B3P4Q]"));
+}
+
+// Territories frames (owner, 2026-11-26): a step's change carries the pictures it made
+// (assets_put); the host keeps each as the document's asset, a link to the workspace's file
+// store when there is one, and the page reads it at /assets/frames/<sha256>.png.
+mod frames_assets {
+    use super::*;
+    use base64::Engine as _;
+    use napkin_host::{BlobInfo, BlobStore, HostResult};
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    const PNG: &[u8] =
+        b"\x89PNG\r\n\x1a\nnot really a picture, but its bytes and hash are what matter";
+
+    fn hex(bytes: &[u8]) -> String {
+        clan_sdk::hash::sha256_prefixed(bytes)
+            .trim_start_matches("sha256:")
+            .to_string()
+    }
+
+    fn put_change(clan: &Value, bytes: &[u8], sha: &str, name: &str) -> Value {
+        json!({
+            "api": "napkin.middleware/1", "task": "run_territories", "handler": "run_territories@1.0",
+            "job": { "id": "job_f", "state": "done", "progress": { "done": 1, "total": 1 }, "error": null },
+            "result": { "summary": "1 picture held for a person" },
+            "change": {
+                "doc": clan["id"], "base_version": clan["version"], "read": {}, "data_patch": {},
+                "decisions": [ { "id": "d_frames_1", "kind": "edit", "agent": "run_territories@1.0/engine",
+                    "action": "frames", "rationale": "saved the pictures",
+                    "targets": [format!("{}#territories", clan["id"].as_str().unwrap())],
+                    "reasoning": reasoning("Saved the pictures the step made.", &[]) } ],
+                "assets_put": [ { "name": name, "sha256": sha,
+                    "data_b64": base64::engine::general_purpose::STANDARD.encode(bytes) } ]
+            }
+        })
+    }
+
+    #[test]
+    fn a_frame_lands_as_the_documents_asset_and_is_served_by_its_name() {
+        let f = fixture();
+        let clan = f.session.clan_context_for_agent();
+        let sha = hex(PNG);
+        let name = format!("frames/{sha}.png");
+        let (out, _) = settle(&f, put_change(&clan, PNG, &sha, &name));
+        assert_eq!(out["data"]["change"]["applied"], true, "{out}");
+        assert_eq!(
+            out["data"]["change"]["assets_saved"],
+            json!([format!("human/assets/{name}")])
+        );
+        assert_eq!(
+            on_disk(&f)
+                .read_entry(&format!("human/assets/{name}"))
+                .unwrap(),
+            PNG
+        );
+        // the page asks for it by that name
+        let resp = f.session.serve_asset(&name).unwrap();
+        assert_eq!(resp.0, "image/png");
+        assert_eq!(resp.1, PNG);
+        // a repeated poll adds nothing
+        let clan = f.session.clan_context_for_agent();
+        let (again, _) = settle(&f, put_change(&clan, PNG, &sha, &name));
+        assert_ne!(
+            again["data"]["change"]["assets_saved"],
+            json!([format!("human/assets/{name}")]),
+            "{again}"
+        );
+    }
+
+    #[test]
+    fn a_picture_whose_bytes_or_name_do_not_match_is_refused_and_nothing_lands() {
+        let f = fixture();
+        let clan = f.session.clan_context_for_agent();
+        let sha = hex(PNG);
+        let other = hex(b"something else");
+        for (bytes, sha, name) in [
+            (PNG, other.clone(), format!("frames/{other}.png")), // the bytes are not that hash
+            (PNG, sha.clone(), format!("frames/{sha}.exe")),     // not a picture type
+            (PNG, sha.clone(), format!("../{sha}.png")),         // not under frames/
+            (PNG, sha.clone(), format!("frames/{other}.png")),   // the name and the hash differ
+        ] {
+            let (out, _) = settle(&f, put_change(&clan, bytes, &sha, &name));
+            assert_eq!(out["data"]["change"]["applied"], false, "{name}: {out}");
+        }
+        assert!(on_disk(&f)
+            .manifest()
+            .files
+            .iter()
+            .all(|e| !e.path.contains("frames/")));
+    }
+
+    #[derive(Default)]
+    struct Blobs(Mutex<BTreeMap<String, Vec<u8>>>);
+    impl BlobStore for Blobs {
+        fn put(&self, bytes: &[u8]) -> HostResult<String> {
+            let sha = clan_sdk::hash::sha256_prefixed(bytes);
+            self.0.lock().unwrap().insert(sha.clone(), bytes.to_vec());
+            Ok(sha)
+        }
+        fn get(&self, sha256: &str) -> HostResult<Vec<u8>> {
+            self.0
+                .lock()
+                .unwrap()
+                .get(sha256)
+                .cloned()
+                .ok_or_else(|| napkin_host::HostError::not_found("no such file"))
+        }
+        fn has(&self, sha256: &str) -> bool {
+            self.0.lock().unwrap().contains_key(sha256)
+        }
+        fn list(&self) -> Vec<BlobInfo> {
+            Vec::new()
+        }
+        fn remove(&self, _: &str) -> HostResult<()> {
+            Ok(())
+        }
+        fn pin(&self, _: &str) -> HostResult<()> {
+            Ok(())
+        }
+        fn pinned(&self) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn with_a_workspace_file_store_the_document_holds_a_link_and_the_store_the_bytes() {
+        let f = fixture();
+        let clan = f.session.clan_context_for_agent();
+        let sha = hex(PNG);
+        let name = format!("frames/{sha}.png");
+        let doc =
+            Document::from_bytes(f.id.clone(), std::fs::read(f.id.as_str()).unwrap()).unwrap();
+        let blobs = Blobs::default();
+        let outcome = middleware::apply(
+            &Ctx::local(),
+            &doc,
+            &put_change(&clan, PNG, &sha, &name),
+            Some(&blobs),
+        )
+        .unwrap();
+        let written = ClanFile::from_bytes(outcome.changes[0].bytes.clone()).unwrap();
+        let entry = written
+            .manifest()
+            .file_by_path(&format!("human/assets/{name}"))
+            .cloned()
+            .unwrap();
+        assert!(entry.linked, "a link, not the bytes");
+        assert_eq!(
+            entry.sha256.as_deref(),
+            Some(format!("sha256:{sha}").as_str())
+        );
+        assert!(
+            !written.has_entry(&format!("human/assets/{name}")),
+            "the bytes are not in the document"
+        );
+        assert_eq!(blobs.get(&format!("sha256:{sha}")).unwrap(), PNG);
+    }
 }
