@@ -65,6 +65,8 @@ npm run build   # cargo build napkin-wasm (wasm32) + wasm-bindgen --target web â
 npm test        # vitest, node, against the built wasm and the real `clan` CLI on PATH
 npm run lint    # tsc --noEmit
 npm run app     # rebuild src/app-template.gen.ts after a contract change (needs `clan`)
+npm run validators  # rebuild src/validators.gen.js after a contract change; committed, shipped as is,
+                    # and not part of build: npm test fails while it is stale
 ```
 
 As with `app/src/wasm`, the generated glue and `.wasm` are not committed; only
